@@ -1,0 +1,2 @@
+els: els.c
+	dcc -o els els.c

@@ -1,0 +1,19 @@
+H0:
+    Device = hddisk.device
+    FileSystem = D1:fs/bffs
+    Unit   = 2
+    Flags  = 0
+    Surfaces  = 6
+    BlocksPerTrack = 17
+    Interleave = 0
+    LowCyl = 20 ;  HighCyl = 808
+    Buffers = 30
+    GlobVec = -1
+    BufMemType = 1
+    Mount = 1
+    DosType = 0x444F5301
+    StackSize = 4000
+    Priority   = 0
+    Reserved = -1
+    PreAlloc = 0
+#

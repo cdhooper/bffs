@@ -1,0 +1,16 @@
+BF1:
+    FileSystem = fs:bffs
+    Device = trackdisk.device
+    Unit = 1
+    Flags = 0
+    Mount = 1
+    Stacksize = 1024
+    Priority = 0
+    GlobVec = -1
+    LowCyl = 0
+    HighCyl = 80
+    Surfaces = 2
+    BlocksPerTrack = 11
+    Buffers = 64
+    Reserved = 0;  /* Unix partition */
+#

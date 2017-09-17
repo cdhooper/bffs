@@ -1,0 +1,79 @@
+OD = obj/
+CCO =
+
+all:  bffs dbprint
+
+bffs: $(OD)stack.o $(OD)handler.o $(OD)debug.o $(OD)packets.o $(OD)ufs.o $(OD)system.o $(OD)fread.o $(OD)fwrite.o $(OD)file.o $(OD)inode.o $(OD)cache.o $(OD)dir.o $(OD)table.o $(OD)alloc.o $(OD)request.o $(OD)inthand.o
+	dcc $(CCO) -o %(left) %(right)
+
+tinode: $(OD)inode.o $(OD)tinode.o
+	dcc $(CCO) -o %(left) %(right)
+
+label: $(OD)dio.o $(OD)label.o
+	dcc $(CCO) -o %(left) %(right)
+
+dumpfs: $(OD)dio.o $(OD)dumpfs.o
+	dcc $(CCO) -o %(left) %(right)
+
+dbprint: dbprint.c
+	dcc $(CCO) -o %(left) %(right)
+
+$(OD)ufs.o: ufs.c ufs.h handler.h file.h debug.h
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)handler.o: handler.c handler.h packets.h table.h debug.h ufs.h
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)debug.o: debug.c debug.h
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)packets.o: packets.c ufs.h packets.h system.h handler.h file.h cache.h debug.h
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)system.o: system.c handler.h ufs.h packets.h system.h debug.h
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)fread.o: fread.c ufs.h file.h handler.h debug.h
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)fwrite.o: fwrite.c ufs.h file.h alloc.h cache.h handler.h debug.h
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)file.o: file.c handler.h ufs.h file.h cache.h debug.h
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)inode.o: inode.c ufs.h cache.h alloc.h debug.h
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)tinode.o: tinode.c
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)cache.o: cache.c cache.h file.h ufs.h handler.h debug.h
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)dir.o: dir.c ufs.h file.h handler.h cache.h debug.h
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)table.o: table.c table.h packets.h
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)request.o: request.c request.h debug.h
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)alloc.o: alloc.c alloc.h ufs.h debug.h
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)label.o: label.c ufs.h
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)dumpfs.o: dumpfs.c ufs.h
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)dio.o: :ufs/amiga_device/dio.c
+	dcc $(CCO) -c %(*.c) -o %(left)
+
+$(OD)inthand.o: inthand.asm
+	das %(*.asm) -o %(left)
+
+$(OD)stack.o: stack.asm
+	das %(*.asm) -o %(left)

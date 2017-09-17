@@ -1,0 +1,17 @@
+OBJ=obj/
+
+OBJS=$(OBJ)toolres.o $(OBJ)tool.o $(OBJ)comm.o
+
+tool: $(OBJS)
+	dcc -o tool $(OBJS)
+
+$(OBJ)toolres.o: toolres.c
+	dcc -c toolres.c -o %(left)
+
+$(OBJ)tool.o: tool.c tool.h comm.h
+	dcc -c tool.c -o %(left)
+
+
+$(OBJ)comm.o: comm.c comm.h
+	dcc -c comm.c -o %(left)
+

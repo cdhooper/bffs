@@ -1,0 +1,34 @@
+This is a BETA version of BFFS 1.3, and is not complete.
+If this were /not/ beta software, you would still be using
+it at your own risk.  Please consider what beta means first
+before using this package.  :)
+
+
+Read doc/user_manual for help setting up the filesystem
+Read doc/relnotes for changes over 1.25
+
+Current known problems:
+  o  READLINK is broken and can GURU the machine.  Do not turn off
+     automatic symlink resolution in BFFSTool.
+  o  Do not unmount (remove) and volume which still has locks to
+     the volume.  Bad things can happen.  Otherwise, disk changes
+     should work fine.
+  o  There is currently no notification that a disk read or write
+     failed.  If your media is bad or there are other problems, BFFS
+     will not tell you of the fact.
+
+Hopefully all of these problems will be resolved before the "real"
+release of BFFS 1.3
+
+Please drop me some email detailing any other problems (or successes)
+you might have with the filesystem.  I will be unable to respond to
+email from December 23rd to December 26th, but after then you should
+be able to reach me.  Since I don't own a machine that can run
+Enforcer, the documentation of any Enforcer hits will also help out.
+
+
+p.s. The five days before a large project is due is better than half
+     a lifetime for a typical Computer Scientist.  :)
+
+-Chris Hooper
+ cdh@mtu.edu

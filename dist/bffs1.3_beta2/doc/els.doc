@@ -1,0 +1,31 @@
+------------------------------------------------------------------------
+Version 1.0 of els                        Distribution is 31-Jan-94
+------------------------------------------------------------------------
+
+els - Very simple directory list utility
+
+
+This program acts similar to to the UNIX ls command, except it accepts
+no command line parameters.
+
+
+Usage:
+	els [device:]filename [[device:]filename . . . ]
+
+Where 
+	device is the optional device where the file exists
+
+	filename is the name of the file to show
+
+
+	You may specify as many filenames as you want to list.
+
+	Why does this program exist?  Only to provide a stopgap
+	until the real directory lister programs are capable of
+	handling the extra permission bits and owner/group.
+
+------------------------------------------------------------------------
+
+
+This program was created by Chris Hooper (cdh@mtu.edu)
+------------------------------------------------------------------------

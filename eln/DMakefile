@@ -1,0 +1,2 @@
+eln: eln.c
+	dcc -o eln eln.c

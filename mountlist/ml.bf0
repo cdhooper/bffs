@@ -1,0 +1,17 @@
+BF0:
+    FileSystem = fs:bffs
+    Device = mfm.device
+    Unit = 0
+    Flags = 0
+    Mount = 1
+    Stacksize = 1024
+    Priority = -1
+    GlobVec = -1
+    LowCyl = 0
+    HighCyl = 79
+    Surfaces = 2
+    BlocksPerTrack = 9
+    Buffers = 64
+    Reserved = 0;  /* Unix partition */
+    PreAlloc = 0;
+#

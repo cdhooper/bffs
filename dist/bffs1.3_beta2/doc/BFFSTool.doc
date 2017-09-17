@@ -1,0 +1,443 @@
+Version 1.3 of BFFSTool                     Distribution is 31-Jan-94
+-----------------------------------------------------------------------
+
+BFFSTool - a program to monitor and modify the behavior of running
+           BFFSFileSystem handlers.
+
+
+BFFSTool provides a graphical "point-and-click" interface to the
+internal operation of a running BFFSFileSystem handler.  The tool
+performs modifications to the running filesystem by directly
+manipulating static BFFS local variables.  This means that all
+changes done by the user happen immediately and can be observed
+while the tool is still running.
+
+Don't be afraid to try the different buttons.  There should be
+nothing you can do in BFFSTool to damage your filesystem or
+permanently impair its performance.
+
+After starting up the filesystem, you may at first be overwhelmed
+with the amount of information presented.  Since this tool was
+developed during debugging of the filesystem, you may find many
+statistics not useful to you at all.  First I will cover the
+meaning of each static, then the buttons and other gadgets will
+be explained.
+
+You can start BFFSTool by typing "bffstool" at the CLI prompt.
+It will automatically search the system for all accessed (and
+valid) BFFS filesystems and choose the first one found to be
+displayed.  If you know the name of the device for BFFSTool to
+initially select, you may specify that on the command line;
+ie: "bffstool bf0:"
+
+A window should open with the title, "Berkeley Fast Filesystem
+(BFFS) status tool V1.3"  If it doesn't then no handlers were
+found in the system.  In that case, you will need to consult
+the documentation for correctly installing a BFFS handler.
+If you have a handler installed correctly, you may have one of
+two problems.  The partition must be mounted and accessed
+before BFFSTool will recognize the filesystem handler as valid.
+The other possible problem may be that you are attempting to
+run BFFSTool with the wrong version of the BFFSFileSystem.
+BFFSTool 1.3 will ONLY work with version 1.3 of BFFSFileSystem.
+
+
+The window should look similar to the following:
+_____________________________________________________________________________
+|_|_________________________________________________________________________|
+|    read hits   0      read opens  0       frags free 7       | Refresh   ||
+|    read misses 0      read groups 4      blocks free 0       +-----------+|
+|   write hits   0      read bytes  4096   inodes free 23      |  Sync     ||
+|   write misses 0     write opens  0         num dirs 1       +-----------+|
+|  cgread hits   0     write groups 0        frag size 1024    |  Clear    ||
+|  cgread misses 0     write bytes  0       block size 8192    +-----------+|
+| cgwrite hits   0          locates 0       num inodes 64      |  Quit     ||
+| cgwrite misses 0         examines 1       data frags 679     -------------|
+|    cache moves 0     examinenexts 7        num frags 720                _ |
+|        flushes 0          flushes 0          num cgs 1    Auto Symlink |x||
+|     cg flushes 0          renames 0          num cyl 80    Ignore Case |x||
+|   force writes 0                           sec/track 9   Link Comments |_||
+|cg force writes 0       sync timer:1        track/cyl 2  Inode Comments | ||
+|       destroys 0      sync stalls:10          cyl/cg 80                +-+|
+|    invalidates 0       GMT offset:0         frags/cg 720    Unix Paths |_||
+| cg max buffers:3         PreAlloc 7        inodes/cg 64      Read Only | ||
+|    max buffers:32                            minfree 0                 +-+|
+|  total buffers 32     media start 0         modified 0    Show Minfree |_||
+| in use buffers 0      media end   737280       clean 0    Grp/Otr Bits |_||
+|  dirty buffers 0          version 1.3 Rw              ____________________|
+| locked buffers 0        disk type Sun md0a   Handler |@|______BFFSa:_____||
+|___________________________________________________________________________|
+
+Note that the above is my best ASCII representation of a graphic display.
+
+
+CACHE INFORMATION:
+------------------
+read hits	The number of successful probes in the cache by the cache
+		module for the requested disk fragment.  In general, this
+		number is slightly inflated because routines outside the
+		cache will often reaccess a block many times.  For later
+		versions of the filesystem, this number will actually be
+		lowered because more routines will start to use the new
+		disk frag locking mechanism offered by the cache.
+		The main disk fragment cache is LRU based, but the data
+		structure features both sequential (ordered) and hashed
+		access for fast block lookups.  Allocation for this
+		cache occurs at filesystem started and whenever buffers
+		are added or subtracted.  Note that not all reads pass
+		through the cache and thus will not be reported as hits
+		or misses.  Most notably, you will not see superblock or
+		multiblock reads/writes noted in the cache information.
+		This tends to push the cache hit rate up as those direct
+		accesses would most often be cache misses.
+read misses	The number of failed cache probes which required a disk
+		access to satisfy the request.
+write hits	The number of successful probes in the cache to access
+		a disk fragment such that the fragment will have to
+		eventually be written back to disk.  A disk fragment
+		must already be in the cache as either clean (has only
+		been read so far) or dirty (has been written at least
+		once since the last flush) to be considered a hit.
+write misses	The number of failed cache probes which required a disk
+		access to cache the disk fragment to be modified.
+cgread hits	A separate cache module controls access to the cylinder
+		group summary cache.  Each cache nodes contains a chunk
+		of memory as large as the disk block size.  Cached in
+		that space are working cylinder group bit fields
+		describing the allocated and free blocks in the active
+		cylinder group(s).  This cache is also LRU ordered, but
+		is not hashed because in general very few cylinder
+		groups should ever be active at the same time.  The
+		larger your files and the smaller your disk, the less
+		individual cylinder groups I recommend.
+cgread misses	The number of cache misses for cylinder group summary
+		information.  Note that cylinder group summary
+		information is only needed by the filesystem when
+		writing to the disk.  If you never write on the 
+		filesystem, then no memory will be allocated to the
+		cylinder group cache (allocation for this cache is
+		strictly dynamic, but bounded).
+cgwrite hits	The number of cache write hits which were satisfied
+		with cylinder group summary information already present
+		in the cache.
+cgwrite misses	The number of cache write misses which required a disk
+		access to satisfy the request to modify cylinder group
+		summary information.
+cache moves	The number of disk fragments moved around on the disk
+		via the cache write-back policy.  Cache moves often
+		occur when writing files to the disk because at file
+ 		close, the policy of the Berkeley filesystem states
+		that the filesystem must attempt to locate a partial
+		filesystem block to put the last (incomplete) file
+		fragments.  The cache moves take advantage of the
+		possibility that the data to be moved is probably still
+		in the cache, alleviating disk access.
+flushes		The number of cache flushes which were requested by
+		the filesystem.  You may have started to realize that
+		the cache acts as an individual entity when it comes
+		to disk data.  No other routines in the filesystem are
+		privy to the information the cache has.  Flushes can
+		occur for various reasons, but will only happen when
+		the cache has dirty disk fragments to be written:
+		o  The large block read or write routines are starting
+		   a data access.
+		o  The file deallocator wants block access to the
+		   filesystem inode blocks (this also causes
+		   invalidates of those fragments to occur).
+		o  The cache was asked to get a disk block fragment,
+		   but all cache slots are in use and the cache is
+		   more than 3/4 full.  ** This 3/4 will become a user
+		   configurable setting in the next release. **
+		o  The write back timer expires demanding the data be
+		   flushed to the disk immediately.
+		o  The user sends a ACTION_FLUSH or ACTION_DIE packet
+		   to the filesystem.
+cg flushes	The number of cylinder group summary cache flushes which
+		were requested by the filesystem.  These flushes can
+		happen under any of the following circumstances:
+		o  The cache was asked to get a cylinder group summary
+		   block which was not in the cache, and the cache was
+		   already full with other cylinder group summary blocks.
+		   Only the cg summary block ejected will be immediately
+		   flushed to disk.
+		o  The write back timer expires demanding the data be
+		   flushed to the disk immediately.
+		o  The user sends a ACTION_FLUSH or ACTION_DIE packet
+		   to the filesystem.
+force writes	The number of cache disk frags which were requested by
+		the filesystem to be written immediately to the disk.
+		Also, the number of cache frags which were forced out
+		of the cache by the cache being full of dirty frags
+		when a new disk frag was requested.
+cg force writes	The number of cylinder group summary blocks which were
+		dirty and forced out to disk when accesses to other
+		cylinder group summary blocks forced them out.  In
+		general, this value should be zero even in an really
+		active system.  If it isn't zero, I suggest bumping the
+		number of cg max buffers.
+destroys	The number of times the entire cache was deallocated.
+		In general, this will only happen on disk change 
+invalidates	The number of time the filesystem asked the cache to
+		"just forget" about specified cache frags.  This will
+		happen to the destination of a cache move (if it exists
+		in the cache), or in the direct block write routines
+		should a large write chunk overlap a cached disk
+		fragment still in the cache.
+cg max buffers	This is a configurable maximum number of cylinder group
+		summary slots (filesystem block size memory chunks)
+		which are to be dedicated to caching cylinder group
+		summary information.
+max buffers	This is a configurable maximum number of disk fragment
+		size memory blocks which are dedicated to the main
+		disk fragment cache.  This number is translatable into
+		the number of buffers reported by AddBuffers; however
+		AddBuffers reports this value in 512 byte blocks.  This
+		may change as it's really just BFFS's interface with
+		the AddBuffers command.
+total buffers	The number of disk buffers allocated by the filesystem.
+		In general, this number will be the same as the max
+		buffers, except when the max buffers are changed from
+		inside BFFSTool.  In that case, the change will not
+		take effect until the next disk change, or the next
+		AddBuffers command.
+in use buffers	The number of cache disk fragment buffers currently in
+		use by the filesystem.
+dirty buffers	The number of cache disk fragment buffers which have
+		not yet been written to disk.  Usually, this value will
+		be zero unless the filesystem is busy writing files.
+locked buffers	The number of disk fragment buffers which have been
+		internally locked by the filesystem.  In general, you
+		should /never/ see this value other than zero.  This is
+		because the internal routines will unlock buffers
+		before completion of a packet.
+
+
+GENERAL HANDLER INFORMATION:
+----------------------------
+read opens	The number of files (successfully and unsuccessfully)
+		opened for read from the disk.
+read groups	The number of raw disk transfers which have been
+		requested of the disk device to read.
+read bytes	The number of bytes which have been requested of the
+		disk device read.
+write opens	The number of files (successfully and unsuccessfully)
+		opened for write to the disk.
+write groups	The number of raw disk transfers which have been
+		requested of the disk device to write.
+write bytes	The number of bytes which have been requested of the
+		disk device write.
+locates		The number of times an individual file was locked
+		via the ACTION_LOCATE packet (Lock() in dos.library)
+examines	The number of examine packets which have been sent
+		to the filesystem handler by AmigaDOS.
+examinenexts	The number of examine next packets which have been
+		sent to the filesystem handler by AmigaDOS.
+flushes		The number of times the cache was flushed by a timer
+		expire or by an ACTION_FLUSH packet send manually.
+renames		The number of files which have been renamed since this
+		handler was started up.
+sync timer	The number of seconds idle write packet time (no write
+		packets have been received within this time) to flush
+		out the cache data to disk.  This is so when the
+		filesystem is idle, it can put the disk to use writing
+		back all the cached dirty disk data (and turning the
+		floppy motor off).
+sync stalls	The number of seconds to retry (check is once every
+		sync timer seconds) the cache flush before forcing a
+		cache flush anyway.  This serves two purposes:
+		o  Even in an system actively writing to the disk, the
+		   filesystem gets a chance to checkpoint and sync
+		   a consistent filesystem structure "often."
+		o  Flushing out the cache improves performance in an
+		   active system since those dirty fragments become
+		   unavailable for regular filesystem use until they
+		   have been synchronized with the media.
+GMT offset	The number of hours (plus or minus) that the local
+		time varies from GMT time.  This is mainly used to
+		synchronize your AmigaDOS timestamp with the UNIX
+		file timestamp (which is always GMT).
+PreAlloc	Representation of the current BFFS settings usable
+		if you want to mount with those settings as default.
+media start	This is the byte address of the physical disk where
+		the active filesystem partition is being accessed.
+media end	This is the upper bounding byte address of the
+		physical disk where the active filesystem partition
+		is being accessed.  All data accesses are checked
+		for validity within this range (to prevent media
+		corruption causing additional possible corruption).
+version		This is a comment field by the filesystem to describe
+		the current running version of BFFS.  You will notice
+		the version number followed by some letters.  The
+		letters you see detail the following:
+		R  Handler can handle removable media.  Your version
+			will probably have this option turned on.
+		E  Handler uses extended packets to talk with the
+			disk device.  Since not all devices are able
+			to use extended packets, your distribution
+			will probably have this option turned off.
+		F  Handler compiled with Fast mode.  This means that
+			all filesystem consistency checking is turned
+			off, but the filesystem performs much faster.
+		I  Intel version.  This version of the filesystem has
+			been compiled to support Intel byte ordering
+			for the filesystem (ie: 386i and 386BSD).
+			This automatically makes the filesystem
+			incompatible with Motorola byte ordering
+			filesystems, which include Sun SPARC, and
+			Amiga.  This functionality is not yet
+			supported, but will be in a future release.
+		r  Filesystem handler is compiled to only read the
+			disk and never allow writes.
+		w  Filesystem handler is compiled to allow both reads
+			from and writes to the disk.
+		D  Filesytem is compiled with debugging messages
+			turned on.  This increases the size of the
+			filesystem and slows it down.  Unless you are
+			running a non-distribution copy of BFFS, you
+			shouldn't see this flag.
+		The above flags are set at compile-time and can not
+		be modified by the user of the filesystem.
+disk type	This field presents information about what BFFS thinks
+		it is dealing with (as far as disk structure is
+		concerned).  The first text (if present) is either
+		"Sun" or "BSD" if a disk partition label is present,
+		and was automatically sensed by the filesystem.  Note
+		that if the Reserved parameter in the MountList is -1,
+		then this text will never show.  If no disk label is
+		present, then the handler device name will be shown
+		instead.  This field may also say "dev:Dsk?" indicating
+		no disk is in the drive.  You may also see "dev:Bad?"
+		which means the superblock is unreadable.  If you see
+		"dev:Dev?" this suggests a problem in the MountList.
+		If the disk was mounted successfully, the next part
+		will have the format "%cd%d%c"  The first %c will be
+		the first character of the device driver.  The %d is
+		the physical unit on that device.  The last %c is the
+		partition that was actually mounted.  So, for example,
+		if you have a Sun floppy in bf0: (and are using
+		messydisk.device or mfm.device , you should see:
+		"Sun md0a"  Otherwise, if you have a Sun hard drive
+		at scsi.device unit 0, you may see "Sun sd0a"
+
+
+SUPERBLOCK INFORMATION:
+-----------------------
+frags free	The number of disk fragments which are not yet
+		allocated to a file.  Note that this number should
+		stay relatively small, as the filesystem attempts
+		not to break full filesystem blocks if partial full
+		blocks (multiple disk frags) are located nearby.
+blocks free	The total number of full filesystem blocks which
+		have not yet been allocated to files.
+inodes free	The number of disk file descriptors still available.
+		If this number falls to zero, no mores files may
+		be allocated.
+num dirs	The number if directories present in the filesystem.
+		Note that the root directory counts as one.
+frag size	The number of bytes which make up a disk fragment,
+		as parameterized by the newfs command.
+block size	The number of bytes which make up a full filesystem
+		disk block as parameterized by the newfs command.
+		Note that this value must be a multiple (from 1x to
+		8x) the size of the frag size.  Also, allowed values
+		for the block size are 4096, 8192, 16384, or 32768.
+num inodes	The total number of inodes which were parameterized
+		as available when the filesystem was created.  By
+		subtracting the number of inodes free, you can get
+		the number of inodes in use.
+data frags	Number of total disk block fragments which are
+		allocatable to disk files.  This is basically the
+		total filesystem size (num frags) minus the static
+		filesystem overhead allocation.
+num frags	The length of the filesystem in disk block fragments.
+		Note that this number is considerably more than the
+		actual usable space of the filesystem.
+num cgs		The number of individual disk cylinder groups
+		parameterized when the filesystem was created (newfs).
+num cyl		The number of disk cylinders involved in the entire
+		filesystem.  This number is also chosen by newfs.
+sec/track	The number of sectors in a single disk track.
+track/cyl	The number of tracks (disk heads) in a single cylinder.
+cyl/cg		The number of disk cylinders parameterized by newfs
+		to be logically located in the same cylinder group.
+frags/cg	The number of disk block fragments per cylinder group.
+inodes/cg	The number of inodes parameterized by newfs to be
+		available (allocated within) each cylinder group.
+minfree		The minimum free disk space to report (percentage).
+modified	The number of modifications to the superblock since
+		the last flush.  If this is non-zero, then the disk
+		is considered out of sync with memory.
+clean		This value should always be zero while the handler is
+		active with the disk.  It is used to indicate in the
+		superblock that the filesystem was cleanly unmounted.
+
+
+BUTTONS:
+--------
+Refresh		This button asks the filesystem for an update on the
+		filesystem status information shown.
+Sync		This button asks the filesystem to FLUSH its dirty
+		cache disk fragments to disk immediately.  You will
+		notice dirty buffers go to zero (unless the disk is
+		VERY active).
+Clear		Clear the value of the operating statistics.  This
+		is a non-dangerous operation, as only data which
+		the filesystem /only/ updates is cleared.
+Quit		This button Quits BFFSTool, returning you to the CLI.
+Auto Symlink	This box allows you to turn on and off the automatic
+		symlink resolution of the filesystem.  For this
+		release NEVER turn this flag off.  ReadLink is not
+		implemented and most AmigaDOS programs will crash if
+		they run into a soft link and attempt to resolve it.
+Ignore Case	This box allows you to turn on and off the case
+		independence you have grown used to with AmigaDOS.
+		When off, multiple files may exist in the same
+		directory with the same name (just different case).
+		This may be necessary when trying to use a UNIX
+		filesystem with files such as "Makefile" and "makefile"
+Link Comments	This box allows you to turn on and off directory
+		comments for "special" files; symbolic links and
+		character/block special devices.
+Inode Comments	This box allows you to turn on and off directory
+		comments for files showing UNIX inode number,
+		permissions, uid, gid, number of links, nunber of
+		physical disk (512 byte) blocks, and number of bytes
+		allocated to the file.  Note that directory listings
+		are faster if you do not normally use comments.
+Unix Paths	This box allows you to turn on and off the UNIX path
+		parser.  When on / is a reference to the root
+		directory.  When off, / is instead a reference to the
+		parent directory.  Use this if you want BFFS to be
+		compatible with some unconfigurable package.
+Read Only	This box represents the superblock flag indicating
+		whether this filesystem is mounted read-write or
+		read-only.  You may change this status at any time.
+Show Minfree	Checking this box makes the filesystem report
+		available disk space as relative to the minfree
+		percentage specified in the superblock.
+Grp/Otr Bits	This box when checked inverts the meaning of the
+		permission bits for group and other.  Apparently
+		there was some late indecision made at Commodore
+		regarding the final meaning of these bits.  This
+		provides a temporary solution should you need it.
+Handler		This is a Cycle gadget which allows you to choose
+		the BFFS handler with which you want to communicate.
+		Note that BFFSTool "knows" which handlers are active
+		in the system and it will only let you query an
+		active BFFS 1.3 or higher filesystem handler.
+
+Finally, you will notice minitiature up/down button gadgets near
+"cg max buffers", "max buffers", "sync timer", "sync stalls", and
+"GMT offset." These are for incrementing and decrementing the value
+of the BFFS static parameter for the filesystem.
+
+
+I hate documentation.  ;)
+
+Enjoy.
+
+-----------------------------------------------------------------------
+
+
+This package was written by Chris Hooper (cdh@mtu.edu).
+-----------------------------------------------------------------------

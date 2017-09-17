@@ -1,0 +1,73 @@
+Version 1.3 of BFFS  (Read-Write)      Distribution is 12-25-93
+-----------------------------------------------------------------------
+
+Berkeley Fast Filesystem (©) for AmigaDOS.
+
+BFFSFilesystem allows you to mount (and use) Unix filesystems directly
+under AmigaDOS.  Function in the operating system is similar in form to
+MessyDos (©) by Olaf Seibert or a CD-ROM filesystem for the Amiga.
+
+This is the first read-write version of the filesystem.  And, although
+I have done a fair amount of testing, you should not consider this
+package stable or otherwise bug-free.
+
+The original package (1.0 release) was co-authored by Bill Moore and
+Chris Hooper.  Bill Moore has since acquired other projects, so this
+product will be maintained and supported entirely by Chris Hooper.
+
+-----------------------------------------------------------------------
+legal_information
+	Please read this first.  By using this product you automatically
+	agree to all terms and conditions stated in the above file.
+
+BFFSFileSystem - Berkeley FFS implementation filesystem for AmigaDOS
+	This is the first release of the Read-Write version of the
+	filesystem.  Since it is the first release, the possibility
+	of grave data corruption exists for filesystems with parameters
+	which have not been tested.  Please see the program documentation
+	for situations which have been tested.
+
+user_manual - Documentation on how to get started and maintain your
+	BSD filesystems under AmigaDOS.
+	
+MountList.BFFS  - Sample AmigaDOS mountlist for filesystem
+	The information contained in this MountList is explained in
+	detail in the user manual.
+
+release_notes - Filesystem operation changes since previous releases.
+
+bin/bffstool - Amiga gadtools utility to monitor filesystem performance
+	and modify current operating parameters.  See the user manual
+	for operating instructions.
+
+bin/dumpfs - Show various Berkeley Fast Filesystem parameters; this
+	includes information in the disk label (if present) as well
+	as the superblock and cylinder group summary information.
+	This tool requires the filesystem already be mounted.
+
+bin/dcp - Copy from files to devices and visa versa.  See the separate
+	documentation included for this package for details.
+
+bin/ln - Create hard and soft links (usage is similar to UNIX ln command)
+
+bin/newfs - 4.3 BSD Tahoe source ported to the Amiga.
+	This program will create a new BSD filesystem within the bounds of
+	the specified partition.  This tool requires the filesystem already
+	be mounted.  A diskchange should be done on the partition following
+	the new filesystem creation.
+
+bin/fsck - 4.3 BSD Tahoe source ported to the Amiga
+	This program will check the consistency of the filesystem specified.
+	It will also NOT work correctly with SunOS 4.1.2 newfs'ed partitions,
+	as Sun has changed its cylinder summary information slightly.
+	The filesystem MUST be quiescent before starting fsck.  If the
+	filesystem is modified, you must perform a diskchange on the
+	partition to ensure continued data consistency.
+
+bin/diskpart - 4.3 BSD Tahoe source ported to the Amiga
+	This program allows you to create and/or edit the disk boot
+	label information stored in the first sector of the disk
+	(Amiga disk partition).  When creating a new disk label, if
+	you do not specify the partition type, one will automatically
+	be created for you specifying parameters which fit inside the
+	the AmigaDOS partition.

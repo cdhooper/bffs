@@ -1,0 +1,2 @@
+mknod: mknod.c
+	dcc -o mknod mknod.c

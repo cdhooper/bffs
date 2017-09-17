@@ -1,0 +1,113 @@
+1.3 Release changes over 1.3beta:
+	If device does not exist, BFFS no longer GURUs the machine.
+		Thanks to Tero Manninen for finding this one.
+	End of file seek fixed (returns correct position now)
+		Again thanks to Tero Manninen for finding this one.
+	Dumpfs infinite loop fixed, superblock check is more stringent,
+		memory cleared before use (in case driver can't read data
+		and dumpfs ran previously) thanks Dominic Giampaolo
+	Problem where files cannot be opened or examine even though they show
+		up in a file listing fixed, found by Lutz Vieweg
+	Unfreed signals in newfs fixed, found by Lutz Vieweg
+	rdb program written to provide simple means for editing and fixing
+		(most) manufacturers' of Rigid Disk Blocks.
+	Disk hardware protection status now correctly observed and reported
+		by filesystem, found by Thomas Kroener
+	Files not relative to a lock and not containing a colon are assumed
+		to be relative to the root - more compatible with ixemul
+	ACTION_FINDINPUT, ACTION_FINDOUTPUT, and ACTION_FINDUPDATE now do not
+		expect the filename be NULL terminated (ixemul.library again)
+	If an inode does not have a timestamp, the superblock time is given
+		Dates for files (such as lost+found) will now be valid
+	Unix filenames longer than the Amiga can handle (106 characters) are
+		now only significant to 106 characters.  Thanks to Tero
+		Manninen for pointing out the problem
+	Dumpfs now deallocates the correct memory amount, thanks again Tero!
+	Problem with newfs, fsck, dumpfs attempting to deallocate memory
+		zero bytes in length corrected, thanks to Tero Manninen
+	Inode's modify timestamp is now updated on file close (if written)
+		to the corrected GMT time
+	On filesystem inhibit or die, all files opened for write which have
+		been modified are synchronized to the disk
+	Problem with BFFS lowercasing all filenames has been corrected
+		thanks to Joe Vasher for pointing this out
+	Fixed crash problem with dumpfs when ^C is pressed
+
+1.3beta Release changes over 1.25:
+	Fixed bug where first file in directory was deleted and the fs still
+		showed the file
+	Fixed two enforcer hits at filesystem startup
+	Added comment for every file, showing inumber, perms, uid, gid,
+		blocks and size (will be able to turn that off)
+	Too many levels (like with looping sym links) will not spin forever
+	Fixed path resolution routines (now any packet can use assigned path)
+	Unimplemented packets now return the correct DOS error result.
+	Write to filesystem enabled (not thoroughly tested yet)
+	Added create file code to filesystem
+	Added delete file code to filesystem
+	Added file allocate/write code
+	Added invisible file access mode (0), so a file can be opened for
+		read/write even if it is already opened with an exclusive
+		lock - this needs to be tested further
+	Fixed return value for morecache, so that AddBuffers knows if the
+		add succeeded
+	Fixed bug in fsck - pass2 was using uninitialized data structure
+	Wrote filesystem monitoring tool - bffstool
+	Rewrote file block indexer - should be quicker (and handle
+		double indirection correctly) now
+	Added BSD style disk label recognition to filesystem and dumpfs,
+		also fixed consistency checks for boot block
+	Removed large stack requirements for fsck, newfs, and diskpart
+	Added partition autosizing for diskpart, newfs and made newfs able
+		to create filesystems in partitions other than the first
+	Added initial configuration options to filesystem via use of the
+		PreAlloc value
+	Added automatic disk sync (using timer.device)
+	Resolution of symbolic links relative to root should now work
+	Disk changes (for removable devices) are now sensed automatically,
+		compliments of Ken Dyke
+	Proper stack is now set automatically by the filesystem.  Only need
+		256 bytes to startup, compliments of Ken Dyke
+
+1.25 Release changes over 1.2:
+	Fixed cache large file read bug
+
+1.2 Release changes over 1.1:
+	Fixed preposterous (bad value) bootblock crashing filesystem
+	Seek of superblock is now much smarter - will look for alternate starts
+	Low memory allocations are now much more robust
+	Assigned paths onto the filesytem now work correctly
+		previously, assigned paths were parsed as the root directory
+	Indirect blocks of (very) large files were incorrectly being calculated
+	Fixed cache low memory problem - fs would exit on low memory when
+		attempting to allocate cache space.
+	Filesystem now reports correct number of blocks consumed by files
+	File dates were five hours fast; they are now probably 5 slow
+	Filesystem now starts immediately if Mount=1 in mountlist
+	Setting Reserved=-1 will make BFFS not rely on information in the
+		boot block of the disk.  Some cases where BFFS crashed
+		previously can be eliminated with this feature.
+
+1.1 Release changes over 1.0:
+	fsck now requires 50k of stack, instead of just crashing
+	sym links now show what they point to in the comment field
+	block and char special files now show type and device in comment field
+	fixed bug in filename path lookups which would cause a guru when
+		referencing objects that are not directories as if they were. 
+	added automatic path lookups to follow symlinks
+	diskname will now default to BFFS{partition} and can be changed with
+		the relabel command
+	file permissions and file type are now considered when granting file
+		read requests 
+	filename searches are now case-independent if a case-dependent match
+		is not found (means a second pass over the directory)
+	fixed problem with return filename on root dir, should be compatible
+		with workbench now
+	Added code to handle SAME_LOCK packet.  Unfortunately, I suspect a bug
+		in the way Workbench handles that info so this routine has been
+		hacked to always return LOCK_SAME.
+	Fixed motor off problem on floppy drives
+	New program - dumpfs to show filesystem information
+
+1.0 Release : beta only
+	Lots of bugs, few features.  :)

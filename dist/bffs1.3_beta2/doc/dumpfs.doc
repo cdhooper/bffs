@@ -1,0 +1,40 @@
+Version 1.1 of dumpfs                     Distribution is 31-Jan-94
+-----------------------------------------------------------------------
+
+dumpfs - a program to given information pertaining to one or more
+	 Berkeley Fast File Systems in the specified AmigaDOS device.
+
+
+Dumpfs enables the user to find out file system information for the
+specified AmigaDOS device.  Specifically, dumpfs will tell if a disk
+partition label can be found.  If one can be found, dumpfs will print
+the partitioning layout for either Sun or BSD disk labels. 
+
+Next, dumpfs will attempt to show the first superblock in the
+partition.  Following the superblock will be the filesystem cylinder
+group summary information.  This process will be repeated for every
+partition found in the disk label.  If you specify (on the command
+line) the exact partition you want dumpfs to show, only that
+partition will be displayed.  This is done by typing the partition
+letter (or number) following the AmigaDOS device name.
+ie: "dumpfs bf0:c"
+
+dumpfs provides its own online help by typing dumpfs with no
+parameters at the command line.  For more help, you can type
+"dumpfs -h"
+
+Briefly, the command line options dumpfs supports are:
+
+-l	do not read boot label information
+-b	do not show boot label information
+-s	do not show superblock information
+-c	do not show cylinder group summary information
+-i	show bit detail of inodes available
+-f	show bit detail of frags available
+-h	give more help
+
+-----------------------------------------------------------------------
+
+
+This package was written by Chris Hooper (cdh@mtu.edu).
+-----------------------------------------------------------------------

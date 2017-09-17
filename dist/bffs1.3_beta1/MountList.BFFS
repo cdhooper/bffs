@@ -1,0 +1,44 @@
+/* A sample MountList entry for a BFFS floppy  (unit 0) */
+
+BF0:
+    FileSystem = l:BFFSFileSystem      /* Use BFFSFileSystem in L:        */
+    Device = mfm.device   /* This comes with CrossDOS, you could also use
+			     messydisk.device if you have that.           */
+    Unit  = 0		  /* Disk unit number - HDToolBox will tell this  */
+    Flags = 0		  /* This is passed to the device                 */
+    Mount = 1		  /* 1 = Mount immediately                        */
+    Stacksize = 1024	  /* 1024 bytes are required by BFFS 1.3          */
+    BlocksPerTrack = 9    /* Disk Sectors/Track - Std. 9 SPT for floppies */
+    Surfaces = 2	  /* Disk heads - HDToolBox MUST agree!           */
+    LowCyl   = 0	  /* This MUST be what HDToolBox gives you!       */
+    HighCyl  = 79	  /* This MUST be what HDToolBox gives you!       */
+    Priority = 5	  /* This should be fine at 5 for floppies        */
+    GlobVec  = -1	  /* BCPL device vector - do no change            */
+    Buffers  = 32;	  /* Use 50k for disk buffers                     */
+    Reserved = -1;	  /* Unix partition (-1 = no disk label)          */
+    PreAlloc = 0;         /* BFFS startup flags                           */
+    DosType  = 0x42464653 /* 'BFFS' - use another type if you want        */
+#
+
+
+
+/* A sample MountList entry for a partition on your hard drive */
+
+BH0:
+    FileSystem = l:BFFSFileSystem      /* Use BFFSFileSystem in L:        */
+    Device = scsi.device  /* This is for 2091.  You may have to change it */
+    Unit  = 0		  /* Disk unit number - HDToolBox will tell this  */
+    Flags = 0		  /* This is passed to the device                 */
+    Mount = 1		  /* 1 = Mount immediately                        */
+    Stacksize = 1024	  /* 1024 bytes are required by BFFS 1.3          */
+    BlocksPerTrack = 17   /* Disk Sectors/Track - HDToolBox MUST agree!   */
+    Surfaces = 4	  /* Disk heads - HDToolBox MUST agree!           */
+    LowCyl   = 0	  /* This MUST be what HDToolBox gives you!       */
+    HighCyl  = 640	  /* This MUST be what HDToolBox gives you!       */
+    Priority = 5	  /* You may want to set this to 10               */
+    GlobVec  = -1	  /* BCPL device vector - do no change            */
+    Buffers  = 100;	  /* Use 50k for disk buffers                     */
+    Reserved = -1;        /* Unix partition (-1 = no disk label)          */
+    PreAlloc = 0;         /* BFFS startup flags                           */
+    DosType  = 0x42464653 /* 'BFFS' - use another type if you want        */
+#

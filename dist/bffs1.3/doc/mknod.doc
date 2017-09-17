@@ -1,0 +1,32 @@
+------------------------------------------------------------------------
+Version 1.0 of mknod                      Distribution is 2-Feb-94
+------------------------------------------------------------------------
+
+mknod - create Unix special device nodes
+
+
+This program acts nearly identical to the Unix command of the same name.
+
+
+Usage:
+	mknod type major minor devname [devname . . . ]
+
+Where 
+	type is either b (block special) or c (character special)
+
+	major is the major device number (0 to 16M)
+
+	minor is the minor device number (0 to 255)
+
+	devname is the name of the special file to create
+
+
+	You are allowed to name as many names as you want to be the
+		specified device node.
+
+
+------------------------------------------------------------------------
+
+
+This program was created by Chris Hooper (cdh@mtu.edu)
+------------------------------------------------------------------------
