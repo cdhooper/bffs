@@ -1,0 +1,4 @@
+line 50 of pass2.c add
+	bzero((char *)&dino, sizeof(struct dinode));
+
+	- was using uninitialized structure

@@ -1,9 +1,13 @@
-OBJ=obj/
+ARCH=ami
+DOTDOT=
+#PROG=$(DOTDOT)/bin/bffstool.$(ARCH)
+PROG=$(DOTDOT)/bin/bffstool
+OBJ=$(DOTDOT)/obj.$(ARCH)/
 
 OBJS=$(OBJ)toolres.o $(OBJ)tool.o $(OBJ)comm.o
 
-tool: $(OBJS)
-	dcc -o tool $(OBJS)
+$(PROG): $(OBJS)
+	dcc -o $(PROG) $(OBJS)
 
 $(OBJ)toolres.o: toolres.c
 	dcc -c toolres.c -o %(left)

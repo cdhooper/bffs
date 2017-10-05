@@ -1,0 +1,28 @@
+ARCH=ami
+DOTDOT=
+#PROG=$(DOTDOT)/bin/dumpfs.$(ARCH)
+PROG=$(DOTDOT)/bin/dumpfs
+OBJ=$(DOTDOT)/obj.$(ARCH)/
+OBJS=$(OBJ)dumpfs_m.o $(OBJ)dump_other_m.o $(OBJ)getopt_m.o $(OBJ)amiga_device_m.o
+
+CC=dcc
+CFLAGS=-I/ucbinclude -I/fs -Dcdh -mD
+RM=delete force
+
+$(PROG): $(OBJS)
+	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
+
+clean:
+	$(RM) $(OBJS) $(PROG)
+
+$(OBJ)dumpfs_m.o: dumpfs.c
+	$(CC) $(CFLAGS) -c dumpfs.c -o %(left)
+
+$(OBJ)dump_other_m.o: dump_other.c
+	$(CC) $(CFLAGS) -c dump_other.c -o %(left)
+
+$(OBJ)getopt_m.o: $(DOTDOT)/unix_support/getopt.c
+	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/getopt.c -o %(left)
+
+$(OBJ)amiga_device_m.o: $(DOTDOT)/unix_support/amiga_device.c
+	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/amiga_device.c -o %(left)

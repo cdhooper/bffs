@@ -1,2 +1,6 @@
-els: els.c
-	dcc -o els els.c
+PROG=/bin/els
+CFLAGS=-I/ucbinclude -Dcdh
+CC=dcc
+
+$(PROG): els.c
+	$(CC) $(CFLAGS) -o $(PROG) %(right)

@@ -1,0 +1,4 @@
+PROG=/bin/dcp
+
+$(PROG): dcp.c
+	dcc -o $(PROG) dcp.c

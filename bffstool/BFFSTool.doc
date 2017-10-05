@@ -1,4 +1,4 @@
-Version 1.3 of BFFSTool                     Distribution is 31-Jan-94
+Version 1.5 of BFFSTool                     Distribution is 31-Jan-96
 -----------------------------------------------------------------------
 
 BFFSTool - a program to monitor and modify the behavior of running
@@ -31,7 +31,7 @@ initially select, you may specify that on the command line;
 ie: "bffstool bf0:"
 
 A window should open with the title, "Berkeley Fast Filesystem
-(BFFS) status tool V1.3"  If it doesn't then no handlers were
+(BFFS) status tool V1.5"  If it doesn't then no handlers were
 found in the system.  In that case, you will need to consult
 the documentation for correctly installing a BFFS handler.
 If you have a handler installed correctly, you may have one of
@@ -39,32 +39,33 @@ two problems.  The partition must be mounted and accessed
 before BFFSTool will recognize the filesystem handler as valid.
 The other possible problem may be that you are attempting to
 run BFFSTool with the wrong version of the BFFSFileSystem.
-BFFSTool 1.3 will ONLY work with version 1.3 of BFFSFileSystem.
+BFFSTool 1.5 will ONLY work with version 1.3 or higher of
+BFFSFileSystem.
 
 
 The window should look similar to the following:
 _____________________________________________________________________________
 |_|_________________________________________________________________________|
-|    read hits   0      read opens  0       frags free 7       | Refresh   ||
-|    read misses 0      read groups 4      blocks free 0       +-----------+|
-|   write hits   0      read bytes  4096   inodes free 23      |  Sync     ||
-|   write misses 0     write opens  0         num dirs 1       +-----------+|
-|  cgread hits   0     write groups 0        frag size 1024    |  Clear    ||
-|  cgread misses 0     write bytes  0       block size 8192    +-----------+|
-| cgwrite hits   0          locates 0       num inodes 64      |  Quit     ||
-| cgwrite misses 0         examines 1       data frags 679     -------------|
-|    cache moves 0     examinenexts 7        num frags 720                _ |
+|    read hits   0      read opens  0       frags free 7         | Refresh ||
+|    read misses 0      read groups 7      blocks free 0         +---------+|
+|   write hits   0      read Kbytes 12     inodes free 23        |  Sync   ||
+|   write misses 0     write opens  0         num dirs 1         +---------+|
+|  cgread hits   0     write groups 0       block size 8192      |  Clear  ||
+|  cgread misses 0     write Kbytes 0        frag size 1024      +---------+|
+| cgwrite hits   0          locates 1       num inodes 64        |  Quit   ||
+| cgwrite misses 0         examines 0       data frags 679       -----------|
+|    cache moves 0     examinenexts 0        num frags 720                _ |
 |        flushes 0          flushes 0          num cgs 1    Auto Symlink |x||
 |     cg flushes 0          renames 0          num cyl 80    Ignore Case |x||
 |   force writes 0                           sec/track 9   Link Comments |_||
 |cg force writes 0       sync timer:1        track/cyl 2  Inode Comments | ||
 |       destroys 0      sync stalls:10          cyl/cg 80                +-+|
 |    invalidates 0       GMT offset:0         frags/cg 720    Unix Paths |_||
-| cg max buffers:3         PreAlloc 7        inodes/cg 64      Read Only | ||
+| cg max buffers:6         PreAlloc 7        inodes/cg 64      Read Only | ||
 |    max buffers:32                            minfree 0                 +-+|
 |  total buffers 32     media start 0         modified 0    Show Minfree |_||
-| in use buffers 0      media end   737280       clean 0    Grp/Otr Bits |_||
-|  dirty buffers 0          version 1.3 Rw              ____________________|
+| in use buffers 2      media end   737280       clean 0    Grp/Otr Bits |_||
+|  dirty buffers 0          version 1.5 R               ____________________|
 | locked buffers 0        disk type Sun md0a   Handler |@|______BFFSa:_____||
 |___________________________________________________________________________|
 
@@ -218,14 +219,14 @@ read opens	The number of files (successfully and unsuccessfully)
 		opened for read from the disk.
 read groups	The number of raw disk transfers which have been
 		requested of the disk device to read.
-read bytes	The number of bytes which have been requested of the
-		disk device read.
+read Kbytes	The number of kilobytes which have been requested of
+		the disk device read.
 write opens	The number of files (successfully and unsuccessfully)
 		opened for write to the disk.
 write groups	The number of raw disk transfers which have been
 		requested of the disk device to write.
-write bytes	The number of bytes which have been requested of the
-		disk device write.
+write Kbytes	The number of kilobytes which have been requested of
+		the disk device write.
 locates		The number of times an individual file was locked
 		via the ACTION_LOCATE packet (Lock() in dos.library)
 examines	The number of examine packets which have been sent
@@ -265,31 +266,42 @@ media end	This is the upper bounding byte address of the
 		is being accessed.  All data accesses are checked
 		for validity within this range (to prevent media
 		corruption causing additional possible corruption).
-version		This is a comment field by the filesystem to describe
-		the current running version of BFFS.  You will notice
-		the version number followed by some letters.  The
-		letters you see detail the following:
-		R  Handler can handle removable media.  Your version
+version		This is a comment field filled the filesystem to
+		describe the current running version of BFFS.  You
+		will notice the version number followed by some
+		letters.  The letters you see detail the following:
+		r  Handler can handle removable media.  Your version
 			will probably have this option turned on.
+		R  Filesystem handler is compiled to only read the
+			disk and never allow writes.  This makes the
+			BFFS code much smaller, as no write code is
+			then compiled in.
 		E  Handler uses extended packets to talk with the
 			disk device.  Since not all devices are able
 			to use extended packets, your distribution
 			will probably have this option turned off.
+		I  Intel byte ordering code.  This version of the
+			filesystem has been compiled to support Intel
+			(little-endian) byte ordering for the filesystem
+			metadata (ie: 386i and 386BSD).  This, of course
+			automatically makes the filesystem incompatible
+			with Motorola byte ordering filesystems, which
+			include Sun SPARC, and Amiga.  This version
+			should be able to read both Sun 386i and NetBSD
+			x86 filesystems.  The translation code necessary
+			makes the filesystem code larger and run slower.
+		.  When directories are examined by user programs the
+			filesystem will automatically show . and ..
+			This option not is compiled in by default to provide
+			compatibility with older programs which recursively
+			traverse a filesystem (so they don't infinite loop).
+		P  File permission checking is not performed with this
+			version of the filesystem.  This makes the filesystem
+			code only slightly faster.
 		F  Handler compiled with Fast mode.  This means that
 			all filesystem consistency checking is turned
-			off, but the filesystem performs much faster.
-		I  Intel version.  This version of the filesystem has
-			been compiled to support Intel byte ordering
-			for the filesystem (ie: 386i and 386BSD).
-			This automatically makes the filesystem
-			incompatible with Motorola byte ordering
-			filesystems, which include Sun SPARC, and
-			Amiga.  This functionality is not yet
-			supported, but will be in a future release.
-		r  Filesystem handler is compiled to only read the
-			disk and never allow writes.
-		w  Filesystem handler is compiled to allow both reads
-			from and writes to the disk.
+			off, but the filesystem performs faster. This
+			is another option turned off by default.
 		D  Filesytem is compiled with debugging messages
 			turned on.  This increases the size of the
 			filesystem and slows it down.  Unless you are
@@ -334,13 +346,13 @@ inodes free	The number of disk file descriptors still available.
 		be allocated.
 num dirs	The number if directories present in the filesystem.
 		Note that the root directory counts as one.
-frag size	The number of bytes which make up a disk fragment,
-		as parameterized by the newfs command.
 block size	The number of bytes which make up a full filesystem
 		disk block as parameterized by the newfs command.
 		Note that this value must be a multiple (from 1x to
 		8x) the size of the frag size.  Also, allowed values
 		for the block size are 4096, 8192, 16384, or 32768.
+frag size	The number of bytes which make up a disk fragment,
+		as parameterized by the newfs command.
 num inodes	The total number of inodes which were parameterized
 		as available when the filesystem was created.  By
 		subtracting the number of inodes free, you can get
@@ -420,11 +432,15 @@ Grp/Otr Bits	This box when checked inverts the meaning of the
 		there was some late indecision made at Commodore
 		regarding the final meaning of these bits.  This
 		provides a temporary solution should you need it.
+		Note that BFFS ignores the GRP/OTR bits, but interprets
+		and passes them on to the user application on request.
 Handler		This is a Cycle gadget which allows you to choose
 		the BFFS handler with which you want to communicate.
 		Note that BFFSTool "knows" which handlers are active
 		in the system and it will only let you query an
 		active BFFS 1.3 or higher filesystem handler.
+		You may have to access the filesystem for the first
+		time before BFFSTool will let you look at it.
 
 Finally, you will notice minitiature up/down button gadgets near
 "cg max buffers", "max buffers", "sync timer", "sync stalls", and

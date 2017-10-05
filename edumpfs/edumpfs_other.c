@@ -1,0 +1,7 @@
+fbread()
+{
+}
+
+fbwrite()
+{
+}

@@ -1,2 +1,26 @@
-eln: eln.c
-	dcc -o eln eln.c
+ARCH=ami
+DOTDOT=
+#PROG=$(DOTDOT)/bin/eln.$(ARCH)
+PROG=$(DOTDOT)/bin/eln
+OBJ=$(DOTDOT)/obj.$(ARCH)/
+OBJS=$(OBJ)eln.o $(OBJ)amiga_unix.o
+
+#CFLAGS=-I./include -DRRESTORE
+#CFLAGS=-O2 -I./include
+#CC=cc
+CC=dcc
+#CFLAGS=-Dcdh -I/include -I ""
+CFLAGS=-Dcdh -I/include
+RM=delete force
+
+$(PROG): $(OBJS)
+	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
+
+clean:
+	$(RM) $(OBJS) $(PROG)
+
+$(OBJ)eln.o: eln.c
+	$(CC) $(CFLAGS) -c eln.c -o $(OBJ)eln.o
+
+$(OBJ)amiga_unix.o: $(DOTDOT)/unix_support/amiga_unix.c
+	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/amiga_unix.c -o $(OBJ)amiga_unix.o

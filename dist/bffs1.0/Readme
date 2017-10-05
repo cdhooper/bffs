@@ -29,7 +29,7 @@ BFFSFileSystem - Berkeley FFS implementation filesystem for AmigaDOS
 
 user_manual - Documentation on how to get started and maintain your
 	BSD filesystems under AmigaDOS.
-	
+
 MountList.BFFS  - Sample AmigaDOS mountlist for filesystem
 	The information contained in this MountList is explained in
 	detail in the user manual.

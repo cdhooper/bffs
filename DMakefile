@@ -1,0 +1,14 @@
+DOTDOT=
+BIN=bin/
+BINS=$(BIN)echown $(BIN)edumpfs $(BIN)etouch $(BIN)newfs $(BIN)bffstool $(BIN)dcp $(BIN)eln $(BIN)fsck $(BIN)rdb $(BIN)tunefs $(BIN)echmod $(BIN)els $(BIN)mknod $(BIN)restore $(BIN)dumpfs $(BIN)diskpart $(BIN)dbprint fs/bffs
+DIR=
+DIRS=$(DIR)echown $(DIR)edumpfs $(DIR)etouch $(DIR)newfs $(DIR)bffstool $(DIR)dcp $(DIR)eln $(DIR)fsck $(DIR)rdb $(DIR)tunefs $(DIR)echmod $(DIR)els $(DIR)mknod $(DIR)restore $(DIR)dumpfs $(DIR)diskpart $(DIR)fs $(DIR)fs
+
+
+all: $(BINS)
+
+
+$(BINS) : $(DIRS)
+	cd %(right)
+	dmake -s $(DOTDOT)/%(left)
+	cd

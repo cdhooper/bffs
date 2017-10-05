@@ -20,9 +20,10 @@ struct BFFSfh  {
 	int	real_inum;	  /* actual inode number to use for I/O */
 };
 
+
 /* Packet routines - specified by table code */
+void PUnimplemented();
 void PLocateObject();
-void PFreeLock();
 void PExamineObject();
 void PExamineNext();
 void PFindInput();
@@ -37,6 +38,8 @@ void PDeleteObject();
 void PMoreCache();
 void PRenameDisk();
 void PSetProtect();
+void PGetPerms();
+void PSetPerms();
 void PCurrentVolume();
 void PCopyDir();
 void PInhibit();
@@ -56,6 +59,7 @@ void PReadLink();
 void PSetFileSize();
 void PSetDate();
 void PSetDates();
+void PSetTimes();
 void PSetOwner();
 void PDiskType();
 void PFhFromLock();
@@ -67,15 +71,26 @@ void PAddNotify();
 void PRemoveNotify();
 void PNil();
 void PFileSysStats();
+void PFreeLock();
+void PGetDiskFSSM();
+void PFreeDiskFSSM();
+void PExObject();
+void PExNext();
 
 /* key is or'd with MSb on first examine */
 #define MSb 1<<31
 
 /* C pointer to BCPL pointer */
-#define CTOB(x) ((x)>>2)
+#ifdef CTOB
+#undef CTOB
+#endif
+#define CTOB(x) (((unsigned long) x)>>2)
 
 /* BCPL pointer to C pointer */
-#define BTOC(x) ((x)<<2)
+#ifdef BTOC
+#undef BTOC
+#endif
+#define BTOC(x) (((unsigned long) x)<<2)
 
 /* access modes */
 #define MODE_READ	0

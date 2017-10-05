@@ -1,5 +1,5 @@
 ------------------------------------------------------------------------
-Version 1.0 of ln                         Distribution is 31-Dec-93
+Version 1.1 of eln                        Distribution is 31-Dec-93
 ------------------------------------------------------------------------
 
 ln - create symbolic links
@@ -9,9 +9,9 @@ This program acts nearly identical to the UNIX command of the same name.
 
 
 Type:
-	ln {-s} [destination] [source] {source . . . }
+	eln {-s} [destination] [source] {source . . . }
 
-Where 
+Where
 	-s means create a soft link
 		otherwise, a hard link to the destination is created
 

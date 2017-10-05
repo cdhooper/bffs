@@ -24,7 +24,13 @@ extern int	motor_is_on;
 extern int	cache_flush_pending;
 
 /* C pointer to BCPL pointer */
-#define CTOB(x) ((x)>>2)
+#ifdef CTOB
+#undef CTOB
+#endif
+#define CTOB(x) (((unsigned long) x)>>2)
 
 /* BCPL pointer to C pointer */
-#define BTOC(x) ((x)<<2)
+#ifdef BTOC
+#undef BTOC
+#endif
+#define BTOC(x) (((unsigned long) x)<<2)

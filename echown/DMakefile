@@ -1,0 +1,4 @@
+PROG=/bin/echown
+
+$(PROG): echown.c
+	dcc -o $(PROG) echown.c

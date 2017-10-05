@@ -1,0 +1,12 @@
+add to bffstool
+	make bffstool able to edit the cache_size and cache_cg_size fields
+	    (send something like a add buffers packet?)
+	ability to change max writeback frags
+	ability to change dirty automatic flush frags
+	ability to change min buffered threshold
+	ability to change max cache invalidate read threshold
+add two parameters for writes - be able to customize how
+	many dirty blocks in cache before write flush and
+	how many blocks may be just dumped into the cache
+	instead of scheduling a disk write for that data (in file_write)
+

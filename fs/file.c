@@ -2,9 +2,11 @@
 #include <dos30/dos.h>
 #include <string.h>
 
-#include "debug.h"
+#include "config.h"
 #include "handler.h"
 #include "ufs.h"
+#include "ufs/inode.h"
+#include "fsmacros.h"
 #include "file.h"
 #include "cache.h"
 #include "alloc.h"
@@ -13,9 +15,11 @@
 #define MAX_PATH_LEVEL_LEN 8191
 #define DIRNAMELEN 107
 
+extern int resolve_symlinks;	/* 1=resolve sym links for AmigaDOS */
+extern int unixflag;		/* 1=Use Unix pathnames 0=AmigaDOS pathnames */
+extern int read_link;		/* 1=currently reading a link */
 
-int	resolve_symlinks = 1;	/* 1=resolve sym links for AmigaDOS */
-int	unixflag = 1;		/* 1=Use Unix pathnames 0=AmigaDOS pathnames */
+char	*linkname;		/* buffer holding path of resolved symlink */
 
 
 
@@ -42,11 +46,13 @@ char *name;
 	char	*buf;
 	struct	icommon	*inode;
 	int	passes = 0;
+	int	inosize;
 
 	namelen = strlen(name) + 1;
 	filename = (char *) AllocMem(namelen, MEMF_PUBLIC);
 	if (filename == NULL) {
 		PRINT(("file_find: unable to allocate %d bytes!\n", namelen));
+		global.Res2 = ERROR_NO_FREE_STORE;
 		return(0);
 	}
 	strcpy(filename, name);
@@ -55,6 +61,7 @@ char *name;
 	current = filename;
 
 	if (unixflag && (*current == '/')) {
+		PRINT(("ref root\n"));
 		finum = 2;
 		current++;
 	}
@@ -65,39 +72,59 @@ char *name;
 
 	while (current < strend) {
 		next = nextslash(current);
+PRINT(("nextslash from %s to %s\n", current, next));
 
 		pinum = finum;
-		if ((finum = file_name_find(pinum, current)) == NULL)
+		if (!unixflag && (*current == '\0')) {
+			finum = file_name_find(pinum, "..");
+		} else if ((finum = file_name_find(pinum, current)) == NULL)
 			break;
 
 		inode = inode_read(finum);
-		if ((inode->ic_mode & IFMT) == IFLNK) {  /* resolve sym link */
-			if (!resolve_symlinks) {
+		if ((DISK16(inode->ic_mode) & IFMT) == IFLNK) {  /* resolve sym link */
+			if (!resolve_symlinks && !read_link) {
+				FreeMem(filename, namelen);
 				global.Res2 = ERROR_IS_SOFT_LINK;
 				return(0);
 			}
-			templen	= IC_SIZE(inode) + strlen(next) + 1;
+			inosize = IC_SIZE(inode);
+			templen	= inosize + strlen(next) + 2;
 			if (templen > MAX_PATH_LEVEL_LEN) {
+				FreeMem(filename, namelen);
 				global.Res2 = ERROR_IS_SOFT_LINK;
 				return(0);
 			}
 			buf = (char *) AllocMem(templen, MEMF_PUBLIC);
-			if (buf == NULL) /* error: ran into symlink and no memory */
+			if (buf == NULL) { /* error: hit symlink and no memory */
+				global.Res2 = ERROR_NO_FREE_STORE;
 				break;
-			file_read(finum, 0, IC_SIZE(inode), buf);
+			}
+			if (bsd44fs && (inosize < MAXSYMLINKLEN))
+				strcpy(buf, inode->ic_db);
+			else
+				file_read(finum, 0, inosize, buf);
 
-			inode = inode_read(finum);
-			strcpy(buf + IC_SIZE(inode) + 1, next);
-			buf[IC_SIZE(inode)] = '/';
+			buf[inosize] = '/';
+			strcpy(buf + inosize + 1, next);
 			FreeMem(filename, namelen);
 			namelen	 = templen;
 			filename = buf;
 
+			if (read_link) {		/* return link name */
+PRINT(("return now %s\n", filename));
+			    filename[namelen - 2] = '\0';
+PRINT(("return now %s\n", filename));
+			    linkname = filename;
+			    return(finum);
+			    /* note buf mem is deallocated by ReadLink routine */
+			}
+
 			/* transition back to root or parent directory */
 			if (*buf == '/') {
-				if (unixflag)
+				if (unixflag) {
+					PRINT2(("loop parse, ref root\n"));
 					finum = 2;
-				else
+				} else
 					finum = file_name_find(pinum, "..");
 				next = buf + 1;
 			} else if (*buf == ':') {
@@ -110,7 +137,7 @@ char *name;
 
 			strend = filename + strlen(filename);
 
-		} else if (inode->ic_mode & IFCHR)
+		} else if (DISK16(inode->ic_mode) & IFCHR)
 			break;
 
 		current = next;
@@ -144,18 +171,24 @@ char	*name;
 {
 	int inum;
 
-	if (*name == '\0')
-		if (unixflag)
+/*
+	if (*name == '\0') {
+		if (unixflag) {
+			PRINT(("null, ref parent\n"));
 			inum = pinum;
-		else
+		} else {
+			PRINT(("null, ref ..\n"));
 			inum = dir_name_search(pinum, "..");
-	else {
-		if ((*name == '.') && (*(name + 1) == '\0'))
-			inum = pinum;
-		else
-			inum = dir_name_search(pinum, name);
-		global.Pinum = pinum;
-	}
+		}
+	} else {
+*/
+	if (*name == '\0')
+		inum = pinum;
+	else if ((*name == '.') && (*(name + 1) == '\0'))
+		inum = pinum;
+	else
+		inum = dir_name_search(pinum, name);
+	global.Pinum = pinum;
 
 	if ((*name == '\0') || ((*name == '.') && ((*(name + 1) == '\0') ||
 	     ((*(name + 1) == '.') && (*(name + 2) == '\0')))) ) {
@@ -180,26 +213,16 @@ char	*str2;
 		if (++count == DIRNAMELEN)
 			return(0);
 	}
+
 	if (*str2 == '\0')
 		return(1);
 	else
 		return(0);
 }
 
-/* old main loop
-		if (*str1 != *str2) {
-			ch1 = ((*str1 >= 'A') && (*str1 <= 'Z')) ?
-				(*str1 | 32) : *str1;
-			ch2 = ((*str2 >= 'A') && (*str2 <= 'Z')) ?
-				(*str2 | 32) : *str2;
-			if ((ch1 | 32) != (ch2 | 32))
-				return(0);
-		}
-*/
 
 
-
-
+#ifndef RONLY
 /* file_deallocate()
 	This routine will deallocate all blocks (including index blocks) for
 	the file pointed to by the specified inode number.  The inode pointers
@@ -232,11 +255,11 @@ ULONG inum;
 	/* if file is larger, allocation is granular only to entire fs blocks */
 	if (tofrags / FRAGS_PER_BLK < NDADDR) {
 		ffrags  = fragnum(superblock, tofrags);
-		block   = idisk_frag(tofrags - ffrags, inode);
+		block   = ridisk_frag(tofrags - ffrags, inode);
 
 /*
 		PRINT(("i=%d size=%d blocks=%d\n", inum, IC_SIZE(inode),
-			inode->ic_blocks));
+			DISK32(inode->ic_blocks)));
 		PRINT(("tofrags=%d ffrags=%d block=%d\n", tofrags, ffrags, block));
 */
 
@@ -249,8 +272,9 @@ ULONG inum;
 
 	for (index = 0; index < NDADDR; index++)
 		if (inode->ic_db[index]) {
-/*			PRINT(("deleting block %d\n", inode->ic_db[index])); */
-			block_deallocate(inode->ic_db[index]);
+/*			PRINT(("deleting block %d\n",
+				DISK32(inode->ic_db[index]))); */
+			block_deallocate(DISK32(inode->ic_db[index]));
 			inode->ic_db[index] = 0;
 		}
 
@@ -265,8 +289,8 @@ ULONG inum;
 			return(0);
 		}
 		if (inode->ic_ib[index]) {
-			iblock_deallocate(index, inode->ic_ib[index]);
-			block_deallocate(inode->ic_ib[index]);
+			iblock_deallocate(index, DISK32(inode->ic_ib[index]));
+			block_deallocate(DISK32(inode->ic_ib[index]));
 		}
 	}
 
@@ -292,9 +316,9 @@ ULONG fragaddr;
 		cache_frag_flush(fragaddr + index);
 
 	if (data_read(level_buffer[level], fragaddr, FBSIZE))
-		PRINT(("** iblock_deallocate: bad block read\n"));
+		PRINT2(("** iblock_deallocate: bad block read\n"));
 
-	for (index = 0; index < NINDIR(superblock); index++)
+	for (index = 0; index < DISK32(superblock->fs_nindir); index++)
 	    if (level_buffer[level][index]) {
 		if (level > 0)
 		    deallocated += iblock_deallocate(level - 1,
@@ -323,6 +347,11 @@ ULONG fragaddr;
 	NEEDS WORK to complete the policy....should allocate from another
 	cg (one which has the fewest blocks allocated) if stepping across
 	the line from direct blocks to first indirect index block.
+
+	inode is file inode
+	inum is file inode number
+	startfrag is file start fragment
+	blocks is number of fs blocks to allocate
 */
 file_blocks_add(inode, inum, startfrag, blocks)
 struct	icommon *inode;		/* pointer to inode */
@@ -341,27 +370,29 @@ ULONG	blocks;			/* number of filesystem blocks to allocate */
 
 	if (startfrag)
 		for (index = startfrag - 1; index >= 0; index--)
-			if (prev_frag = idisk_frag(index, inode))
+			if (prev_frag = ridisk_frag(index, inode))
 				break;
 
-	if (prev_frag == 0)
+	if (prev_frag == 0) {
 		prev_frag = itod(superblock, inum);
+		PRINT(("no prev frag found, set to %d\n", prev_frag));
+	}
 
 	cgx  = dtog(superblock, prev_frag);
 	mycg = cache_cg_write(cgx);
 	for (index = 0; index < blocks; index++) {
-		/* check already alloced */
-		if (idisk_frag(startfrag + index * FRAGS_PER_BLK, inode))
-			continue;
-		blockgot = block_allocate(prev_frag);
-		if (blockgot == 0) {
-			PRINT(("file_blocks_add: failed to allocate all requested blocks\n"));
-			break;
-		}
-		inode = inode_modify(inum);
-		inode->ic_blocks += NSPB(superblock);
-		cidisk_frag(startfrag + index * FRAGS_PER_BLK, inum, blockgot);
-		prev_frag = blockgot;
+	    /* check already alloced */
+	    if (ridisk_frag(startfrag + index * FRAGS_PER_BLK, inode))
+		continue;
+	    blockgot = block_allocate(prev_frag);
+	    if (blockgot == 0) {
+		PRINT(("file_blocks_add: failed to allocate all requested blocks\n"));
+		break;
+	    }
+	    inode = inode_modify(inum);
+	    inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NSPB(superblock));
+	    cidisk_frag(startfrag + index * FRAGS_PER_BLK, inum, blockgot);
+	    prev_frag = blockgot;
 	}
 	return(index);
 }
@@ -386,7 +417,7 @@ ULONG	blocks;			/* number of filesystem blocks to allocate */
 	the number of blocks (meaning no frags), then nothing will be done
 	to the file.
 */
-file_block_extend(inum)
+int file_block_extend(inum)
 ULONG	inum;
 {
 	struct	icommon *inode;
@@ -399,16 +430,16 @@ ULONG	inum;
 	struct	cg *mycg;
 
 	inode	= inode_read(inum);
-	fspill	= (inode->ic_blocks / NSPF(superblock)) % FRAGS_PER_BLK;
+	fspill	= (DISK32(inode->ic_blocks) / NSPF(superblock)) % FRAGS_PER_BLK;
 
-PRINT(("fbe: %d blks=%d fspill=%d\n", inum, inode->ic_blocks, fspill));
+PRINT(("fbe: %d blks=%d fspill=%d\n", inum, DISK32(inode->ic_blocks), fspill));
 
 	if (fspill == 0)
-		return;		/* block is already full size */
+		return(0);	/* block is already full size */
 
-	fblk = inode->ic_blocks / NSPF(superblock) - fspill;
+	fblk = DISK32(inode->ic_blocks) / NSPF(superblock) - fspill;
 
-	dblk	= idisk_frag(fblk, inode);
+	dblk	= ridisk_frag(fblk, inode);
 	cgx	= dtog(superblock, dblk);
 	mycg	= cache_cg(cgx);
 
@@ -424,12 +455,12 @@ PRINT(("fbe: %d blks=%d fspill=%d\n", inum, inode->ic_blocks, fspill));
 		frags_allocate(dblk, FRAGS_PER_BLK - fspill);
 	} else {	/* we must move (fspill) fragments to a new block */
 		if (fblk)
-			nblk = block_allocate(idisk_frag(fblk - 1, inode));
+			nblk = block_allocate(ridisk_frag(fblk - 1, inode));
 		else
 			nblk = block_allocate(itod(superblock, inum));
 		if (nblk == 0) {
 			PRINT(("Unable to allocate space for WRITE!\n"));
-			return;
+			return(1);
 		}
 		for (index = 0; index < fspill; index++)
 			cache_frag_move(nblk + index, dblk + index);
@@ -439,7 +470,15 @@ PRINT(("fbe: %d blks=%d fspill=%d\n", inum, inode->ic_blocks, fspill));
 	}
 
 	inode = inode_modify(inum);
+
+#ifdef INTEL
+	cgx = DISK32(inode->ic_blocks) +
+	      ((FRAGS_PER_BLK - fspill) * NSPF(superblock));
+	inode->ic_blocks = DISK32(cgx);
+#else
 	inode->ic_blocks += ((FRAGS_PER_BLK - fspill) * NSPF(superblock));
+#endif
+	return(0);
 }
 
 
@@ -472,8 +511,8 @@ ULONG inum;
 	for (blkstart = startblk; blkstart < NDADDR; blkstart++) {
 	    if (inode->ic_db[blkstart]) {
 		PRINT(("removing dir %d addr %d\n",
-			blkstart, inode->ic_db[blkstart]));
-		block_deallocate(inode->ic_db[blkstart]);
+			blkstart, DISK32(inode->ic_db[blkstart])));
+		block_deallocate(DISK32(inode->ic_db[blkstart]));
 		inode->ic_db[blkstart] = 0;
 		deallocated++;
 	    }
@@ -519,7 +558,7 @@ ULONG inum;
 	   that file block position.  iblock_deallocate routine will
 	   record the number of blocks actually deallocated for us */
 
-	curblk = inode->ic_ib[level - 1];
+	curblk = DISK32(inode->ic_ib[level - 1]);
 	if (curblk == 0)
 	    goto deallocate_trees;
 
@@ -530,7 +569,7 @@ ULONG inum;
 	    ptrcur = ptrnum[index] + 1;
 	    for (fragcur = fragno[index]; fragcur < FRAGS_PER_BLK; fragcur++) {
 		temp = (ULONG *) cache_frag_write(curblk + fragcur, 1);
-		for (; ptrcur < NINDIR(superblock) / FRAGS_PER_BLK; ptrcur++) {
+		for (; ptrcur < DISK32(superblock->fs_nindir) / FRAGS_PER_BLK; ptrcur++) {
 		    if (temp[ptrcur]) {
 			curdelblk = temp[ptrcur];
 			if (index)
@@ -562,8 +601,9 @@ ULONG inum;
 	PRINT(("dealloc trees, start=%d\n", level));
 	for (index = level; index < NIADDR; index++)
 	    if (inode->ic_ib[index]) {
-		deallocated += iblock_deallocate(index, inode->ic_ib[index]);
-		block_deallocate(inode->ic_ib[index]);
+		deallocated += iblock_deallocate(index,
+						 DISK32(inode->ic_ib[index]));
+		block_deallocate(DISK32(inode->ic_ib[index]));
 		deallocated++;
 		inode->ic_ib[index] = 0;
 	    }
@@ -574,9 +614,15 @@ ULONG inum;
 	}
 
 	inode = inode_modify(inum);
+#ifdef INTEL
+	inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) -
+				  (NSPB(superblock) * deallocated));
+#else
 	inode->ic_blocks -= (NSPB(superblock) * deallocated);
+#endif
 
-	PRINT(("deallocated final=%d fblks=%d\n", deallocated, inode->ic_blocks));
+	PRINT(("deallocated final=%d fblks=%d\n", deallocated,
+		DISK32(inode->ic_blocks)));
 }
 
 /* file_block_retract()
@@ -586,7 +632,7 @@ ULONG inum;
  *	o  The amount of space to deallocate must exist within one filesystem
  *		block.  You should call file_blocks_deallocate() if you wish to
  *		deal with more than just the last file block.
- *	o  This routine automatically relocated partial blocks as necessary.
+ *	o  This routine automatically relocates partial blocks as necessary.
  *	o  If the size of the file exceeds that which can be recorded solely
  *		by the inode direct addresses, then this trimming is not done.
  *		This is per the apparent (read: undocumented) BSD FFS (and fsck)
@@ -595,7 +641,6 @@ ULONG inum;
 file_block_retract(inum)
 int	inum;
 {
-	ULONG	fsize;
 	ULONG	ffrags;
 	ULONG	tofrags;
 	ULONG	dblk;
@@ -610,29 +655,39 @@ int	inum;
 	struct	cg *mycg;
 	struct	icommon *inode;
 
-
 	PRINT(("file_block_retract(): i=%d\n", inum));
 	inode	= inode_modify(inum);
-	fsize	= IC_SIZE(inode);
-	tofrags	= numfrags(superblock, fragroundup(superblock, fsize));
+	tofrags	= numfrags(superblock, fragroundup(superblock, IC_SIZE(inode)));
 	ffrags	= fragnum(superblock, tofrags);
 
-	PRINT(("fsize=%d total=%d frag_spill=%d\n", fsize, tofrags, ffrags));
+	PRINT(("filesize=%d total=%d frag_spill=%d actual_spill=%d\n",
+		IC_SIZE(inode), tofrags, ffrags,
+		fragnum(superblock, (DISK32(inode->ic_blocks) / NSPF(superblock)))));
 
 	if ((ffrags == 0) || (tofrags > FRAGS_PER_BLK * NDADDR))
-	    return;
+	    return(0);
+
+	if (ffrags == fragnum(superblock, DISK32(inode->ic_blocks) / NSPF(superblock))) {
+	    PRINT2(("caught actual spill %d as same size i=%d\n", ffrags, inum));
+	    return(1);
+	}
 
 	inode	= inode_modify(inum);
+#ifdef INTEL
+	inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) -
+				  (NSPF(superblock) * (FRAGS_PER_BLK - ffrags)));
+#else
 	inode->ic_blocks -= (NSPF(superblock) * (FRAGS_PER_BLK - ffrags));
+#endif
 
-	fdblk	= idisk_frag(blknum(superblock, tofrags), inode);
+	fdblk	= ridisk_frag(blknum(superblock, tofrags), inode);
 	cgx	= dtog(superblock, fdblk);
 	mycg	= cache_cg_write(cgx);
 	dblk	= dtogd(superblock, fdblk);
 	if (tofrags < FRAGS_PER_BLK)
 	    pblk = dtogd(superblock, itod(superblock, inum));
 	else
-	    pblk = dtogd(superblock, idisk_frag(fdblk - FRAGS_PER_BLK, inode));
+	    pblk = dtogd(superblock, ridisk_frag(fdblk - FRAGS_PER_BLK, inode));
 
 /*
 	PRINT(("inum=%d cg=%d d=%d p=%d\n", inum, cgx, dblk, pblk));
@@ -641,10 +696,10 @@ int	inum;
 
 	nblk = block_fragblock_find(mycg, pblk, ffrags);
 	if (nblk != -1) {
-	    PRINT(("will realloc to block %d\n", nblk));
-
 	    nblkfrags	= nblk % FRAGS_PER_BLK;
 	    ndblk	= nblk + cgbase(superblock, cgx);
+
+	    PRINT(("will realloc to block %d, %d pieces\n", nblk, nblkfrags));
 
 	    /* if found = full block, leave data where it is, dealloc extra */
 	    if ((nblkfrags == 0) && (block_avail(cg_blksfree(mycg), nblk))) {
@@ -652,11 +707,14 @@ int	inum;
 		goto dealloc_extra;
 	    }
 
+	    /* check if given the same block as we already have */
 	    if (ndblk - nblkfrags == fdblk - fdblk % FRAGS_PER_BLK) {
 		/* should not happen because entire block should be
 		   allocated to file at this point */
-		PRINT(("INCON: got same block %d\n", ndblk - nblkfrags));
-		goto dealloc_extra;
+		PRINT2(("fbr: INCON: got same block %d[%d]\n",
+			ndblk - nblkfrags, cgx));
+/*		goto dealloc_extra; */
+		return(0);
 	    }
 
 	    /* allocate frags of that new block */
@@ -672,13 +730,16 @@ int	inum;
 	    /* point inode at new location */
 	    cidisk_frag(tofrags - ffrags, inum, ndblk);
 
-	    return;
+	    return(0);
 	}
 
 	dealloc_extra:
-/*	PRINT(("freeing frags in %d, ic_blocks=%d\n", dblk, inode->ic_blocks)); */
+	PRINT(("freeing frags in %d, ic_blocks=%d\n", dblk,
+		DISK32(inode->ic_blocks)));
 
+	/* deallocate the unused frags in the current block */
 	frags_deallocate(fdblk + ffrags, FRAGS_PER_BLK - ffrags);
+	return(0);
 }
 
 /* frag_expand()
@@ -712,20 +773,21 @@ ULONG inum;
 	ULONG	cgblk;
 	ULONG	newblk;
 	int	count;
+	int	inosize;
 	struct	cg *mycg;
 	struct	icommon *inode;
 
 /*	PRINT(("frag expand: inum=%d\n", inum)); */
 
 	inode	= inode_modify(inum);
-	fspill	= (inode->ic_blocks / NSPF(superblock)) % FRAGS_PER_BLK;
-	fblk	=  inode->ic_blocks / NSPF(superblock) - fspill;
-	dblk	= idisk_frag(fblk, inode);
+	fspill	= (DISK32(inode->ic_blocks) / NSPF(superblock)) % FRAGS_PER_BLK;
+	fblk	=  DISK32(inode->ic_blocks) / NSPF(superblock) - fspill;
+	dblk	= ridisk_frag(fblk, inode);
 	cgx	= dtog(superblock, dblk);
 	mycg	= cache_cg_write(cgx);
-
+	inosize	= IC_SIZE(inode);
 /*	PRINT(("frgexp: i=%d size=%d last=%d spill=%d diskaddr=%d cg=%d\n", inum,
-		IC_SIZE(inode), fblk, fspill, dblk, cgx)); */
+		inosize, fblk, fspill, dblk, cgx)); */
 
 	startoff = dblk % FRAGS_PER_BLK;
 	cgblk	 = dblk - cgbase(superblock, cgx);
@@ -752,7 +814,8 @@ ULONG inum;
 
 	    if (newblk) {
 		inode = inode_modify(inum);
-		inode->ic_blocks      += NSPF(superblock);
+		inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) +
+					  NSPF(superblock));
 		IC_INCSIZE(inode, FSIZE);
 
 		if (fblk)
@@ -766,16 +829,19 @@ ULONG inum;
 
 	/* possibly allocate fragment in existing block */
 	} else if (startoff + fspill < FRAGS_PER_BLK)  {
-	    PRINT(("Looking for more space in current block\n"));
+	    PRINT(("Looking for more space in current block %d %d\n",
+		   cgblk + fspill, dblk + fspill));
 	    if (bit_val(cg_blksfree(mycg), cgblk + fspill)) {
 		frags_allocate(dblk + fspill, 1);
 
 		inode = inode_modify(inum);
-		inode->ic_blocks      += NSPF(superblock);
+		inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) +
+					  NSPF(superblock));
 		IC_INCSIZE(inode, FSIZE);
 
 		return(dblk + fspill);
 	    }
+	    PRINT((":none found\n"));
 	}
 
 	/* situation: fspill != 0, but the block is full.  This means that
@@ -785,7 +851,7 @@ ULONG inum;
 
 #ifndef FAST
 	if (dblk == 0) {
-		PRINT(("** error, dblk was 0, but trying to move frags!\n"));
+		PRINT2(("** error, dblk was 0, but trying to move frags!\n"));
 		return(0);
 	}
 #endif
@@ -808,7 +874,8 @@ ULONG inum;
 
 	if (newblk) {
 		inode = inode_modify(inum);
-		inode->ic_blocks      += NSPF(superblock);
+		inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) +
+					  NSPF(superblock));
 		IC_INCSIZE(inode, FSIZE);
 
 		for (index = 0; index < fspill; index++)
@@ -823,3 +890,4 @@ ULONG inum;
 
 	return(newblk + fspill);
 }
+#endif

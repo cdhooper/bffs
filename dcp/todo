@@ -1,0 +1,15 @@
+make dcp capable of async copies
+
+do direct file packet reads/writes instead of going through Dos
+	this will require a filesystem lock, msgport, and msgbuf allocation
+for stdio, leave as is
+
+in the case of -a (async) option:
+	split buffer in half (so there are two)
+		and set up "in use/idle" flag for buffer
+	for devices, allocate two trackIO structures
+		DoIO becomes SendIO
+	for files, allocate two msgbufs
+	main copy loop would then function like:
+		if no buffer available, wait on a message from handler/device
+		do normal operation (either read or write) with free buffer

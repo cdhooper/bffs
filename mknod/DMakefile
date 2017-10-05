@@ -1,2 +1,4 @@
-mknod: mknod.c
-	dcc -o mknod mknod.c
+PROG=/bin/mknod
+
+$(PROG): mknod.c
+	dcc -o $(PROG) mknod.c

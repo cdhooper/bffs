@@ -1,0 +1,4 @@
+PROG=/bin/rdb
+
+$(PROG): rdb.c
+	dcc -o $(PROG) rdb.c

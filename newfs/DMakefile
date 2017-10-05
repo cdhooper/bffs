@@ -1,0 +1,47 @@
+ARCH=ami
+DOTDOT=
+#PROG=$(DOTDOT)/bin/newfs.$(ARCH)
+PROG=$(DOTDOT)/bin/newfs
+OBJ=$(DOTDOT)/obj.$(ARCH)/
+OBJS=$(OBJ)newfs_m.o $(OBJ)mkfs_m.o $(OBJ)newfs_other_m.o $(OBJ)dkcksum_m.o $(OBJ)disklabel_m.o $(OBJ)file_label_m.o $(OBJ)amiga_label_m.o $(OBJ)amiga_device_m.o $(OBJ)getopt_m.o
+
+CC=dcc
+CFLAGS=-I/ucbinclude -I/fs -Dcdh -mD
+RM=delete force
+
+#CC=gcc
+#CFLAGS=-I../ucbinclude -I1:dcc/include/amiga20 -I1:dcc/include
+#DOTDOT=..
+
+$(PROG): $(OBJS)
+	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
+
+clean:
+	$(RM) $(OBJS) $(PROG)
+
+$(OBJ)newfs_m.o: newfs.c
+	$(CC) $(CFLAGS) -c newfs.c -o %(left)
+
+$(OBJ)mkfs_m.o: mkfs.c
+	$(CC) $(CFLAGS) -c mkfs.c -o %(left)
+
+$(OBJ)newfs_other_m.o: newfs_other.c
+	$(CC) $(CFLAGS) -c newfs_other.c -o %(left)
+
+$(OBJ)dkcksum_m.o: dkcksum.c
+	$(CC) $(CFLAGS) -c dkcksum.c -o %(left)
+
+$(OBJ)disklabel_m.o: $(DOTDOT)/unix_support/disklabel.c
+	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/disklabel.c -o %(left)
+
+$(OBJ)file_label_m.o: $(DOTDOT)/unix_support/file_label.c
+	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/file_label.c -o %(left)
+
+$(OBJ)amiga_label_m.o: $(DOTDOT)/unix_support/amiga_label.c
+	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/amiga_label.c -o %(left)
+
+$(OBJ)amiga_device_m.o: $(DOTDOT)/unix_support/amiga_device.c
+	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/amiga_device.c -o %(left)
+
+$(OBJ)getopt_m.o: $(DOTDOT)/unix_support/getopt.c
+	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/getopt.c -o %(left)

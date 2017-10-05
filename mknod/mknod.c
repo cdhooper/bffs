@@ -1,18 +1,19 @@
-/* mknod.c version 1.0
- *	This program is copyright (1994) Chris Hooper.  All code herein
- *	is freeware.  No portion of this code may be sold for profit.
+/* mknod.c version 1.1
+ *	This program is copyright (1994, 1996) Chris Hooper.  All code
+ *	herein is freeware.  No portion of this code may be sold for profit.
  */
 #include <stdio.h>
 #include <dos/dos.h>
 #include </dos30/dosextens.h>
 #include <exec/memory.h>
 
-#define TYPE_CHARACTER	0
-#define TYPE_BLOCK	1
+#define TYPE_BLOCK	0
+#define TYPE_CHARACTER	1
 
 #define ulong unsigned long
 #define CTOB(x) ((x)>>2)
 
+char *version = "\0$VER: mknod 1.1 (17.Aug.96) © 1996 Chris Hooper";
 char *progname;
 
 main(argc, argv)
@@ -62,6 +63,7 @@ char *argv[];
 
 print_usage()
 {
+	fprintf(stderr, "%s\n", version + 7);
 	fprintf(stderr, "usage:  %s type major minor devname [devname devname ...]\n",
 		progname);
 	fprintf(stderr, "        type is b (block) or c (character)\n");
@@ -114,7 +116,7 @@ ulong	device;
 	packet->sp_Pkt.dp_Type         = ACTION_CREATE_OBJECT;
 	packet->sp_Pkt.dp_Arg1         = lock;
 	packet->sp_Pkt.dp_Arg2         = CTOB(buf);
-	packet->sp_Pkt.dp_Arg3         = (type ? CDEVICE : BDEVICE);
+	packet->sp_Pkt.dp_Arg3         = (type ? ST_CDEVICE : ST_BDEVICE);
 	packet->sp_Pkt.dp_Arg4         = device;
 
 	PutMsg(msgport, (struct Message *) packet);

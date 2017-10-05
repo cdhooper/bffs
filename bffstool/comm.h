@@ -2,20 +2,20 @@ struct stat {
 	ULONG	magic;			/* 'BFF\0' for BFFS FileSystem R0 */
 	ULONG	size;			/* structure size (in longs)	  */
 	ULONG	unused;			/* checksum - not used		  */
-	ULONG   superblock;             /* updated only on packet request */
-	ULONG   cache_head;             /* updated only on packet request */
-	ULONG   cache_hash;             /* updated only on packet request */
-	ULONG   *cache_size;            /* updated only on packet request */
-	ULONG   *cache_cg_size;         /* updated only on packet request */
-	ULONG   *cache_item_dirty;      /* updated only on packet request */
-	ULONG   *cache_alloced;         /* updated only on packet request */
-	ULONG   *disk_poffset;          /* updated only on packet request */
-	ULONG   *disk_pmax;             /* updated only on packet request */
-	ULONG   *unixflag;              /* updated only on packet request */
+	ULONG   superblock;		/* updated only on packet request */
+	ULONG   cache_head;		/* updated only on packet request */
+	ULONG   cache_hash;		/* updated only on packet request */
+	ULONG   *cache_size;		/* updated only on packet request */
+	ULONG   *cache_cg_size;		/* updated only on packet request */
+	ULONG   *cache_item_dirty;	/* updated only on packet request */
+	ULONG   *cache_alloced;		/* updated only on packet request */
+	ULONG   *disk_poffset;		/* updated only on packet request */
+	ULONG   *disk_pmax;		/* updated only on packet request */
+	ULONG   *unixflag;		/* updated only on packet request */
 	ULONG   *resolve_symlinks;      /* updated only on packet request */
 	ULONG   *case_independent;      /* updated only on packet request */
-	ULONG   *dir_comments;		/* updated only on packet request */
-	ULONG   *dir_comments2;		/* updated only on packet request */
+	ULONG   *link_comments;		/* updated only on packet request */
+	ULONG   *inode_comments;	/* updated only on packet request */
 	ULONG   *cache_used;		/* updated only on packet request */
 	ULONG   *timer_secs;		/* updated only on packet request */
 	ULONG   *timer_loops;		/* updated only on packet request */

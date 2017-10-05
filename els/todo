@@ -1,0 +1,7 @@
+add group file and passwd file read stuff
+
+add stuff into columns and not print all data unless -l
+
+els -i
+els -s
+	print rows that are too long - suspect not being counted

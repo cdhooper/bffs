@@ -1,0 +1,55 @@
+ARCH=ami
+DOTDOT=
+PROG=$(DOTDOT)/bin/restore
+OBJ=$(DOTDOT)/obj.$(ARCH)/
+OBJS=$(OBJ)restore_main.o $(OBJ)interactive.o $(OBJ)restore.o $(OBJ)dirs.o $(OBJ)symtab.o $(OBJ)tape.o $(OBJ)restore_utilities.o $(OBJ)strsep.o $(OBJ)glob.o $(OBJ)restore_other.o $(OBJ)getopt.o $(OBJ)amiga_unix.o
+
+#CFLAGS=-I../ucbinclude -DRRESTORE
+#CFLAGS=-O2 -I./ucbinclude
+#CC=cc
+
+CC=dcc
+CFLAGS=-Dcdh -I/ucbinclude
+RM=delete force
+
+$(PROG): $(OBJS)
+	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
+
+clean:
+	$(RM) $(OBJS) $(PROG)
+
+$(OBJ)restore_main.o: restore_main.c restore.h
+	$(CC) $(CFLAGS) -c restore_main.c -o $(OBJ)restore_main.o
+
+$(OBJ)interactive.o: interactive.c restore.h
+	$(CC) $(CFLAGS) -c interactive.c -o $(OBJ)interactive.o
+
+$(OBJ)restore.o: restore.c restore.h
+	$(CC) $(CFLAGS) -c restore.c -o $(OBJ)restore.o
+
+$(OBJ)dirs.o: dirs.c restore.h
+	$(CC) $(CFLAGS) -c dirs.c -o $(OBJ)dirs.o
+
+$(OBJ)symtab.o: symtab.c restore.h
+	$(CC) $(CFLAGS) -c symtab.c -o $(OBJ)symtab.o
+
+$(OBJ)tape.o: tape.c restore.h
+	$(CC) $(CFLAGS) -c tape.c -o $(OBJ)tape.o
+
+$(OBJ)restore_utilities.o: restore_utilities.c restore.h
+	$(CC) $(CFLAGS) -c restore_utilities.c -o $(OBJ)restore_utilities.o
+
+$(OBJ)glob.o: glob.c
+	$(CC) $(CFLAGS) -c glob.c -o $(OBJ)glob.o
+
+$(OBJ)strsep.o: strsep.c
+	$(CC) $(CFLAGS) -c strsep.c -o $(OBJ)strsep.o
+
+$(OBJ)restore_other.o: restore_other.c
+	$(CC) $(CFLAGS) -c restore_other.c -o $(OBJ)restore_other.o
+
+$(OBJ)getopt.o: $(DOTDOT)/unix_support/getopt.c
+	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/getopt.c -o $(OBJ)getopt.o
+
+$(OBJ)amiga_unix.o: $(DOTDOT)/unix_support/amiga_unix.c
+	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/amiga_unix.c -o $(OBJ)amiga_unix.o

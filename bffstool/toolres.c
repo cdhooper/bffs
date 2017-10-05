@@ -1,5 +1,5 @@
-/* toolres.c version 1.3  (BFFStool)
- *      This program is copyright (1993, 1994) Chris Hooper.  All code
+/* toolres.c version 1.5  (BFFStool)
+ *      This program is copyright (1993 - 1996) Chris Hooper.  All code
  *      herein is freeware.  No portion of this code may be sold for profit.
  */
 
@@ -16,7 +16,7 @@ struct NewWindow window_ops =
 	ACTIVATE | WINDOWDRAG | WINDOWDEPTH | WINDOWCLOSE | SIMPLE_REFRESH,
 	NULL,
 	NULL,
-	"Berkeley Fast Filesystem (BFFS) status tool V1.3",
+	"Berkeley Fast Filesystem (BFFS) status tool V1.5",
 	NULL,
 	NULL,
 	0, 0, 0, 0,
@@ -55,11 +55,11 @@ char *fieldnames[] =
 	"read groups", "write groups", "read bytes ", "write bytes ",
 	"locates", "examines", "examinenexts", "flushes",
 	"read opens ", "write opens ", "renames", "Version", "Disk Type",
-	"PreAlloc",
+	"PreAlloc", "read Kbytes", "write Kbytes",
 /* superblock starts at 53  (dyn and static)	*/
         "num inodes",
-	"frags free", "blocks free", "inodes free", "num dirs",
-	"frag size", "block size", "data frags", "num frags",
+	"inodes free", "blocks free", "frags free", "num dirs",
+	"block size", "frag size", "data frags", "num frags",
 	"num cgs", "num cyl",
 	"sec/track", "track/cyl", "cyl/cg", "frags/cg", "inodes/cg",
 	"minfree", "modified", "clean",

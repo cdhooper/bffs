@@ -3,8 +3,8 @@
 #include "sys/time.h"
 #include "sys/vnode.h"
 #include "ufs/fs.h"
-#include "ufs/inode.h"
-#include "ufs/fsdir.h"
+/* #include "ufs/inode.h" */
+/* #include "ufs/fsdir.h" */
 
 #define ID_BFFS_DISK	(0x42464653L)  /* 'BFFS' filesystem */
 /*
@@ -21,11 +21,9 @@
 
 #define BOOT_BLOCK	0		/* Physical position of disk boot block	*/
 #define SUPER_BLOCK	16		/* Position of superblock in fs		*/
-#define MAX_BLOCK_SIZE	32768		/* Internal disk block buffer size	*/
 #define MAX_PART	8		/* Number disk partitions supported	*/
-#define SunBB_MAGIC	0xDABE		/* Sun Boot block magic number		*/
-#define B44BB_MAGIC	0x82564557	/* BSD 44 Boot block magic number	*/
-
+#define SunBB_MAGIC     0xDABE          /* Sun Boot block magic number          */
+#define B44BB_MAGIC     0x82564557      /* BSD 44 Boot block magic number       */
 
 /* This structure was also created purely from examination of a Sun boot sector.
    I guarantee nothing. */
@@ -96,7 +94,6 @@ struct bsd44_label {
 extern	int	fs_partition;		/* current partition number	  */
 extern	struct	fs *superblock; 	/* current superblock		  */
 extern	struct	IOExtTD *trackIO;	/* pointer to trackdisk IORequest */
-extern	struct	DosEnvec *Environment;	/* dos environment	 	  */
 extern	ULONG	poffset;		/* disk partition start offset	  */
 extern	ULONG	tranmask;		/* device DMA transfer mask	  */
 
@@ -104,7 +101,12 @@ extern	ULONG	pfragshift;		/* pointers in a frag		  */
 extern	ULONG	pfragmask;		/* mask current pointer in frag	  */
 extern	ULONG	fblkshift;		/* frags in a block		  */
 extern	ULONG	fblkmask;		/* mask current frag in block	  */
+extern  int	bsd44fs;		/* 0 = 4.3 BSD, 1 = 4.4 BSD 	  */
+extern  ULONG	fs_lfmask;		/* quick mask, bits flipped ala q */
+extern  ULONG	fs_lbmask;		/* quick mask, bits flipped ala q */
 
 #ifndef NULL
 #define NULL 0
 #endif
+
+#define MAXSYMLINKLEN (12 + 3) * 4 - 1

@@ -1,6 +1,6 @@
 #	@(#)disktab	5.1 (Berkeley) 4/8/91
 
-# Disk geometry and partition layout tables. 
+# Disk geometry and partition layout tables.
 # Key:
 #	dt	controller type
 #	ty	type of disk (fixed, removeable, simulated)

@@ -1,4 +1,3 @@
-
 /*
  * The I node is the focus of all local file activity in UNIX.
  * There is a unique inode allocated for each active file,
@@ -14,6 +13,31 @@
 #define	NIADDR	3		/* indirect addresses in inode */
 #define	FSL_SIZE (NDADDR+NIADDR-1) * sizeof (daddr_t)
 				/* max fast symbolic name length is 56 */
+
+struct	icommon {
+	u_short	ic_mode;	/*  0: mode and type of file */
+	short	ic_nlink;	/*  2: number of links to file */
+
+	uid_t	ic_ouid;	/*  4: owner's user id */
+	gid_t	ic_ogid;	/*  6: owner's group id */
+	quad	ic_size;	/*  8: number of bytes in file */
+
+	time_t	ic_atime;	/* 16: time last accessed */
+	long	ic_atime_ns;
+	time_t	ic_mtime;	/* 24: time last modified */
+	long	ic_mtime_ns;
+	time_t	ic_ctime;	/* 32: last time inode changed */
+	long	ic_ctime_ns;
+
+	daddr_t	ic_db[NDADDR];	/* 40: disk block addresses */
+	daddr_t	ic_ib[NIADDR];	/* 88: indirect blocks */
+	long	ic_flags;	/* 100: status, currently unused */
+	long	ic_blocks;	/* 104: blocks actually held */
+	long	ic_gen;		/* 108: generation number */
+	u_long	ic_nuid;	/* 112: File owner. */
+	u_long	ic_ngid;	/* 116: File group. */
+	long	dl_spare[2];	/* 120: Reserved; currently unused */
+};
 
 struct	inode {
 	struct	inode *i_chain[2];	/* must be first */
@@ -35,40 +59,7 @@ struct	inode {
 		struct inode  *if_freef;	/* free list forward */
 		struct inode **if_freeb;	/* free list back */
 	} i_fr;
-	struct 	icommon {
-		u_short	ic_mode;	/*  0: mode and type of file */
-		short	ic_nlink;	/*  2: number of links to file */
-		uid_t	ic_uid;		/*  4: owner's user id */
-		gid_t	ic_gid;		/*  6: owner's group id */
-		quad	ic_size;	/*  8: number of bytes in file */
-#ifdef	KERNEL
-		struct timeval ic_atime; /* 16: time last accessed */
-		struct timeval ic_mtime; /* 24: time last modified */
-		struct timeval ic_ctime; /* 32: last time inode changed */
-#else
-		time_t	ic_atime;	/* 16: time last accessed */
-		long	ic_atspare;
-		time_t	ic_mtime;	/* 24: time last modified */
-		long	ic_mtspare;
-		time_t	ic_ctime;	/* 32: last time inode changed */
-		long	ic_ctspare;
-#endif
-		daddr_t	ic_db[NDADDR];	/* 40: disk block addresses */
-		daddr_t	ic_ib[NIADDR];	/* 88: indirect blocks */
-		long	ic_flags;	/* 100: status, currently unused */
-		long	ic_blocks;	/* 104: blocks actually held */
-		long	ic_gen;		/* 108: generation number */
-		/*
-		 * XXX - the disk spares were used to avoid changing
-		 * the size of the incore inode in a minor release.
-		 * Fix for 5.0 release.
-		 * Also remove the code in iget, iupdat that clears them.
-		 */
-		long	ic_delaylen;	/* 112: delayed writes, units=bytes */
-		long	ic_delayoff;	/* 116: where we started delaying */
-		long	ic_nextrio;	/* 120: where to start the next clust */
-		long	ic_writes;	/* 124: number of outstanding writes */
-	} i_ic;
+	struct icommon i_ic;
 };
 
 struct	dinode {
@@ -151,6 +142,7 @@ struct	dinode {
 #define	IFREG		0100000		/* regular */
 #define	IFLNK		0120000		/* symbolic link */
 #define	IFSOCK		0140000		/* socket */
+#define	IFWHT		0160000		/* whiteout entry */
 
 #define	ISUID		04000		/* set user id on execution */
 #define	ISGID		02000		/* set group id on execution */

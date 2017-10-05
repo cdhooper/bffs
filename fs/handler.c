@@ -10,10 +10,11 @@
 #include <clib/exec_protos.h>
 #include <clib/dos_protos.h>
 
-#include "debug.h"
+#include "config.h"
 #include "handler.h"
 #include "packets.h"
 #include "table.h"
+#include "stat.h"
 
 #define NULL 0
 #define RESTART_TIMER timerIO->tr_time.tv_secs  = timer_secs;	\
@@ -42,10 +43,12 @@ int	timing		= 0;
 int	write_items	= 0;
 int	write_delay	= 0;
 int	receiving_packets = 1;
-int	timer_secs	= 1;
-int	timer_loops	= 10;
+extern int timer_secs;  /* delay seconda after write for cleanup */
+extern int timer_loops; /* maximum delays before forced cleanup */
+extern char *version;	/* BFFS version string */
 
-/* trying to reduce stack space consumption, these are for main */
+
+/* attempt to reduce stack space consumption, these are for main */
 ULONG  signal;
 ULONG  dcsignal;
 ULONG  dossignal;
@@ -55,9 +58,12 @@ struct Node **msghead;
 int    msgtype;
 int    entries = 0;
 
+
 handler()
 {
-    int	   index   = 0;
+    int    index = 0;
+    int    ptype;
+    struct call_table *ptable;
 
     BFFSTask = (struct Process *) FindTask(NULL);
     DosPort  = &(BFFSTask->pr_MsgPort);
@@ -76,17 +82,22 @@ handler()
 
     if (open_timer()) {
 	close_timer(0);
-	PRINT(("cannot open timer, unable to continue\n"));
+	PRINT2(("cannot open timer, unable to continue\n"));
 	receiving_packets = 0;
 	goto ignore_packets;
     }
 
+
     if (open_dchange()) {
 	close_dchange(0);
+/*
+ *  Don't consider it fatal that dchange is not supported
+ *
 	close_timer(1);
-	PRINT(("cannot open disk change service, unable to continue\n"));
+	PRINT2(("cannot open disk change service, unable to continue\n"));
 	receiving_packets = 0;
 	goto ignore_packets;
+*/
     }
 
     dossignal	= 1L << DosPort->mp_SigBit;
@@ -122,9 +133,9 @@ handler()
 			timing = 1;
 		    }
 		} else {
-			if (cache_item_dirty)
-				PFlush();
-			timing = 0;
+		    if (cache_item_dirty)
+			PFlush();
+		    timing = 0;
 		}
 	}
 
@@ -146,58 +157,59 @@ handler()
 	    global.Res1 = DOSTRUE;
 	    global.Res2 = 0L;
 
-	    for (index = 0; index < entries; index++)
-	        if (packet_table[index].packet_type == pack->dp_Type)
-		    if (inhibited && packet_table[index].check_inhibit) {
-			PRINT(("Sorry, we're inhibited.\n"));
+	    ptype = pack->dp_Type;
+	    if ((ptype < 41) && (ptype >= 0)) {   /* try for index table */
+		if (dev_openfail && dpacket_table[ptype].check_inhibit) {
+		    open_filesystem();
+		    if (dev_openfail) {
 			global.Res1 = DOSFALSE;
 			global.Res2 = ERROR_NO_DISK;
 			goto endpack;
-		    } else
-			break;
+		    }
+		}
 
-	    if (dev_openfail && packet_table[index].check_inhibit) {
+	        PRINT1(("%s D 1=%d 2=%d 3=%d 4=%d\n",
+			dpacket_table[ptype].name, pack->dp_Arg1,
+			pack->dp_Arg2, pack->dp_Arg3, pack->dp_Arg4));
+
+		dpacket_table[ptype].routine();   /* call the packet handler */
+
+		goto endpack;
+	    } else {
+		ptable = &packet_table[0];
+		for (index = 0, ptable = &packet_table[0];
+		     index < entries; index++, ptable++)
+		    if (ptable->packet_type == ptype)
+			if (inhibited && ptable->check_inhibit) {
+			    PRINT(("Sorry, we're inhibited.\n"));
+			    global.Res1 = DOSFALSE;
+			    global.Res2 = ERROR_NO_DISK;
+			    goto endpack;
+			} else
+			    break;
+	    }
+	    if (dev_openfail && ptable->check_inhibit) {
 	        open_filesystem();
 	        if (dev_openfail) {
 		    global.Res1 = DOSFALSE;
+		    global.Res2 = ERROR_NO_DISK;
 		    goto endpack;
 	        }
 	    }
 
-	    PRINT(("%s 1=%d 2=%d 3=%d 4=%d\n",
-		    packet_table[index].name, pack->dp_Arg1, pack->dp_Arg2,
-		    pack->dp_Arg3, pack->dp_Arg4));
+	    if (index == entries) {
+		PRINT1(("p=%d E 1=%d 2=%d 3=%d 4=%d unknown packet\n",
+			pack->dp_Type, pack->dp_Arg1, pack->dp_Arg2,
+			pack->dp_Arg3, pack->dp_Arg4));
 
-	    /* eventually make the incoming packet a global and have
-		the functions get only the needed data from this global */
+		global.Res1 = DOSFALSE;
+		global.Res2 = ERROR_ACTION_NOT_KNOWN;
+	    } else {
+	        PRINT1(("%s S 1=%d 2=%d 3=%d 4=%d\n",
+			ptable->name, pack->dp_Arg1,
+			pack->dp_Arg2, pack->dp_Arg3, pack->dp_Arg4));
 
-	    switch(packet_table[index].call_type) {
-	        case ALL:
-		    packet_table[index].routine(pack->dp_Arg1, pack->dp_Arg2,
-					        pack->dp_Arg3, pack->dp_Arg4);
-		    break;
-	        case NNN:
-		    packet_table[index].routine();
-		    break;
-	        case CNN:
-		    packet_table[index].routine(BTOC(pack->dp_Arg1));
-		    break;
-	        case NCN:
-		    packet_table[index].routine(BTOC(pack->dp_Arg2));
-		    break;
-	        case NON:
-	        case BAD:
-		    PRINT(("p=%d, c=%d n=%s 1=%d 2=%d 3=%d 4=%d unknown packet\n",
-			    pack->dp_Type, packet_table[index].call_type,
-			    packet_table[index].name, pack->dp_Arg1, pack->dp_Arg2,
-			    pack->dp_Arg3, pack->dp_Arg4));
-		    global.Res1 = DOSFALSE;
-		    global.Res2 = ERROR_NOT_IMPLEMENTED;
-		    break;
-	        default:
-		    PRINT(("ERROR! Unknown call %d\n", packet_table[index].call_type));
-		    global.Res1 = DOSFALSE;
-		    global.Res2 = ERROR_NOT_IMPLEMENTED;
+		ptable->routine();   /* call the packet handler */
 	    }
 
 	    endpack:
@@ -228,8 +240,6 @@ handler()
 	will "just say no" to anything sent to us.  Eventually, wait for
 	all locks to be freed, then exit. */
 
-    close_files();
-    close_filesystem();
     close_dchange(1);
     close_timer(1);
     UnNameHandler();
@@ -250,9 +260,13 @@ handler()
 		}
 		if (open_dchange()) {
 			close_dchange(0);
+/*
+ *  Don't consider it fatal that dchange is not supported
+ *
 			PRINT(("cannot open disk change service\n"));
 			receiving_packets = 0;
 			continue;
+*/
 		}
 		goto endpack;
 	}

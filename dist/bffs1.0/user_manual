@@ -490,7 +490,7 @@ releases of BFFS, a file's Delete permission may take on the Write
 permission of the parent directory.
 
     Permissions for directories are currently ignored.  This will
-change in a future release to be:  
+change in a future release to be:
   The Execute bit will determine if a directory may be accessed.
      The Read bit will determine if the entries in a directory are visible.
     The Write bit will determine if files may be created in the directory.

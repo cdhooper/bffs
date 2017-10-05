@@ -1,0 +1,13 @@
+Beta Testers,
+
+This is an incomplete release of BFFS 1.5.  Much of the documentation
+is missing which will be included in the real release.
+
+Although I have attempted to test all the applications in this package
+after the last compilation, there may be problems I might have overlooked.
+
+So far, I know of the following:
+    els -i and -s
+	make display lines which are greater than 80 characters
+	it also does not display symlink or device information,
+		but that may not be fixed

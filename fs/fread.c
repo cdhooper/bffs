@@ -1,7 +1,9 @@
 #include <devices/trackdisk.h>
 
-#include "debug.h"
+#include "config.h"
 #include "ufs.h"
+#include "ufs/inode.h"
+#include "fsmacros.h"
 #include "file.h"
 #include "handler.h"
 
@@ -14,6 +16,10 @@
 		3. Read head of fs-frag
 */
 
+char *cache_frag();
+char *cache_available();
+
+
 ULONG file_read(inum, sbyte, nbytes, buf)
 ULONG	inum;
 ULONG	sbyte;
@@ -23,15 +29,15 @@ char	*buf;
 	struct	icommon *inode;
 	ULONG	current;
 	ULONG	spos, epos, sfrag, efrag;
-	ULONG	nffrags, fsize;
+	ULONG	nffrags, filesize;
 
 	inode = inode_read(inum);
-	fsize = IC_SIZE(inode);
+	filesize = IC_SIZE(inode);
 
-	if (sbyte > fsize)
+	if (sbyte > filesize)
 		return(-1);
-	if ((nbytes + sbyte) > fsize)
-		nbytes = (ULONG) fsize - sbyte;
+	if ((nbytes + sbyte) > filesize)
+		nbytes = (ULONG) filesize - sbyte;
 
 	/* Read initial */
 	spos	= fragoff(superblock, sbyte);
@@ -40,121 +46,154 @@ char	*buf;
 	efrag	= lfragno(superblock, sbyte + nbytes);
 	nffrags	= efrag - sfrag;
 
-/*
+
 	PRINT(("sbyte=%d nbytes=%d start=%d:%d end=%d:%d poff=%d\n", sbyte,
 		nbytes, sfrag, spos, efrag, epos, poffset));
-*/
+
+
 
 	/* Handle the possibility that the entire read is in one frag */
 	if (sfrag == efrag) {
 
-/*
-PRINT(("part read: %d:%d to %d:%d\n", spos, sfrag, epos, efrag));
-*/
 
-		partial_frag_read(idisk_frag(sfrag, inode), spos, epos - spos, buf);
-		return(nbytes);
+PRINT(("part read: %d:%d to %d:%d\n", spos, sfrag, epos, efrag));
+
+		return(partial_frag_read(ridisk_frag(sfrag, inode),
+			spos, nbytes, buf));
 	}
 
 	/* Handle the odd bytes at the beginning */
 	current = 0;
 	if (spos != 0) {
-		partial_frag_read(idisk_frag(sfrag, inode), spos, FSIZE - spos, buf);
+		if (partial_frag_read(ridisk_frag(sfrag, inode), spos,
+					FSIZE - spos, buf) == 0)
+			return(0);
 		sfrag++;
 		nffrags--;
 		buf += FSIZE - spos;
 	}
 
+
 	/* Read main file frags */
 	if (nffrags > 0) {
-		file_frags_read(inode, sfrag, nffrags, buf);
+		file_frags_read(inode, sfrag, nffrags, buf, inum);
 		buf += nffrags * FSIZE;
 	}
 
 	/* Handle the ending bytes, if any */
-	if (epos)
-		partial_frag_read(idisk_frag(efrag, inode), 0, epos, buf);
+	PRINT(("efrag=%d epos=%d\n", efrag, epos));
+	if (epos) {
+	    inode = inode_read(inum);
+	    return(nbytes - epos +
+		   partial_frag_read(ridisk_frag(efrag, inode), 0, epos, buf));
+	}
 
 	return(nbytes);
 }
 
-int file_frags_read(inode, sfrag, nfrags, buf)
+int file_frags_read(inode, sfrag, nfrags, buf, inum)
 struct	icommon *inode;
 ULONG	sfrag;
 ULONG	nfrags;
 char	*buf;
+int	inum;
 {
-    ULONG frag = 0;
-    ULONG csfrag, cefrag, lfrag;
+    register ULONG lfrag;
+    register ULONG frag;
+    register ULONG cefrag = 0;
+    ULONG csfrag = 0;
     char  *bstart;
-
-    if (((ULONG) buf) & tranmask)
-	return(file_ua_frags_read(inode, sfrag, nfrags, buf));
+    char  *caddr;
 
     if (nfrags == 0)
 	return(0);
 
-    lfrag = idisk_frag(sfrag + frag, inode);
-    if (lfrag)
-	cache_frag_flush(lfrag);
+    if ((nfrags < 4) || (((ULONG) buf) & tranmask))  /* cached reads */
+	return(file_ua_frags_read(inode, sfrag, nfrags, buf, inum));
 
-    while (frag < nfrags)  {
-	csfrag = lfrag;
-	cefrag = lfrag;
-	bstart = buf + frag * FSIZE;
-
-	frag++;
-	while (frag < nfrags) {
-	    for (lfrag = 0; lfrag == 0; frag++)
-		if ((lfrag = idisk_frag(sfrag + frag, inode)) == 0)
-			ZeroMem(buf + frag * FSIZE, FSIZE);
-		else
-			cache_frag_flush(lfrag);
-
-	    if (lfrag == cefrag + 1)
-		cefrag = lfrag;
-	    else {
-		frag--;
-		break;
+    inode = inode_read(inum);
+    for (frag = 0; frag < nfrags; frag++) {
+	lfrag = ridisk_frag(sfrag + frag, inode);
+	if ((lfrag = ridisk_frag(sfrag + frag, inode)) == 0) {
+	    if (csfrag) {
+		if (data_read(bstart, csfrag,
+			      FSIZE * (cefrag - csfrag + 1)))
+			PRINT2(("** data read fault for file_frags_read\n"));
+		csfrag = 0;
+		cefrag = 0;
 	    }
+	    ZeroMem(buf + frag * FSIZE, FSIZE);
+	} else if (caddr = cache_available(lfrag)) {	/* if in cache */
+	    if (csfrag) {
+		if (data_read(bstart, csfrag, FSIZE * (cefrag - csfrag + 1)))
+			PRINT2(("** data read fault for file_frags_read\n"));
+		csfrag = 0;
+		cefrag = 0;
+	    }
+	    CopyMem(caddr, buf + frag * FSIZE, FSIZE);
+	} else if (lfrag == cefrag + 1) {
+	    cefrag = lfrag;
+	} else {
+	    if (csfrag)
+		if (data_read(bstart, csfrag, FSIZE * (cefrag - csfrag + 1)))
+			PRINT2(("** data read fault for file_frags_read\n"));
+	    inode = inode_read(inum);
+	    csfrag = lfrag;
+	    cefrag = lfrag;
+	    bstart = buf + frag * FSIZE;
 	}
-	if (data_read(bstart, csfrag, FSIZE * (cefrag - csfrag + 1)))
-		PRINT(("** data read fault for file_frags_read\n"));
+    }
 
-/*
+    if (csfrag)
+	if (data_read(bstart, csfrag, FSIZE * (cefrag - csfrag + 1)))
+		PRINT2(("** data read fault for file_frags_read\n"));
+
+
 PRINT(("ffr: cs=%d ce=%d csf=%d cef=%d maddr=%x\n", csfrag, cefrag,
 	(bstart - buf) / FSIZE, frag + sfrag, bstart));
-*/
-    }
 
     return(frag * FSIZE);
 }
 
 
 /*
-        ** We may want to eliminate caching these blocks, since
-	they are read in their entirety..Reducing the possibility
-	we will actually need them in the future...and increasing
-	the possibility of conveniently flushing our cache for us.
+    ** We may want to eliminate caching these blocks, since
+    they are read in their entirety..Reducing the possibility
+    we will actually need them in the future...and increasing
+    the possibility of inconveniently cycling our cache for us.
 */
-int file_ua_frags_read(inode, sfrag, nfrags, buf)
+int file_ua_frags_read(inode, sfrag, nfrags, buf, inum)
 struct	icommon *inode;
 ULONG	sfrag;
 ULONG	nfrags;
 char	*buf;
+int	inum;
 {
     int frag = 0;
     int lfrag;
+    char *fragbuf;
+    char *current;
 
+    current = buf;
+    PRINT(("ua_frags_read %x\n", buf));
     while (frag < nfrags)  {
-	lfrag = idisk_frag(sfrag + frag, inode);
+	lfrag = ridisk_frag(sfrag + frag, inode);
 	if (lfrag == 0) /* we have a hole */
-		ZeroMem(buf + frag * FSIZE, FSIZE);
-	else
-		CopyMem(cache_frag(lfrag), buf + frag * FSIZE, FSIZE);
+		ZeroMem(current, FSIZE);
+	else {
+		PRINT(("part f=%d c=%x ", frag, current));
+		if (fragbuf = cache_frag(lfrag))
+			CopyMem(fragbuf, current, FSIZE);
+		else {
+			PRINT(("file_us_frags_read broken!\n"));
+			break;
+		}
+		inode = inode_read(inum);
+	}
+	current += FSIZE;
 	frag++;
     }
-    return(frag * FSIZE);
+    return(current - buf);
 }
 
 ZeroMem(buf, len)
@@ -173,6 +212,12 @@ int	offset;
 int	size;
 char	*buf;
 {
-	CopyMem(cache_frag(frag) + offset, buf, size);
-	return(size);
+	char *fragbuf;
+
+	PRINT(("part f=%d o=%d s=%d b=%x ", frag, offset, size, buf));
+	if (fragbuf = cache_frag(frag)) {
+		CopyMem(fragbuf + offset, buf, size);
+		return(size);
+	}
+	return(0);
 }

@@ -1,0 +1,28 @@
+ARCH=ami
+DOTDOT=
+#PROG=$(DOTDOT)/bin/tunefs.$(ARCH)
+PROG=$(DOTDOT)/bin/tunefs
+OBJ=$(DOTDOT)/obj.$(ARCH)/
+OBJS=$(OBJ)tunefs.o $(OBJ)tunefs_other.o $(OBJ)amiga_device.o
+
+CC=dcc
+CFLAGS=-I/ucbinclude -Dcdh
+RM=delete force
+
+$(PROG): $(OBJS)
+	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
+
+clean:
+	$(RM) $(OBJS) $(PROG)
+
+$(OBJ)tunefs.o: tunefs.c
+	$(CC) $(CFLAGS) -c tunefs.c -o $(OBJ)tunefs.o
+
+$(OBJ)tunefs_other.o: tunefs_other.c
+	$(CC) $(CFLAGS) -c tunefs_other.c -o $(OBJ)tunefs_other.o
+
+$(OBJ)getopt.o: $(DOTDOT)/unix_support/getopt.c
+	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/getopt.c -o $(OBJ)getopt.o
+
+$(OBJ)amiga_device.o: $(DOTDOT)/unix_support/amiga_device.c
+	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/amiga_device.c -o $(OBJ)amiga_device.o

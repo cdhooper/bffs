@@ -1,0 +1,13 @@
+DOTDOT=
+#PROG=$(DOTDOT)/bin/echmod.ami
+PROG=$(DOTDOT)/bin/echmod
+CC=dcc
+CFLAGS=-Dcdh -I$(DOTDOT)/ucbinclude
+OBJ=$(DOTDOT)/obj.ami/
+OBJS=$(OBJ)echmod.o
+
+$(PROG): $(OBJS)
+	$(CC) -o $(PROG) $(OBJS)
+
+$(OBJ)echmod.o: echmod.c
+	$(CC) $(CFLAGS) -c echmod.c -o $(OBJ)echmod.o

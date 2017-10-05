@@ -1,10 +1,10 @@
-/* comm.c version 1.3  (BFFStool)
- *      This program is copyright (1993, 1994) Chris Hooper.  All code
+/* comm.c version 1.5  (BFFStool)
+ *      This program is copyright (1993 - 1996) Chris Hooper.  All code
  *      herein is freeware.  No portion of this code may be sold for profit.
  */
 
 #include <stdio.h>
-#include </dos30/dosextens.h>
+#include "dos30/dosextens.h"
 #include <libraries/dosextens.h>
 #include <exec/memory.h>
 #include <clib/dos_protos.h>

@@ -1,6 +1,8 @@
 extern	int cache_size;			/* max frags allowed in cache */
+extern	int cache_cg_size;		/* max cgs in cg cache */
 char	*cache_frag();			/* get buffer for specified frag */
 char	*cache_frag_write();		/* get buffer for frag, mark dirty */
+char	*cache_available();		/* get buffer if in cache, else NULL */
 struct	cg	  *cache_cg();		/* get buffer for specified cg */
 struct	cg	  *cache_cg_write();	/* get buffer for cg, mark dirty */
 int	cache_frag_flush();		/* sync disk with specified frag */
@@ -18,8 +20,8 @@ struct cache_set {
 };
 
 /* cache frag node flags */
-#define CACHE_CLEAN   0			/* clean	   */
-#define CACHE_DIRTY   1			/* dirty	   */
+#define CACHE_CLEAN   0			/* frag clean	   */
+#define CACHE_DIRTY   1			/* frag dirty	   */
 #define CACHE_LOCKED  2			/* locked in cache */
 
 int	cache_hash();			/* internal hash routine */

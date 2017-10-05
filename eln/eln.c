@@ -1,5 +1,5 @@
-/* eln.c version 1.0
- *      This program is copyright (1994) Chris Hooper.  All code herein
+/* eln.c version 1.1
+ *      This program is copyright (1994, 1996) Chris Hooper.  All code herein
  *      is freeware.  No portion of this code may be sold for profit.
  */
 
@@ -8,6 +8,9 @@
 
 #define HARD 0
 #define SOFT 1
+
+char *version = "\0$VER: eln 1.1 (8.Apr.96) © 1996 Chris Hooper";
+
 
 main(argc, argv)
 int  argc;
@@ -33,13 +36,11 @@ char *argv[];
 	if (index >= argc)
 		print_usage(argv[0]);
 
-	if (type == HARD)
-		dest = (void *) Lock(src, ACCESS_READ);
-	else
-		dest = (void *) src;
+
+	dest = (void *) src;
 
 	for (; index < argc; index++)
-		if (!MakeLink(argv[index], dest, type)) {
+		if (PMakeLink(dest, argv[index], type)) {
 			fprintf(stderr, "Unable to link %s to %s\n",
 				argv[index], src);
 			printf("%d\n", IoErr());
@@ -47,15 +48,13 @@ char *argv[];
 			fprintf(stderr, "   because: %s\n", buf);
 		}
 
-	if (type == HARD)
-		UnLock(dest);
-
 	exit(0);
 }
 
 print_usage(progname)
 char *progname;
 {
+	fprintf(stderr, "%s\n", version + 7);
 	fprintf(stderr, "usage:  %s [-s] src dest [dest2 dest3 ...]\n", progname);
 	exit(1);
 }

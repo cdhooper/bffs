@@ -197,9 +197,14 @@ struct	fs {
 	struct	csum *fs_csp[MAXCSBUFS]; /* list of fs_cs info buffers */
 	long	fs_cpc;			/* cyl per cycle in postbl */
 	short	fs_opostbl[16][8];	/* old rotation block list head */
-	long	fs_sparecon[56];	/* reserved for future constants */
+	long	fs_sparecon[50];	/* reserved for future constants */
+	long	fs_contigsumsize;	/* size of cluster summary array */
+	long	fs_maxsymlinklen;	/* max length of an internal symlink */
+	long	fs_inodefmt;		/* format of on-disk inodes */
+	quad	fs_maxfilesize;		/* maximum representable file size */
 	quad	fs_qbmask;		/* ~fs_bmask - for use with quad size */
 	quad	fs_qfmask;		/* ~fs_fmask - for use with quad size */
+	long	fs_state;		/* validate fs_clean field */
 	long	fs_postblformat;	/* format of positional layout tables */
 	long	fs_nrpos;		/* number of rotaional positions */
 	long	fs_postbloff;		/* (short) rotation block list head */
@@ -219,26 +224,7 @@ struct	fs {
  */
 #define	FS_42POSTBLFMT		-1	/* 4.2BSD rotational table format */
 #define	FS_DYNAMICPOSTBLFMT	1	/* dynamic rotational table format */
-/*
- * Macros for access to superblock array structures
- */
-#define	fs_postbl(fs, cylno) \
-	(((fs)->fs_postblformat == FS_42POSTBLFMT) \
-	? ((fs)->fs_opostbl[cylno]) \
-	: ((short *)((char *)(fs) + (fs)->fs_postbloff) \
-	+ (cylno) * (fs)->fs_nrpos))
-#define	fs_rotbl(fs) \
-	(((fs)->fs_postblformat == FS_42POSTBLFMT) \
-	? ((fs)->fs_space) \
-	: ((u_char *)((char *)(fs) + (fs)->fs_rotbloff)))
-
-/*
- * Convert cylinder group to base address of its global summary info.
- *
- * N.B. This macro assumes that sizeof (struct csum) is a power of two.
- */
-#define	fs_cs(fs, indx) \
-	fs_csp[(indx) >> (fs)->fs_csshift][(indx) & ~(fs)->fs_csmask]
+#define FS_44INODEFMT		2	/* 4.4BSD inode format */
 
 /*
  * Cylinder group block for a file system.
@@ -266,29 +252,6 @@ struct	cg {
 	u_char	cg_space[1];		/* space for cylinder group maps */
 /* actually longer */
 };
-/*
- * Macros for access to cylinder group array structures
- */
-#define	cg_blktot(cgp) \
-	(((cgp)->cg_magic != CG_MAGIC) \
-	? (((struct ocg *)(cgp))->cg_btot) \
-	: ((long *)((char *)(cgp) + (cgp)->cg_btotoff)))
-#define	cg_blks(fs, cgp, cylno) \
-	(((cgp)->cg_magic != CG_MAGIC) \
-	? (((struct ocg *)(cgp))->cg_b[cylno]) \
-	: ((short *)((char *)(cgp) + (cgp)->cg_boff) + \
-	(cylno) * (fs)->fs_nrpos))
-#define	cg_inosused(cgp) \
-	(((cgp)->cg_magic != CG_MAGIC) \
-	? (((struct ocg *)(cgp))->cg_iused) \
-	: ((char *)((char *)(cgp) + (cgp)->cg_iusedoff)))
-#define	cg_blksfree(cgp) \
-	(((cgp)->cg_magic != CG_MAGIC) \
-	? (((struct ocg *)(cgp))->cg_free) \
-	: ((u_char *)((char *)(cgp) + (cgp)->cg_freeoff)))
-#define	cg_chkmagic(cgp) \
-	((cgp)->cg_magic == CG_MAGIC || \
-	((struct ocg *)(cgp))->cg_magic == CG_MAGIC)
 
 /*
  * The following structure is defined
@@ -314,122 +277,5 @@ struct	ocg {
 	u_char	cg_free[1];		/* free block map */
 /* actually longer */
 };
-
-/*
- * Turn file system block numbers into disk block addresses.
- * This maps file system blocks to device size blocks.
- */
-#define	fsbtodb(fs, b)	((b) << (fs)->fs_fsbtodb)
-#define	dbtofsb(fs, b)	((b) >> (fs)->fs_fsbtodb)
-
-/*
- * Cylinder group macros to locate things in cylinder groups.
- * They calc file system addresses of cylinder group data structures.
- */
-#define	cgbase(fs, c)	((daddr_t)((fs)->fs_fpg * (c)))
-#define	cgstart(fs, c) \
-	(cgbase(fs, c) + (fs)->fs_cgoffset * ((c) & ~((fs)->fs_cgmask)))
-#define	cgsblock(fs, c)	(cgstart(fs, c) + (fs)->fs_sblkno)	/* super blk */
-#define	cgtod(fs, c)	(cgstart(fs, c) + (fs)->fs_cblkno)	/* cg block */
-#define	cgimin(fs, c)	(cgstart(fs, c) + (fs)->fs_iblkno)	/* inode blk */
-#define	cgdmin(fs, c)	(cgstart(fs, c) + (fs)->fs_dblkno)	/* 1st data */
-
-/*
- * Macros for handling inode numbers:
- * 	inode number to file system block offset.
- * 	inode number to cylinder group number.
- * 	inode number to file system block address.
- */
-#define	itoo(fs, x)	((x) % INOPB(fs))
-#define	itog(fs, x)	((x) / (fs)->fs_ipg)
-#define	itod(fs, x) \
-	((daddr_t)(cgimin(fs, itog(fs, x)) + \
-	(blkstofrags((fs), (((x) % (fs)->fs_ipg) / INOPB(fs))))))
-
-/*
- * Give cylinder group number for a file system block.
- * Give cylinder group block number for a file system block.
- */
-#define	dtog(fs, d)	((d) / (fs)->fs_fpg)
-#define	dtogd(fs, d)	((d) % (fs)->fs_fpg)
-
-/*
- * Extract the bits for a block from a map.
- * Compute the cylinder and rotational position of a cyl block addr.
- */
-#define	blkmap(fs, map, loc) \
-	(((map)[(loc) / NBBY] >> ((loc) % NBBY)) & \
-	(0xff >> (NBBY - (fs)->fs_frag)))
-#define	cbtocylno(fs, bno) \
-	((bno) * NSPF(fs) / (fs)->fs_spc)
-#define	cbtorpos(fs, bno) \
-	(((bno) * NSPF(fs) % (fs)->fs_spc / \
-	(fs)->fs_nsect * (fs)->fs_trackskew + \
-	(bno) * NSPF(fs) % (fs)->fs_spc % \
-	(fs)->fs_nsect * (fs)->fs_interleave) % \
-	(fs)->fs_nsect * (fs)->fs_nrpos / (fs)->fs_npsect)
-
-/*
- * The following macros optimize certain frequently calculated
- * quantities by using shifts and masks in place of divisions
- * modulos and multiplications.
- */
-#define	blkoff(fs, loc)		/* calculates (loc % fs->fs_bsize) */ \
-	((loc) & ~(fs)->fs_bmask)
-#define	fragoff(fs, loc)	/* calculates (loc % fs->fs_fsize) */ \
-	((loc) & ~(fs)->fs_fmask)
-#define	lblkno(fs, loc)		/* calculates (loc / fs->fs_bsize) */ \
-	((loc) >> (fs)->fs_bshift)
-#define	numfrags(fs, loc)	/* calculates (loc / fs->fs_fsize) */ \
-	((loc) >> (fs)->fs_fshift)
-#define	blkroundup(fs, size)	/* calculates roundup(size, fs->fs_bsize) */ \
-	(((size) + (fs)->fs_bsize - 1) & (fs)->fs_bmask)
-#define	fragroundup(fs, size)	/* calculates roundup(size, fs->fs_fsize) */ \
-	(((size) + (fs)->fs_fsize - 1) & (fs)->fs_fmask)
-#define	fragstoblks(fs, frags)	/* calculates (frags / fs->fs_frag) */ \
-	((frags) >> (fs)->fs_fragshift)
-#define	blkstofrags(fs, blks)	/* calculates (blks * fs->fs_frag) */ \
-	((blks) << (fs)->fs_fragshift)
-#define	fragnum(fs, fsb)	/* calculates (fsb % fs->fs_frag) */ \
-	((fsb) & ((fs)->fs_frag - 1))
-#define	blknum(fs, fsb)		/* calculates rounddown(fsb, fs->fs_frag) */ \
-	((fsb) &~ ((fs)->fs_frag - 1))
-
-/*
- * Determine the number of available frags given a
- * percentage to hold in reserve
- */
-#define	freespace(fs, percentreserved) \
-	(blkstofrags((fs), (fs)->fs_cstotal.cs_nbfree) + \
-	(fs)->fs_cstotal.cs_nffree - ((fs)->fs_dsize * (percentreserved) / 100))
-
-/*
- * Determining the size of a file block in the file system.
- */
-#define	blksize(fs, ip, lbn) \
-	(((lbn) >= NDADDR || (ip)->i_size >= ((lbn) + 1) << (fs)->fs_bshift) \
-	    ? (fs)->fs_bsize \
-	    : (fragroundup(fs, blkoff(fs, (ip)->i_size))))
-#define	dblksize(fs, dip, lbn) \
-	(((lbn) >= NDADDR || (dip)->di_size >= ((lbn) + 1) << (fs)->fs_bshift) \
-	    ? (fs)->fs_bsize \
-	    : (fragroundup(fs, blkoff(fs, (dip)->di_size))))
-
-/*
- * Number of disk sectors per block; assumes DEV_BSIZE byte sector size.
- */
-#define	NSPB(fs)	((fs)->fs_nspf << (fs)->fs_fragshift)
-#define	NSPF(fs)	((fs)->fs_nspf)
-
-/*
- * INOPB is the number of inodes in a secondary storage block.
- */
-#define	INOPB(fs)	((fs)->fs_inopb)
-#define	INOPF(fs)	((fs)->fs_inopb >> (fs)->fs_fragshift)
-
-/*
- * NINDIR is the number of indirects in a file system block.
- */
-#define	NINDIR(fs)	((fs)->fs_nindir)
 
 #endif /*!_ufs_fs_h*/

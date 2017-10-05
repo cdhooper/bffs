@@ -1,0 +1,26 @@
+ARCH=ami
+DOTDOT=
+#PROG=$(DOTDOT)/bin/etouch.$(ARCH)
+PROG=$(DOTDOT)/bin/etouch
+OBJ=$(DOTDOT)/obj.$(ARCH)/
+OBJS=$(OBJ)etouch.o $(OBJ)amiga_unix.o
+
+#CFLAGS=-I./include -DRRESTORE
+#CFLAGS=-O2 -I./include
+#CC=cc
+
+CC=dcc
+CFLAGS=-Dcdh -I/ucbinclude
+RM=delete force
+
+$(PROG): $(OBJS)
+	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
+
+clean:
+	$(RM) $(OBJS) $(PROG)
+
+$(OBJ)etouch.o: etouch.c
+	$(CC) $(CFLAGS) -c etouch.c -o $(OBJ)etouch.o
+
+$(OBJ)amiga_unix.o: $(DOTDOT)/unix_support/amiga_unix.c
+	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/amiga_unix.c -o $(OBJ)amiga_unix.o

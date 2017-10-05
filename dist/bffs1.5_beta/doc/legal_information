@@ -1,0 +1,99 @@
+DISCLAIMER
+----------
+The BSD filesystem for AmigaDOS was derived in part from the 1983
+BSD 4.2 paper, "A Fast File System for UNIX" - Marshall Kirk McKusick, 
+William N. Joy, Samuel J. Leffler, Robert S. Fabry of the University
+of California at Berkeley (Computer Systems Research Group).  It has
+since been enhanced to take advantage of, and to support the
+enhancements made to the FFS implementation in the BSD 4.4 Fast File
+System.
+
+A modified version of the Berkeley BSD Tahoe (and NetBSD current)
+include files are used as part of this program.  However, at no point
+during development was the Berkeley ufs filesystem source code consulted
+for ideas, techniques, algorithms, or other such aid in the development
+of this filesystem.  Because of this, the filesystem is claimed to be
+compatible only with regard to data structure and not necessarily
+organization nor algorithmic policies.
+
+The programs fsck, newfs, dumpfs, diskpart, and tunefs were ported from
+NetBSD source dated November 4, 1994.  Restore was ported from NetBSD
+source dated October 1, 1995.  All software ports were ported through
+SunOS to AmigaDOS solely by Chris Hooper.  The programs were modified
+heavily to accommodate AmigaDOS devices and reduce the system stack
+requirements.  Because of this a warning must be issued that the
+operation of these programs may not be identical from their original
+sources, and may perform incorrectly with respect to the original
+implementation.
+
+The programs BFFStool, dumpfs, dcp, echmod, echown, edumpfs, eln, els,
+etouch, mknod, and rdb are utilities created originally to support
+development of the filesystem.  Much effort has been placed on the
+implementations to operate in the "expected" manner for users coming
+from a UNIX platform.  As with the rest of the software in this
+distribution it is not expressed or implied these utilities will perform
+to any standards or set expectations.
+
+All aforementioned programs may do more harm than good to affected
+media.  I, in no way, guarantee correctness of the product and will
+not be held responsible for its use (or misuse).  This includes all
+damages incurred and loss of business.
+
+This package and support utilities represent a culmination (much off
+and much on) of five years work on my part.  All development was done
+on my own equipment, and in my spare time.  In no way shall my employers,
+past or present, be granted claim to ownership or the responsibilities
+thus implied by this software distribution.
+
+
+PRODUCT DISTRIBUTION
+--------------------
+This product and individual contents thereof are Copyright (©)
+1991 - 1996 inclusively by Chris Hooper.  No part of this product
+is Public Domain nor may be treated as such.  This product is not
+Commercial Software, Public Domain, or Shareware.  It is best
+described by the term Freeware.  The terms and obligations of
+Freeware are simple and non-monetary; if they cannot be met,
+you must completely erase / destroy this package.
+
+
+Terms of ownership
+------------------
+  1. You do not modify/erase/spindle/mutilate and distribute any
+     part of this package (other than spelling corrections ;)
+  2. You will help or have helped at least three other people
+     learning how to use computers.
+  3. You report bugs to me directly if they really drive you nuts.
+
+
+Terms of distribution
+---------------------
+    1. All terms of ownership are met.
+    2. All files included in the distribution of this package are
+	redistributed together unmodified as the same package.
+    3. No fee other than reasonable repackaging is charged for this
+	product.  Organizations that wish to charge for this package
+	or include any part of this package in their own for sale
+	package must contact me and obtain approval.  The following
+	are granted exclusive unlimited distribution rights.  They
+	may charge what they see fit with no royalties.
+	    Ty Sarna for inclusion in any NetBSD distribution
+	    Markus Wild for inclusion in any NetBSD distribution
+	    Fred Fish for inclusion in any Fish disk distribution
+	    Aminet Internet free software archive
+	    Any Internet FTP site offering this package as a free
+		anonymous service
+	    
+
+Thank you to the Internet community for enriching my life and
+providing such lofty programming challenges.  Thank you especially
+to those people who have helped as Beta testers and others that
+helped make my programs better.  Special thanks goes out to Ken Dyke
+and Randell Jesup of the past Commodore.
+
+
+My permanent address:
+
+Chris Hooper               |   My email address may change, but I
+72560 M-43 Hwy.	           |   may currently be reached via:
+South Haven, MI  49090     |   cdh@mtu.edu

@@ -1,5 +1,5 @@
-/* tool.c version 1.3  (BFFStool)
- *      This program is copyright (1993, 1994) Chris Hooper.  All code
+/* tool.c version 1.5  (BFFStool)
+ *      This program is copyright (1993 - 1996) Chris Hooper.  All code
  *      herein is freeware.  No portion of this code may be sold for profit.
  */
 
@@ -63,10 +63,14 @@ ULONG	      *stats	= NULL;
 int	      sb_mod = 0;
 int	      sb_clean = 0;
 int	      prealloc = 0;
+int           rkbytes = 0;
+int           wkbytes = 0;
 int	      stat_start 	= 23;
 int           prealloc_pos	= 52;
-int           super_max_inodes	= 53;
-int	      super_start	= 54;
+int           rkbytes_pos	= 53;
+int           wkbytes_pos	= 54;
+int           super_max_inodes	= 55;
+int	      super_start	= 56;
 /* int	      hashlist_start; */
 int	      total_gadgets = 0;
 int	      *gad_addresses[MAX_GADGETS];
@@ -114,7 +118,7 @@ char *argv[];
 	    fprintf(stderr, "Error communicating with %s ", handler_name);
 	    errorexit("handler.\n");
 	}
-
+	
 	stat = get_stat();
 	if (!stat) {
 	    if (*handler_name == '\0')
@@ -182,13 +186,13 @@ setup_gadgets()
 	do_ng(608, ypos, 20, 8, "Link Comments", ID_COMMENT,
 	      NG_HIGHLABEL | PLACETEXT_LEFT);
 	dcgad = gad = CreateGadget(CHECKBOX_KIND, gad, &ng, GTCB_Checked,
-			   *stat->dir_comments, TAG_DONE);
+			   *stat->link_comments, TAG_DONE);
 	ypos += 12;
 
 	do_ng(608, ypos, 10, 8, "Inode Comments", ID_COMMENT2,
 	      NG_HIGHLABEL | PLACETEXT_LEFT);
 	dc2gad = gad = CreateGadget(CHECKBOX_KIND, gad, &ng, GTCB_Checked,
-			   *stat->dir_comments2, TAG_DONE);
+			   *stat->inode_comments, TAG_DONE);
 	ypos += 12;
 
 	do_ng(608, ypos, 20, 8, "Unix Paths", ID_PATH,
@@ -250,7 +254,7 @@ setup_gadgets()
 	vertical_int(stat_start +  2);	/* read misses */
 	vertical_int(stat_start +  1);	/* write hits */
 	vertical_int(stat_start +  3);	/* write misses */
-
+	
 	vertical_int(stat_start +  4);	/* cgread hits */
 	vertical_int(stat_start +  6);	/* cgread misses */
 	vertical_int(stat_start +  5);	/* cgwrite hits */
@@ -276,10 +280,20 @@ setup_gadgets()
 
 	vertical_int(stat_start + 24);	/* read opens */
 	vertical_int(stat_start + 16);	/* read groups */
-	vertical_int(stat_start + 18);	/* read bytes */
+
+	rkbytes = (stat->direct_read_bytes) / 1024;
+	gad_addresses[rkbytes_pos] = &rkbytes;    /* rkbytes calculated */
+	vertical_int(rkbytes_pos);
+/*	vertical_int(stat_start + 18);	/* read bytes */
+
 	vertical_int(stat_start + 25);	/* write opens */
 	vertical_int(stat_start + 17);	/* write groups */
-	vertical_int(stat_start + 19);	/* write bytes */
+
+	wkbytes = (stat->direct_write_bytes) / 1024;
+	gad_addresses[wkbytes_pos] = &wkbytes;    /* wkbytes calculated */
+	vertical_int(wkbytes_pos);
+/*	vertical_int(stat_start + 19);	/* write bytes */
+
 	vertical_int(stat_start + 20);	/* locates */
 	vertical_int(stat_start + 21);	/* examines */
 	vertical_int(stat_start + 22);	/* examinenexts */
@@ -299,8 +313,8 @@ setup_gadgets()
 	prealloc = (*stat->resolve_symlinks ?  0 : 1 ) |
 		   (*stat->case_independent ?  0 : 2 ) |
 		   (*stat->unixflag         ?  0 : 4 ) |
-		   (*stat->dir_comments     ?  8 : 0 ) |
-		   (*stat->dir_comments2    ? 16 : 0 ) |
+		   (*stat->link_comments    ?  8 : 0 ) |
+		   (*stat->inode_comments   ? 16 : 0 ) |
 		   (*stat->og_perm_invert   ? 32 : 0 ) |
 		   (*stat->minfree          ? 64 : 0 ) |
 		   (((unsigned char) *stat->GMT) << 8);
@@ -339,7 +353,7 @@ setup_gadgets()
 		vertical_int(current);
 
 
-/*
+/* below displays detailed cache LRU information
 	hashlist_start = current;
 	xpos = 182;
 	ypos += 8;
@@ -560,11 +574,11 @@ UWORD	code;
 		refresh_prealloc();
 		break;
 	    case ID_COMMENT:
-		*stat->dir_comments = !*stat->dir_comments;
+		*stat->link_comments = !*stat->link_comments;
 		refresh_prealloc();
 		break;
 	    case ID_COMMENT2:
-		*stat->dir_comments2 = !*stat->dir_comments2;
+		*stat->inode_comments = !*stat->inode_comments;
 		refresh_prealloc();
 		break;
 	    case ID_MINFREE:
@@ -659,7 +673,7 @@ refresh_information()
 	    }
 	}
 
-/* ont printing hash any more
+/* not printing hash any more
 	index = hashlist_start;
 	for (temp = cache_stack; ((temp != NULL) && (index < total_gadgets));
 	     temp = temp->stack_up, index++)
@@ -675,10 +689,10 @@ refresh_information()
 			  *stat->case_independent, TAG_DONE);
 
 	GT_SetGadgetAttrs(dcgad, window, NULL, GTCB_Checked,
-			  *stat->dir_comments, TAG_DONE);
+			  *stat->link_comments, TAG_DONE);
 
 	GT_SetGadgetAttrs(dc2gad, window, NULL, GTCB_Checked,
-			  *stat->dir_comments2, TAG_DONE);
+			  *stat->inode_comments, TAG_DONE);
 
 	GT_SetGadgetAttrs(upgad, window, NULL, GTCB_Checked,
 			  *stat->unixflag, TAG_DONE);
@@ -704,11 +718,14 @@ refresh_information()
 	prealloc = (*stat->resolve_symlinks ?  0 : 1 ) |
 		   (*stat->case_independent ?  0 : 2 ) |
 		   (*stat->unixflag         ?  0 : 4 ) |
-		   (*stat->dir_comments     ?  8 : 0 ) |
-		   (*stat->dir_comments2    ? 16 : 0 ) |
+		   (*stat->link_comments    ?  8 : 0 ) |
+		   (*stat->inode_comments   ? 16 : 0 ) |
 		   (*stat->og_perm_invert   ? 32 : 0 ) |
 		   (*stat->minfree          ? 64 : 0 ) |
 		   (((unsigned char) *stat->GMT) << 8);
+
+	rkbytes = (stat->direct_read_bytes)  / 1024;
+	wkbytes = (stat->direct_write_bytes) / 1024;
 
 	max_inodes = superblock->fs_ipg * superblock->fs_ncg;
 
@@ -759,8 +776,8 @@ refresh_prealloc()
 	prealloc = (*stat->resolve_symlinks ?  0 : 1 ) |
 		   (*stat->case_independent ?  0 : 2 ) |
 		   (*stat->unixflag         ?  0 : 4 ) |
-		   (*stat->dir_comments     ?  8 : 0 ) |
-		   (*stat->dir_comments2    ? 16 : 0 ) |
+		   (*stat->link_comments    ?  8 : 0 ) |
+		   (*stat->inode_comments   ? 16 : 0 ) |
 		   (*stat->og_perm_invert   ? 32 : 0 ) |
 		   (*stat->minfree          ? 64 : 0 ) |
 		   (((unsigned char) *stat->GMT) << 8);
@@ -814,12 +831,12 @@ assign_superblock_addresses()
 {
 	int current = super_start;
 
-	gad_addresses[current++] = &superblock->fs_cstotal.cs_nffree; /* frags free */
-	gad_addresses[current++] = &superblock->fs_cstotal.cs_nbfree; /* blocks free */
 	gad_addresses[current++] = &superblock->fs_cstotal.cs_nifree; /* inodes free */
+	gad_addresses[current++] = &superblock->fs_cstotal.cs_nbfree; /* blocks free */
+	gad_addresses[current++] = &superblock->fs_cstotal.cs_nffree; /* frags free */
 	gad_addresses[current++] = &superblock->fs_cstotal.cs_ndir; /* num dirs */
-	gad_addresses[current++] = &superblock->fs_fsize;	    /* frag size */
 	gad_addresses[current++] = &superblock->fs_bsize;	    /* block size */
+	gad_addresses[current++] = &superblock->fs_fsize;	    /* frag size */
 	gad_addresses[current++] = &superblock->fs_dsize;	    /* data frags */
 	gad_addresses[current++] = &superblock->fs_size;	    /* num frags */
 	gad_addresses[current++] = &superblock->fs_ncg;		    /* num cgs */

@@ -1,12 +1,17 @@
 #include <exec/memory.h>
 #include <dos30/dos.h>
 #include <dos30/dosextens.h>
+#include <dos/filehandler.h>
 
-#include "debug.h"
+#include "config.h"
 #include "handler.h"
 #include "ufs.h"
+#include "ufs/inode.h"
+#include "ufs/dir.h"
+#include "fsmacros.h"
 #include "packets.h"
 #include "system.h"
+#include "stat.h"
 
 #define ACCESS_INVISIBLE 0
 
@@ -16,9 +21,12 @@ extern	char *handler_name;
 extern	int fs_partition;
 char	*volumename;
 struct	stat *stat = NULL;
+extern	int unixflag;
+extern	struct PartInfo *partinfo;
+extern	struct  DeviceNode *DevNode;
 
-int dir_comments   = 0;		/* symlink and device comments */
-int dir_comments2  = 0;		/* all inode info comments */
+int link_comments  = 0;		/* symlink and device comments */
+int inode_comments = 0;		/* all inode info comments */
 int og_perm_invert = 0;		/* invert permissions on other/group */
 int GMT = 5;			/* GMT offset for localtime */
 
@@ -55,7 +63,7 @@ void NewVolNode()
 
     fsname(info, volumename);
 
-    ttime = superblock->fs_time + GMT * 3600;
+    ttime = DISK32(superblock->fs_time) + GMT * 3600;
     /* (1978 - 1970) * 365.25 = 2922 */
     VolNode->dl_VolumeDate.ds_Days   = ttime / 86400 - 2922;
     VolNode->dl_VolumeDate.ds_Minute = (ttime % 86400) / 60;
@@ -82,6 +90,10 @@ char *volumename;
     struct DeviceList *tmp;
     char *name;
 
+    if (superblock == NULL) {
+	PRINT2(("** superblock is null in fsname()\n"));
+	return;
+    }
     for (name = superblock->fs_fsmnt + MAXMNTLEN - 2;
 	 name > superblock->fs_fsmnt + 1; name--)
 	if (*name == '\0') {
@@ -98,7 +110,7 @@ char *volumename;
     Forbid();
 	tmp = (struct DeviceList *) BTOC(info->di_DevInfo);
 	while (tmp != NULL)
-	    if (!strcmp(((char *) BTOC(tmp->dl_Name)) + 1, name)) {
+	    if (streqv(((char *) BTOC(tmp->dl_Name)) + 1, name)) {
 		name[strlen(name) - 1]++;
 		tmp = (struct DeviceList *) BTOC(info->di_DevInfo);
 	    } else
@@ -152,6 +164,7 @@ void RemoveVolNode()
 
 close_files()
 {
+#ifndef RONLY
     struct BFFSLock *lock = NULL;
 
     if (VolNode == 0) {
@@ -159,47 +172,44 @@ close_files()
 	return;
     }
 
-    PRINT(("looping da nodes\n"));
+    PRINT(("close_files\n"));
     lock = (struct BFFSLock *) BTOC(VolNode->dl_LockList);
     while (lock != NULL) {
 	if (lock->fl_Fileh && (lock->fl_Fileh->access_mode == MODE_WRITE)) {
 	    PRINT(("write closing i=%d\n", lock->fl_Key));
-	    truncate_file(lock->fl_Fileh);
+	    if (lock->fl_Fileh->access_mode == MODE_WRITE)
+		truncate_file(lock->fl_Fileh);
 	}
 	lock = (struct BFFSLock *) BTOC(lock->fl_Link);
     }
+#endif
 }
 
 
+#ifndef RONLY
 truncate_file(fileh)
 struct BFFSfh *fileh;
 {
     struct icommon *inode;
     time_t timeval;
 
-    if (fileh->truncate_mode == MODE_TRUNCATE) {
+    if (fileh->access_mode == MODE_WRITE) {
 	inode = inode_modify(fileh->real_inum);
-	time(&timeval);				/* get local time */
-	timeval += 2922 * 86400 - GMT * 3600;
-	inode->ic_mtime = timeval;
-	if (fileh->access_mode == MODE_READ)
-	    file_block_extend(fileh->real_inum);
-	if (IC_SIZE(inode) > fileh->maximum_position) {
-	    inode = inode_modify(fileh->real_inum);
-	    IC_SETSIZE(inode, fileh->maximum_position);
-	    file_blocks_deallocate(fileh->real_inum);
+	if (fileh->truncate_mode == MODE_TRUNCATE) {
+	    if (IC_SIZE(inode) > fileh->maximum_position) {
+		IC_SETSIZE(inode, fileh->maximum_position);
+		file_blocks_deallocate(fileh->real_inum);
+	    }
+	    fileh->truncate_mode = MODE_UPDATE;
 	}
-	file_block_retract(fileh->real_inum);
-	fileh->access_mode = MODE_READ;
-    } else if (fileh->access_mode == MODE_WRITE) {
-	inode = inode_modify(fileh->real_inum);
 	time(&timeval);				/* get local time */
 	timeval += 2922 * 86400 - GMT * 3600;
-	inode->ic_mtime = timeval;
+	inode->ic_mtime = DISK32(timeval);
 	file_block_retract(fileh->real_inum);
 	fileh->access_mode = MODE_READ;
     }
 }
+#endif
 
 struct BFFSLock *CreateLock(key, mode, pinum, poffset)
 ULONG	key;
@@ -212,6 +222,7 @@ ULONG	poffset;
 
     if (VolNode == NULL) {
 	global.Res2 = ERROR_DEVICE_NOT_MOUNTED;
+	PRINT(("device is not mounted\n"));
 	return(NULL);
     }
 
@@ -223,18 +234,24 @@ ULONG	poffset;
 	} else
 	    lock = (struct BFFSLock *) BTOC(lock->fl_Link);
 
+    if ((lock != NULL) && (access == 0))
+	PRINT(("access on invisible lock\n"));
     switch (mode) {
 	case EXCLUSIVE_LOCK:
 		if (access) {  /* somebody else has a lock on it... */
 		    global.Res2 = ERROR_OBJECT_IN_USE;
+		    PRINT(("exclusive: lock is already exclusive\n"));
 		    return(NULL);
 		}
 		break;
 	case ACCESS_INVISIBLE:
+		if (access)
+		    PRINT(("invisible: access on locked file\n"));
 		break;
 	default:  /* C= told us if it's not EXCLUSIVE, it's SHARED */
 		if (access == EXCLUSIVE_LOCK) {
 		    global.Res2 = ERROR_OBJECT_IN_USE;
+		    PRINT(("exclusive: lock is already shared\n"));
 		    return(NULL);
 		}
 		break;
@@ -325,27 +342,22 @@ char *name;
     return(2);
 }
 
-strneqv(str, lower, length)
-char	*str;
-char	*lower;
+strneqv(str1, str2, length)
+char	*str1;
+char	*str2;
 int	length;
 {
 	while (length) {
-		if (*str != *lower)
-			if ((*str >= 'A') && (*str <= 'Z')) {
-				if ((*str + ('a' - 'A')) != *lower)
-					return(0);
-			} else
-				return(0);
-		str++;
-		lower++;
+		if ((*str1 != *str2) && ((*str1 | 32) != (*str2 | 32)))
+			return(0);
+		if (*str1 == 0)
+			return(1);
+		str1++;
+		str2++;
 		length--;
 	}
 
-	if (*lower == '\0')
-		return(1);
-	else
-		return(0);
+	return(1);
 }
 
 NameHandler(name)
@@ -355,10 +367,11 @@ char *name;
 	if (handler_name != NULL)
 		return;
 
-	handler_name = (char *) AllocMem(name[0] + 1, MEMF_PUBLIC);
+	handler_top:
+	handler_name = (char *) AllocMem(name[0], MEMF_PUBLIC);
 	if (handler_name == NULL) {
 		PRINT(("NameHandler: unable to allocate %d bytes!\n", name[0]));
-		exit(1);
+		goto handler_top;
 	}
 	strncpy(handler_name, name + 1, name[0] - 1);
 	handler_name[name[0] - 1] = '\0';
@@ -371,7 +384,7 @@ char *name;
 UnNameHandler()
 {
 	if (handler_name) {
-		FreeMem(handler_name, strlen(handler_name[0]));
+		FreeMem(handler_name, strlen(handler_name) + 1);
 		handler_name = NULL;
 	}
 }
@@ -381,11 +394,12 @@ InitStats()
 	int	current;
 	int	size;
 	ULONG	*ptr;
+	char	*magp;
 
 	if (stat == NULL) {
 		stat = (struct stat *) AllocMem(sizeof(struct stat), MEMF_PUBLIC);
 		if (stat == NULL) {
-			PRINT(("** not enough memory for stats\n"));
+			PRINT2(("** not enough memory for stats\n"));
 			return(1);
 		}
 	}
@@ -398,10 +412,11 @@ InitStats()
 		*ptr = 0;
 
 	stat->size = size;
-	((char *) stat->magic)[0] = 'B';
-	((char *) stat->magic)[1] = 'F';
-	((char *) stat->magic)[2] = 'F';
-	((char *) stat->magic)[3] = '\0';
+	magp = (char *) (&stat->magic);
+	*magp++ = 'B';
+	*magp++ = 'F';
+	*magp++ = 'F';
+	*magp++ = '\0';
 
 	return(0);
 }
@@ -414,44 +429,59 @@ struct direct *dir_ent;
 {
     int		fmode;
     int		temp;
+    int		temp2;
     ULONG	ttime;
 
-    fmode = finode->ic_mode;
+    fmode = DISK16(finode->ic_mode);
     fib->fib_Comment[0] = 0;				/* zero length */
     fib->fib_Comment[1] = '\0';				/* NULL terminated */
     fib->fib_Size	= (long) 0;
     fib->fib_NumBlocks	= (long) 0;
 
     /* give file information in the comment field */
-    if (dir_comments2) {
-	sprintf(fib->fib_Comment + 1,
-		"%si=%-4d p=%04o u=%-5d g=%-5d l=%-2d bl=%-4d s=%d",
-		temp ? " " : "", dir_ent ? dir_ent->d_ino : 0, fmode & 07777,
-		finode->ic_uid, finode->ic_gid, finode->ic_nlink,
-		finode->ic_blocks, IC_SIZE(finode));
+    if (inode_comments) {
+	if (bsd44fs)
+	    sprintf(fib->fib_Comment + 1,
+		    "i=%-4d p=%04o u=%-5d g=%-5d l=%-2d bl=%-4d s=%d",
+		    dir_ent ? DISK32(dir_ent->d_ino) : 0, fmode & 07777,
+		    DISK32(finode->ic_nuid), DISK32(finode->ic_ngid),
+		    DISK16(finode->ic_nlink),
+		    DISK32(finode->ic_blocks), IC_SIZE(finode));
+	else
+	    sprintf(fib->fib_Comment + 1,
+		    "i=%-4d p=%04o u=%-5d g=%-5d l=%-2d bl=%-4d s=%d",
+		    dir_ent ? DISK32(dir_ent->d_ino) : 0, fmode & 07777,
+		    DISK16(finode->ic_ouid), DISK16(finode->ic_ogid),
+		    DISK16(finode->ic_nlink),
+		    DISK32(finode->ic_blocks), IC_SIZE(finode));
 	fib->fib_Comment[0] = strlen(fib->fib_Comment + 1);
     }
 
     fib->fib_Size	= IC_SIZE(finode);	/* bytes */
-    fib->fib_NumBlocks  = finode->ic_blocks / NSPF(superblock);
+    fib->fib_NumBlocks  = DISK32(finode->ic_blocks) / NSPF(superblock);
 
-    if ((lock->fl_Key == ROOTINO) && (pack->dp_Type == ACTION_EXAMINE_OBJECT))
+    if ((lock->fl_Key == ROOTINO) && (pack->dp_Type == ACTION_EXAMINE_OBJECT)) {
 	fib->fib_DirEntryType = ST_ROOT;
-    else if ((fmode & IFMT) == IFREG)
+	fib->fib_Size = 0;
+    } else if ((fmode & IFMT) == IFREG)
 	fib->fib_DirEntryType = ST_FILE;
     else if ((fmode & IFMT) == IFDIR) {
 	fib->fib_DirEntryType = ST_USERDIR;
 	fib->fib_Size	    = IC_SIZE(finode);	/* bytes */
-	fib->fib_NumBlocks  = finode->ic_blocks / NSPF(superblock);
+	fib->fib_NumBlocks  = DISK32(finode->ic_blocks) / NSPF(superblock);
     } else if ((fmode & IFMT) == IFLNK) {
 	fib->fib_DirEntryType = ST_SOFTLINK;
-	if (dir_comments) {
-	    if (temp = strlen(fib->fib_Comment + 1))
+	if (link_comments) {
+	    if ((temp = strlen(fib->fib_Comment + 1)) != 0)
 		fib->fib_Comment[temp++ + 1] = ' ';
 	    strcpy(fib->fib_Comment + temp + 1, "-> ");
-	    file_read(dir_ent->d_ino, 0, 78 - temp,
-		      fib->fib_Comment + strlen(fib->fib_Comment + 1) + 1);
-	    fib->fib_Comment[0] = strlen(fib->fib_Comment + 1);
+	    if (finode->ic_blocks == 0) {	/* must be 4.4 fastlink */
+	        temp2 = strlen((char *) DISK32(finode->ic_db));
+		strcpy(fib->fib_Comment + temp + 4, DISK32(finode->ic_db));
+	    } else
+	        temp2 = file_read(DISK32(dir_ent->d_ino), 0, 76 - temp,
+			          fib->fib_Comment + temp + 4);
+	    fib->fib_Comment[0] = temp + 3 + temp2;
 	}
     } else if (fmode & IFCHR) {
 	if ((fmode & IFMT) == IFBLK)
@@ -459,35 +489,49 @@ struct direct *dir_ent;
 	else
 		fib->fib_DirEntryType = ST_CDEVICE;
 
-	if (dir_comments) {
+	if (link_comments) {
 	    if (temp = strlen(fib->fib_Comment + 1))
 		fib->fib_Comment[temp++ + 1] = ' ';
-	    sprintf(fib->fib_Comment + temp + 1, "%cdev(%d,%d)",
-		    'B' + (-1 * ST_BDEVICE) + fib->fib_DirEntryType,
-		    finode->ic_db[0] >> 8, finode->ic_db[0] & 255);
+	    sprintf(fib->fib_Comment + temp + 1, "-] %cdev(%d,%d)",
+		    ((fib->fib_DirEntryType == ST_BDEVICE) ? 'B' : 'C'),
+		    DISK32(finode->ic_db[0]) >> 8,
+		    DISK32(finode->ic_db[0]) & 255);
 	    fib->fib_Comment[0] = strlen(fib->fib_Comment + 1);
 	}
     } else if ((fmode & IFMT) == IFIFO) {
 	fib->fib_DirEntryType = ST_FIFO;
-	if (dir_comments) {
+	if (temp = strlen(fib->fib_Comment + 1))
+	    fib->fib_Comment[temp++ + 1] = ' ';
+	if (link_comments) {
 	    sprintf(fib->fib_Comment + temp + 1, "fifo");
 	    fib->fib_Comment[0] = strlen(fib->fib_Comment + 1);
 	}
     } else if ((fmode & IFMT) == IFSOCK) {
 	fib->fib_DirEntryType = ST_SOCKET;
-	if (dir_comments) {
+	if (temp = strlen(fib->fib_Comment + 1))
+	    fib->fib_Comment[temp++ + 1] = ' ';
+	if (link_comments) {
 	    sprintf(fib->fib_Comment + temp + 1, "socket");
+	    fib->fib_Comment[0] = strlen(fib->fib_Comment + 1);
+	}
+    } else if ((fmode & IFMT) == IFWHT) {
+	fib->fib_DirEntryType = ST_WHITEOUT;
+	if (temp = strlen(fib->fib_Comment + 1))
+	    fib->fib_Comment[temp++ + 1] = ' ';
+	if (link_comments) {
+	    sprintf(fib->fib_Comment + temp + 1, "whiteout");
 	    fib->fib_Comment[0] = strlen(fib->fib_Comment + 1);
 	}
     }
 
 
     fib->fib_Protection = 0;
-    /* bummer, can't support archive or hidden - not enough UNIX bits	     */
+    /* bummer, can't support archive - not enough UNIX bits	     */
     /* fib->fib_Protection |= ((fmode & (IEXEC >> 3))? 0 : FIBF_ARCHIVE);    */
-    /* fib->fib_Protection |= (((fmode & IFMT) == IFLNK) ? FIBF_HIDDEN : 0); */
 
     /* Yes, it's complicated to figure out */
+    /* if SUID & VTX, then SCRIPT, if SUID, then SCRIPT+PURE, if VTX, then PURE */
+/*
     if (fmode & ISUID) {
 	if (fmode & ISVTX)
 		fib->fib_Protection |= FIBF_SCRIPT;
@@ -495,6 +539,10 @@ struct direct *dir_ent;
 		fib->fib_Protection |= FIBF_PURE | FIBF_SCRIPT;
     } else if (fmode & ISVTX)
 	fib->fib_Protection |= FIBF_PURE;
+*/
+    fib->fib_Protection |= ((fmode & ISUID)  ? FIBF_SCRIPT     : 0);
+    fib->fib_Protection |= ((fmode & ISGID)  ? FIBF_HIDDEN     : 0);
+    fib->fib_Protection |= ((fmode & ISVTX)  ? FIBF_PURE       : 0);
 
 
     fib->fib_Protection |= ((fmode & IREAD)  ? 0 : FIBF_READ   );
@@ -503,30 +551,39 @@ struct direct *dir_ent;
 
     fmode <<= 3;	/* look at group bits now */
 if (og_perm_invert) {
-    fib->fib_Protection |= ((fmode & IREAD)  ? FIBF_GRP_READ    : 0);
-    fib->fib_Protection |= ((fmode & IWRITE) ? FIBF_GRP_WRITE | FIBF_GRP_DELETE : 0);
-    fib->fib_Protection |= ((fmode & IEXEC)  ? FIBF_GRP_EXECUTE : 0);
+    fib->fib_Protection |= ((fmode & IREAD)  ?FIBF_GRP_READ    : 0);
+    fib->fib_Protection |= ((fmode & IWRITE) ?FIBF_GRP_WRITE | FIBF_GRP_DELETE:0);
+    fib->fib_Protection |= ((fmode & IEXEC)  ?FIBF_GRP_EXECUTE : 0);
     fmode <<= 3;	/* look at other bits now */
-    fib->fib_Protection |= ((fmode & IREAD)  ? FIBF_OTR_READ    : 0);
-    fib->fib_Protection |= ((fmode & IWRITE) ? FIBF_OTR_WRITE | FIBF_OTR_DELETE : 0);
-    fib->fib_Protection |= ((fmode & IEXEC)  ? FIBF_OTR_EXECUTE : 0);
+    fib->fib_Protection |= ((fmode & IREAD)  ?FIBF_OTR_READ    : 0);
+    fib->fib_Protection |= ((fmode & IWRITE) ?FIBF_OTR_WRITE | FIBF_OTR_DELETE:0);
+    fib->fib_Protection |= ((fmode & IEXEC)  ?FIBF_OTR_EXECUTE : 0);
 } else {
-    fib->fib_Protection |= ((fmode & IREAD)  ? 0 : FIBF_GRP_READ   );
-    fib->fib_Protection |= ((fmode & IWRITE) ? 0 : FIBF_GRP_WRITE | FIBF_GRP_DELETE);
-    fib->fib_Protection |= ((fmode & IEXEC)  ? 0 : FIBF_GRP_EXECUTE);
+    fib->fib_Protection |= ((fmode & IREAD)  ?0:FIBF_GRP_READ   );
+    fib->fib_Protection |= ((fmode & IWRITE) ?0:FIBF_GRP_WRITE | FIBF_GRP_DELETE);
+    fib->fib_Protection |= ((fmode & IEXEC)  ?0:FIBF_GRP_EXECUTE);
     fmode <<= 3;	/* look at other bits now */
-    fib->fib_Protection |= ((fmode & IREAD)  ? 0 : FIBF_OTR_READ   );
-    fib->fib_Protection |= ((fmode & IWRITE) ? 0 : FIBF_OTR_WRITE | FIBF_OTR_DELETE);
-    fib->fib_Protection |= ((fmode & IEXEC)  ? 0 : FIBF_OTR_EXECUTE);
+    fib->fib_Protection |= ((fmode & IREAD)  ?0:FIBF_OTR_READ   );
+    fib->fib_Protection |= ((fmode & IWRITE) ?0:FIBF_OTR_WRITE | FIBF_OTR_DELETE);
+    fib->fib_Protection |= ((fmode & IEXEC)  ?0:FIBF_OTR_EXECUTE);
 }
 
-    fib->fib_OwnerUID  = finode->ic_uid;
-    fib->fib_OwnerGID  = finode->ic_gid;
+    if (bsd44fs) {
+	fib->fib_OwnerUID  = (UWORD) DISK32(finode->ic_nuid);
+	fib->fib_OwnerGID  = (UWORD) DISK32(finode->ic_ngid);
+    } else {
+	fib->fib_OwnerUID  = (UWORD) DISK16(finode->ic_ouid);
+	fib->fib_OwnerGID  = (UWORD) DISK16(finode->ic_ogid);
+    }
+
+/*
+    fib->fib_DirOffset = lock->fl_Poffset;
+*/
 
     fib->fib_EntryType = fib->fib_DirEntryType;		/* must be the same */
-    ttime = finode->ic_mtime + GMT * 3600;
+    ttime = DISK32(finode->ic_mtime) + GMT * 3600;
     if (ttime == 0)
-	ttime = superblock->fs_time;
+	ttime = DISK32(superblock->fs_time);
 
     /* 86400 = 24 * 60 * 60           = (seconds in a day ) */
     /*  2922 = (1978 - 1970) * 365.25 = (clock birth difference in days) */
@@ -534,7 +591,7 @@ if (og_perm_invert) {
 
     fib->fib_Date.ds_Days   =  ttime / 86400 - 2922;	      /* Date today */
     fib->fib_Date.ds_Minute = (ttime % 86400) / 60;	      /* Minutes today */
-    fib->fib_Date.ds_Tick   = (ttime % 60) * TICKS_PER_SECOND;/* Ticks this minute */
+    fib->fib_Date.ds_Tick   = (ttime % 60) * TICKS_PER_SECOND;/* Ticks * minute */
 
 #define DIRNAMESIZE 107
     if ((lock->fl_Key == ROOTINO) && (pack->dp_Type == ACTION_EXAMINE_OBJECT))
@@ -542,11 +599,12 @@ if (og_perm_invert) {
     else {
 	strncpy(fib->fib_FileName + 1, dir_ent->d_name, DIRNAMESIZE - 1);
 	fib->fib_FileName[DIRNAMESIZE] = '\0';
+	fib->fib_DiskKey = DISK32(dir_ent->d_ino);
     }
     fib->fib_FileName[0] = (char) strlen(fib->fib_FileName + 1);
 /*
     PRINT(("  i=%-4d fs=%-8d fb=%-3d name=%s\n",
-	   dir_ent ? dir_ent->d_ino : 0, fib->fib_Size,
+	   dir_ent ? DISK32(dir_ent->d_ino) : 0, fib->fib_Size,
 	   fib->fib_NumBlocks, fib->fib_FileName+1));
 */
 }
@@ -568,7 +626,7 @@ char **name;
 	char	*sname;
 	ULONG	pinum = 0;
 
-	/* PRINT(("parent_parse l=%d path=%s\n", lock, path)); */
+	PRINT(("parent_parse l=%d path=%s\n", lock, path));
 
 	if (pinum = ResolveColon(path))
 		if ((sname = strchr(path, ':')) == NULL)
@@ -594,14 +652,23 @@ char **name;
 			break;
 		}
 	}
-/*
-	PRINT(("part=%s sname=%s (%d %d) pinum=%d   ",
-		part, sname, part, sname, pinum));
-*/
-	if (sname != part)
+
+	PRINT(("part=%s sname=%s (dif=%d) pinum=%d   ",
+		part, sname, part - sname, pinum));
+
+	if (sname != part) {
 		pinum = file_find(pinum, sname);
-	else if (*part == '/') {
-		pinum = file_find(pinum, "/");
+		if (!unixflag && (part > sname + 1) && (*(part - 2) == '/'))
+			pinum = dir_name_search(pinum, "..");
+	} else if (*part == '/') {
+
+		PRINT(("searching for parent of /\n"));
+		if (unixflag)
+			pinum = 2;
+		else
+			pinum = dir_name_search(pinum, "..");
+
+		PRINT(("parent pinum found is %d\n", pinum));
 		part++;
 	}
 
@@ -610,7 +677,7 @@ char **name;
 
 	*name = part;
 
-/*	PRINT(("part=%s pinum=%d\n", part, pinum)); */
+	PRINT(("part=%s pinum=%d name=%s\n\n", part, pinum, *name));
 
 	return(pinum);
 }
@@ -628,32 +695,29 @@ char *path;
 	char	*sname;
 	ULONG	inum = 0;
 
-/*
-PRINT(("path_parse l=%d path=%s\n", lock, path));
-*/
+
+	PRINT(("path_parse l=%d path=%s addr=%x\n", lock, path, path));
+
 
 	if (inum = ResolveColon(path))
-		if (sname = strchr(path, ':'))
-			sname++;
-		else {
-			sname = path;
-			inum = 2;
-		}
+	    if (sname = strchr(path, ':'))
+		sname++;
+	    else {
+		sname = path;
+		inum = 2;
+	    }
 	else {
 		sname = path;
-		if (lock) {
-			inum		= lock->fl_Key;
-			global.Pinum	= lock->fl_Pinum;
-			global.Poffset	= lock->fl_Poffset;
-		} else
-			inum = 2;
+	    if (lock) {
+		inum		= lock->fl_Key;
+		global.Pinum	= lock->fl_Pinum;
+		global.Poffset	= lock->fl_Poffset;
+	    } else
+		inum = 2;
 	}
 
 	inum = file_find(inum, sname);
 
-/*
-PRINT(("sname=%s inum=%d\n", sname, inum));
-*/
 
 	return(inum);
 }
@@ -696,10 +760,12 @@ close_filesystem()
 	PRINT(("close filesystem\n"));
 
 	if (superblock) {
+#ifndef RONLY
 		cache_flush();
 		cache_cg_flush();
 		superblock->fs_clean = 1;	/* unmounted clean */
 		superblock_flush();
+#endif
 		close_cache();
 		superblock_destroy();
 		strcpy(stat->disk_type, "Unmounted");
@@ -720,3 +786,22 @@ char	*str;
 		str++;
 	}
 }
+
+
+#ifdef INTEL
+
+unsigned short disk16(x)
+unsigned short x;
+{
+	return(((x >> 8) & 255) | ((x & 255) << 8));
+}
+
+unsigned long disk32(x)
+unsigned long x;
+{
+	return((x >> 24) | (x << 24) |
+	       ((x << 8) & (255 << 16)) |
+	       ((x >> 8) & (255 << 8)));
+}
+
+#endif

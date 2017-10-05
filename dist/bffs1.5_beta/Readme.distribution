@@ -1,0 +1,155 @@
+Version 1.5 BETA of BFFS  (Read-Write)      Distribution is 21-Aug-96
+-----------------------------------------------------------------------
+
+Berkeley Fast Filesystem AmigaDOS, Copyright 1991-1996 Chris Hooper
+
+BFFSFilesystem allows you to mount (and use) Unix filesystems directly
+under AmigaDOS.  Function in the operating system is similar to that of
+MessyDos (©) by Olaf Seibert or a CD-ROM filesystem for the Amiga.
+
+This is the first read-write version of the filesystem.  And, although
+I have done a fair amount of testing, you should not consider this
+package stable or otherwise bug-free.
+
+The original package (1.0 release) was co-authored by Bill Moore and
+Chris Hooper.  Bill Moore has since acquired other projects, so this
+product will be maintained and supported entirely by Chris Hooper.
+
+Compatibility
+	In the past, this package has been tested (working) with:
+	    hardware:  Amiga 500, 1000, 2000, 3000, and 4000
+	    software:  OS 2.04 and OS 3.1
+
+	The current version has only been tested on the following:
+	    hardware:  Amiga 3000
+	    software:  OS 3.1
+
+I see no reason why it should not work with other Amiga hardware or
+operating system version, 2.0+.
+
+-----------------------------------------------------------------------
+BFFS PACKAGE DISTRIBUTED FILES
+
+doc/legal_information
+	Please read this first.  By using this product you automatically
+	agree to all terms and conditions stated in the above file.
+
+l/BFFSFileSystem - Berkeley FFS implementation filesystem for AmigaDOS
+	This is the first release of the Read-Write version of the
+	filesystem for BSD 4.2 - 4.4 FFS Filesystems.  I believe it to
+	be stable.
+
+l/BFFSFileSystem.r - Berkeley FFS implementation filesystem for AmigaDOS
+	which CAN ONLY Read BSD 4.2 - 4.4 FFS Filesystems.  Write code has
+	been compiled out for this version for a smaller executable and
+	guaranteed no-writes.
+	
+l/BFFSFileSystem.ir - Berkeley FFS implementation filesystem for AmigaDOS
+	which CAN ONLY Read  x86 filesystems (such as those generated on
+	the Sun 386i running SunOS 4.x).  Not well tested, though seems
+	to work with the one floppy filesystem I have available.
+
+l/BFFSFileSystem.d - Berkeley FFS implementation filesystem for AmigaDOS
+	with full debugger support messages compiled in (use dbprint)
+
+l/BFFSFileSystem.f - Berkeley FFS implementation filesystem for AmigaDOS
+	with internal program consistency checks compiled out, fastest in
+	speed.
+
+MountList.BFFS  - Sample AmigaDOS mountlist for filesystem
+	The information contained in this MountList is explained in
+	detail in the user manual.
+
+bin/BFFSTool - Amiga gadtools utility to monitor filesystem performance
+	and modify current operating parameters.  See the user manual
+	for operating instructions.
+
+bin/dbprint - Debugger filesystem message printer (not very useful for
+	end user)
+
+bin/dcp - Copy from files to devices and visa versa.  See the separate
+	documentation included for this package for details.
+
+bin/diskpart - 10-Nov-1994 NetBSD source ported to the Amiga.
+	This program allows you to create and/or edit the disk
+	boot label information stored in the first sector of the disk
+	(Amiga disk partition).  When creating a new disk label, if
+	you do not specify the partition type, one will automatically
+	be created for you specifying parameters which fit inside the
+	the AmigaDOS partition.
+
+bin/dumpfs - 10-Nov-1994 NetBSD source ported to the Amiga.
+	This utility will print out the low level disk metadata 
+	structures of the superblock and cylinder group summary areas.
+
+bin/echmod - Change file (user/group/other) permissions
+
+bin/echown - Change file Ownership (per AmigaDOS 3.0 packet)
+
+bin/edumpfs - Show various Berkeley Fast Filesystem parameters; this
+	includes information in the disk label (if present) as well
+	as the superblock and cylinder group summary information.
+	This tool requires the filesystem already be mounted.  Sun x86
+	filesystems are automatically recognized and are correctly
+	interpreted.
+
+bin/eln - Create hard and soft links (usage is similar to UNIX ln command)
+
+bin/els - Quick and (not so dirty anymore) directory lister showing
+	extended AmigaDOS 3.0 permissions and file owner/group.  Can
+	also show true UNIX permissions, file size in blocks, and file
+	inode number on a UNIX filesystem.
+
+bin/etouch - Create and update timestamps on files - supports inode change
+	time, modify time, and last access time on BFFS filesystem files.
+
+bin/fsck - 10-Nov-1994 NetBSD source ported to the Amiga.
+	This program will check the consistency of the filesystem specified.
+	It will also NOT work correctly with SunOS 4.1.2 newfs'ed partitions,
+	as Sun has changed its cylinder summary information slightly.
+	The filesystem MUST be quiescent before starting fsck.
+
+bin/mknod - Create Unix special device nodes
+
+bin/newfs - 10-Nov-1994 NetBSD source ported to the Amiga.
+	This program will create a new BSD filesystem within the bounds of
+	the specified partition.  This tool requires the filesystem already
+	be mounted.
+
+bin/rdb - Show/modify the RDB (Rigid Disk Block) area of an Amiga disk
+
+bin/restore - 1-Oct-1995 NetBSD source ported to the Amiga.
+	This program will restore UNIX dump format files to a filesystem
+	using standard Amiga file writes.  It is capable of creating
+	device nodes, setting times, and creating symbolic links on BFFS
+	filesystems.
+
+bin/tunefs - 10-Nov-1994 NetBSD source ported to the Amiga.
+	This program is used to tweak semi-static filesystem parameters
+	such as the percentage minfree setting.  Tunefs ,ust be run on a
+	quiescent filesystem.
+
+
+doc/user_manual - Documentation on how to get started and maintain
+	your BSD filesystems under AmigaDOS.
+	
+doc/release_notes.BFFS - Filesystem operation (code) changes since
+	previous releases of the BFFS package.
+
+doc/BFFSTool.doc - documentation for BFFSTool
+
+etc/disktab - predefined disktypes for disklabel (not absolutely needed)
+
+etc/Raw_Sun_Floppy_label - if you want to put a Sun label on a floppy
+			   so that a Sun can use it, you need to format
+			   the floppy, newfs the floppy, then
+			   dcp Raw_Sun_Floppy_label BF0:
+			   If BF0: is the name of your BFFS floppy device.
+
+etc/HD_Raw_Sun_Floppy_label - This is the 1.44MB version of the Sun floppy
+			      label (for high density floppy drives)
+
+-----------------------------------------------------------------------
+
+This package was written by Chris Hooper (cdh@mtu.edu)
+-----------------------------------------------------------------------

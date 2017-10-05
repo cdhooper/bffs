@@ -69,7 +69,7 @@ bin/diskpart - 4.3 BSD Tahoe source ported to the Amiga
 
 doc/user_manual - Documentation on how to get started and maintain your
 	BSD filesystems under AmigaDOS.
-	
+
 doc/release_notes.BFFS - Filesystem operation changes since previous releases.
 
 doc/BFFSTool.doc - documentation for BFFSTool

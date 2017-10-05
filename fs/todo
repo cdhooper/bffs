@@ -1,0 +1,138 @@
+problem with 2048 phys sector size in writing larger files -
+complains of BLK(S) MISSING IN BITMAP
+
+when fs block filled, clrbit cg_clustersfree(newcg), frag/fs->fs_frag
+if contigsumsize > 0    when freed, setbit same
+ref fsck:pass5.c:267
+
+2048 byte sector size - change TD_SECTOR and DEV_BSIZE to variable
+	watch out for:	superblock offset
+			inode file block size (fwrite etc)
+
+eliminate the conversion to TD_SECTOR buffers in the code, go
+strictly by the number of buffers the user really wants
+
+rename cache.c to cache_frag.c and create new cache_block.c which
+uses similar policies, but works on whole filesystem blocks.  May
+need call into cache code now for external routines (packets.c),
+maybe not.
+Cache cgs the same as regular blocks?
+
+figure out different IS_FILESYSTEM packets, arg4 changes 0,9,10,11
+
+return correct size for directories instead of always 0
+
+add cgs with addbuffers +-10000 and value to documentation
+
+Note in doc file that if using csh and UnixPaths turned on, that ..
+will take user to root (csh converts .. to /)
+
+integrate cg caching with main block caching?
+	NO - different block sizes between frag and cg block
+
+make els show destination name of symlink (Readlink)
+
+change version info such that sd1a is no longer printed
+only if partition is other than 'a', then give slice number
+after :
+
+
+For 1.5:
+    implement immutable file?
+    implement whiteout entries?
+    port dump
+
+implement packets 50 and 51 from AS225
+
+----------------------------------------------------------------------
+
+NEXT VERSION:
+
+cache speedup?
+    add async nature to blocks in cache - cache should wait if async pending
+    if previous block already in cache, then sync request current block
+	and async request next block
+
+check possible filesystem corruption problem with large
+filesystems and lots of writes; inode block sometimes
+not getting written out back to disk
+	cache problem?  couldn't find anything.
+since it doesn't happen every time in the same conditions,
+cache flushes must play a role.
+
+add muFS stuff under #ifdef MUFS
+
+add support for AS225 ls packets 50 and 51 (extra info)
+
+add async reads and writes, but only allow one at a time.
+read or write must be complete before packet return
+from handler; may not be possible because how system uses
+cache code.  May only be useful for direct file reads
+and writes.
+
+bitchk and company probably need new macros written
+for little endian machines...will be wierd I think
+maybe no change needed though
+
+add action notify stuff for files/directory locks
+	easy to do files, tough to do directories
+	- add another field in the lock structure
+	at action end (for write) go through all locks looking
+		for lock on current file or parent directory.
+		if notify set for those, notify the requester
+
+
+add requester notification of disk read and write errors - allow for
+retry on the IO operation (in data_read and data_write routines)
+maybe also, if the trackdisk IO error was disk change, demand that the
+disk be returned to the drive
+
+when disk changed, have data_read and data_write routines demand the
+same disk be returned - set up superblock id structure that can be
+used to identify the correct disk (update the in memory structure
+only when the superblock is read from or written to the disk)
+
+fix data_read and data_write to check if disk frag requested is
+>0 and <size of partition instead of checking offset (overflow problem)
+
+work on allocation policy of block_fragblock_find - seems just a little
+too greedy for new filesystem blocks
+
+use cg_rotor for last used block
+use cg_frotor for last used frag
+
+Allow for "devices" - files that cause programs to be run to
+    intercept reads and writes - store filename and parms in device file
+    or at least handle names like hddisk.device
+    use symlink mechanism - symlink must be in format
+	::device,unit,lun,flags,startblk,endblk		-or-
+	::volumename:					-or maybe-
+	::program					-or-
+    store the information in the direct block addresses of inode (12 * 4 chars)?
+
+Allow mounting of other filesystems at mount points
+
+add to env? RDBPartitionName, if possible
+	just require device name and partition name for AmigaDOS RDB disks
+	hm...how do I find the rdb names?
+
+
+optimize operations which do / and % for the macros
+
+make cache_append routine to be called when adding blk zero'd cache
+blocks into the cache - so they don't look like they've just been used
+
+write stripe.device
+write mirror.device
+
+for i386 write support
+work on superblock references everywhere
+work on bit manipulation routines?
+
+write new debug handler - have only one PRINT call that takes as
+first parameter the debug level of the message.  message passer
+will look value up in array to determine if message should be sent.
+
+verify Lock("") does exactly the same thing as what Lock(".") does.
+This was a bug in bffs 1.5 reported by Todd Vierling <tv@pobox.com> in 1997
+

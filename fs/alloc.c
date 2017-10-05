@@ -1,13 +1,18 @@
 #include <dos/filehandler.h>
 
-#include "debug.h"
+#include "config.h"
+
+/* no need to go further if we are building the read only release */
+#ifndef RONLY
+
 #include "alloc.h"
 #include "ufs.h"
+#include "fsmacros.h"
 #include "cache.h"
 
 /* This set of routines deals directly with cg allocation blocks */
 
-int optimization = TIME;
+extern int optimization;
 /* bit_set, bit_clr, bit_val */
 
 
@@ -18,11 +23,18 @@ ULONG	 fpos;
 {
 	switch (FRAGS_PER_BLK) {
 		case 1:
+/*
 			bit_clr(map, fpos);
+*/
+			map[fpos >> 3] &= ~(1 << (fpos & 7));
 			break;
 		case 2:
+/*
 			bit_clr(map, fpos & ~1);
 			bit_clr(map, fpos | 1);
+*/
+			map[fpos >> 3] &= ~(1 <<  (fpos & 6));
+			map[fpos >> 3] &= ~(1 << ((fpos & 6) | 1));
 			break;
 		case 4:
 			/* note 0xf0 and 0x0f are reversed because of & */
@@ -44,11 +56,14 @@ ULONG	 fpos;
 {
 	switch (FRAGS_PER_BLK) {
 		case 1:
-			bit_set(map, fpos);
+			map[fpos >> 3] |= (1 << (fpos & 7));
+/*			bit_set(map, fpos); */
 			break;
 		case 2:
-			bit_set(map, fpos & ~1);
-			bit_set(map, fpos | 1);
+/*			bit_set(map, fpos & ~1);
+			bit_set(map, fpos |  1); */
+			map[fpos >> 3] |= (1 <<  (fpos & 6));
+			map[fpos >> 3] |= (1 << ((fpos & 6) | 1));
 			break;
 		case 4:
 			map[fpos >> 3] |= ((fpos & 4) ? 0xf0 : 0x0f);
@@ -141,6 +156,8 @@ int	min_frags;
 	map = cg_blksfree(mycg);
 
 	preferred = blknum(superblock, preferred);
+	if (preferred > mycg->cg_ndblk)
+		preferred = 0;
 
 /*
 	PRINT(("bfragfind near frag=%d of cg=%d size=%d\n",
@@ -153,7 +170,7 @@ int	min_frags;
 	}
 
 	if (optimization == TIME) {  /* find closest block with size >= needed */
-/*	    PRINT(("time\n")); */
+	    PRINT(("time\n"));
 	    for (index = preferred; index < mycg->cg_ndblk;
 		 index += FRAGS_PER_BLK) {
 		freehere = 0;
@@ -161,7 +178,7 @@ int	min_frags;
 		    if (bit_val(map, index + index2)) {
 			freehere++;
 			if (freehere == min_frags) {
-/*			    PRINT(("found at %d\n", index + index2 - freehere + 1)); */
+			    PRINT((">found at %d\n", index + index2 - freehere + 1));
 			    return(index + index2 - freehere + 1);
 			}
 		    } else
@@ -174,13 +191,13 @@ int	min_frags;
 		    if (bit_val(map, index + index2)) {
 			freehere++;
 			if (freehere == min_frags) {
-/*			    PRINT(("found at %d\n", index + index2 - freehere + 1)); */
+			    PRINT(("<found at %d\n", index + index2 - freehere + 1));
 			    return(index + index2 - freehere + 1);
 			}
 		    } else
 			freehere = 0;
 	    }
-/*	    PRINT(("nothing found!|\n")); */
+	    PRINT(("nothing found!|\n"));
 	    return(-1);
 	} else {
 /*	    PRINT(("space\n")); */
@@ -261,7 +278,6 @@ ULONG	preferred;
 	int	 index;
 	int	 temp;
 	int	 temp2;
-	char	 bmask;
 	int	 maxfrag;
 	unsigned char *map;
 
@@ -270,6 +286,8 @@ ULONG	preferred;
 
 	map = cg_blksfree(mycg);
 	preferred = blknum(superblock, preferred);
+	if (preferred > mycg->cg_ndblk)
+		preferred = 0;
 
 	switch (FRAGS_PER_BLK) {
 	    case 1:
@@ -279,9 +297,12 @@ ULONG	preferred;
 				if (temp <= mindist) {
 					fragpos = index;
 					mindist = temp;
-				}
+				} else
+					break;
 			}
 		}
+/* I think the else break will cut down on search time - once the
+   sweet spot is passed and we're not finding closer holes anymore */
 		break;
 	    case 2:
 		for (index = 0; index < maxfrag; index += 2) {
@@ -291,7 +312,8 @@ ULONG	preferred;
 				if (temp <= mindist) {
 					fragpos = index;
 					mindist = temp;
-				}
+				} else
+					break;
 			}
 		}
 		break;
@@ -303,14 +325,16 @@ ULONG	preferred;
 				if (temp <= mindist) {
 					fragpos = index;
 					mindist = temp;
-				}
+				} else
+					break;
 			}
 			if ((map[temp2] & 0xf0) == 0xf0) {
 				temp = abs(preferred - (index + 4));
 				if (temp <= mindist) {
 					fragpos = index + 4;
 					mindist = temp;
-				}
+				} else
+					break;
 			}
 		}
 		break;
@@ -323,7 +347,8 @@ ULONG	preferred;
 				if (temp <= mindist) {
 					fragpos = index << 3;
 					mindist = temp;
-				}
+				} else
+					break;
 			}
 		}
 		break;
@@ -340,6 +365,7 @@ ULONG nearblock;
 {
 	ULONG	cgx;
 	ULONG	bfree;
+	ULONG	temp;
 	int	block;
 	ULONG	index;
 	int	cylinder;
@@ -348,7 +374,9 @@ ULONG nearblock;
 	cgx  = dtog(superblock, nearblock);
 	mycg = cache_cg(cgx);
 
-/*	PRINT(("balloc: around blk %d (cg %d) - ", nearblock, cgx)); */
+
+	PRINT(("balloc: around blk %d (cg %d) - ", nearblock, cgx));
+
 
 	if (superblock->fs_cstotal.cs_nbfree == 0) {
 		PRINT(("no blocks available in filesystem\n"));
@@ -358,17 +386,21 @@ ULONG nearblock;
 	block = block_free_find(mycg, dtogd(superblock, nearblock));
 
 	if (block == -1) {	/* then we must find cg with least blks used */
+		ULONG	ncg;
+
+		ncg = DISK32(superblock->fs_ncg);
 		bfree = 0;
-		for (index = 0; index < superblock->fs_ncg; index++) {
-		    if (superblock->fs_cs(superblock, index).cs_nbfree > bfree) {
-			bfree = superblock->fs_cs(superblock, index).cs_nbfree;
+		for (index = 0; index < ncg; index++) {
+		    temp = DISK32(superblock->fs_cs(superblock, index).cs_nbfree);
+		    if (temp > bfree) {
+			bfree = temp;
 			cgx   = index;
-/*			PRINT(("\n%d has %d blocks available  ", cgx, bfree)); */
+			PRINT(("\n%d has %d blocks available  ", cgx, bfree));
 		    }
 		}
 
 		if (bfree == 0) {
-			PRINT(("INCON: block_allocate: no space free in fs\n"));
+			PRINT2(("INCON: block_allocate: no space free in fs\n"));
 			return(0);
 		}
 
@@ -377,22 +409,46 @@ ULONG nearblock;
 
 #ifndef FAST
 		if (block == -1) {
-			PRINT(("INCON: cg %d should have block free!\n", cgx));
+			PRINT2(("INCON: cg %d should have block free!\n", cgx));
 			return(0);
 		}
 #endif
 	}
 
-/*	PRINT(("found %d in cg %d\n", block, cgx)); */
+/*
+	PRINT(("found block %d in cg %d\n", block, cgx));
+*/
 	mycg = cache_cg_write(cgx);
 	block_alloc(cg_blksfree(mycg), block);
 	mycg->cg_cs.cs_nbfree--;
+
+#ifdef INTEL
+
+	temp = DISK32(superblock->fs_fmod) + 1;
+	superblock->fs_fmod = DISK32(temp);
+
+	temp = DISK32(superblock->fs_cstotal.cs_nbfree) - 1;
+	superblock->fs_cstotal.cs_nbfree = DISK32(temp);
+
+	temp = DISK32(superblock->fs_cs(superblock, cgx).cs_nbfree) - 1;
+	superblock->fs_cs(superblock, cgx).cs_nbfree = DISK32(temp);
+
+	cylinder = cbtocylno(superblock, block);
+	temp = DISK16(cg_blks(superblock, mycg, cylinder)[cbtorpos(superblock, block)]) - 1;
+	cg_blks(superblock, mycg, cylinder)[cbtorpos(superblock, block)] = DISK16(temp);
+	temp = DISK16(cg_blktot(mycg)[cylinder]) - 1;
+	cg_blktot(mycg)[cylinder] = DISK16(temp);
+
+#else
+
 	superblock->fs_fmod++;
 	superblock->fs_cstotal.cs_nbfree--;
 	superblock->fs_cs(superblock, cgx).cs_nbfree--;
 	cylinder = cbtocylno(superblock, block);
 	cg_blks(superblock, mycg, cylinder)[cbtorpos(superblock, block)]--;
 	cg_blktot(mycg)[cylinder]--;
+
+#endif
 
 	return(block + cgbase(superblock, cgx));
 }
@@ -484,7 +540,7 @@ ULONG frags;
 		/* it was a completely empty block */
 		cgblkstart = block_allocate(blkstart);
 		if (cgblkstart != blkstart) {
-			PRINT(("INCON: blk %d should be free for split, but isn't!  got %d instead\n", blkstart, cgblkstart));
+			PRINT2(("INCON: blk %d should be free for split, but isn't!  got %d instead\n", blkstart, cgblkstart));
 			if (cgblkstart)
 				block_deallocate(cgblkstart);
 			return;
@@ -581,3 +637,5 @@ ULONG frags;
 			bit_set(cg_blksfree(mycg), cgfragstart + index);
 	}
 }
+
+#endif
