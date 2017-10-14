@@ -1,0 +1,18 @@
+testdev:
+    FileSystem = fs:bffs
+    Device = fmsdisk.device
+    Unit = 14
+    Flags = 0
+    Mount = 0
+    Stacksize = 1024
+    Priority = -1
+    GlobVec = -1
+    LowCyl = 0
+    HighCyl = 160
+    Surfaces = 2
+    BlocksPerTrack = 18
+    Buffers = 64
+    Reserved = 0;  /* Unix partition */
+    PreAlloc = 11;  /* 8 for link comment, 16 for inode comment */
+    DosType = 0x42464653  /* BFFS */
+#

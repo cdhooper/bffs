@@ -9,7 +9,7 @@
 #define HARD 0
 #define SOFT 1
 
-char *version = "\0$VER: eln 1.1 (8.Apr.96) © 1996 Chris Hooper";
+char *version = "\0$VER: eln 1.11 (7.Sep.96) ) 1996 Chris Hooper";
 
 
 main(argc, argv)
@@ -41,11 +41,13 @@ char *argv[];
 
 	for (; index < argc; index++)
 		if (PMakeLink(dest, argv[index], type)) {
-			fprintf(stderr, "Unable to link %s to %s\n",
-				argv[index], src);
-			printf("%d\n", IoErr());
-			Fault(IoErr(), "", buf, 67);
-			fprintf(stderr, "   because: %s\n", buf);
+			long err = IoErr();
+			if (err == 0)
+				strcpy(buf, "unknown reason");
+			else
+				Fault(err, "", buf, 67);
+			fprintf(stderr, "Unable to link %s to %s - %d %s\n",
+				argv[index], src, err, buf);
 		}
 
 	exit(0);

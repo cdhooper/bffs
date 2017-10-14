@@ -79,7 +79,9 @@ static char *rcsid = "$Id: newfs.c,v 1.10 1994/06/08 19:30:28 mycroft Exp $";
 #include <varargs.h>
 #endif
 
-#ifndef cdh
+#ifdef cdh
+extern int DEV_BSIZE;
+#else
 #include "mntopts.h"
 
 struct mntopt mopts[] = {
@@ -393,6 +395,10 @@ main(argc, argv)
 #ifdef AMIGA
 	onbreak(break_abort);
 	fso = -1;
+        if (dio_open(special) == 0) {
+                dio_inhibit(1);
+                goto ropened;
+        }
 #else
 	if (Nflag) {
 		fso = -1;
@@ -425,7 +431,7 @@ main(argc, argv)
 		}
 #endif
 	}
-#endif !AMIGA
+#endif /* AMIGA */
 	if (mfs && disktype != NULL) {
 		lp = (struct disklabel *)getdiskbyname(disktype);
 		if (lp == NULL)
@@ -440,12 +446,6 @@ main(argc, argv)
 		fsi = open(special, O_RDONLY);
 #endif
 		if (fsi < 0) {
-#ifdef AMIGA
-			if (dio_open(special) == 0) {
-				dio_inhibit(1);
-				goto ropened;
-			}
-#endif
 			Perror("Can't open %s for read", special);
 		}
 		if (fstat(fsi, &st) < 0)
@@ -581,6 +581,11 @@ main(argc, argv)
 	bbsize = lp->d_bbsize;
 	sbsize = lp->d_sbsize;
 #endif
+#ifdef cdh
+        dio_assign_bsize(sectorsize);
+	sectorsize = DEV_BSIZE;
+#endif
+
 	oldpartition = *pp;
 #ifdef tahoe
 	realsectorsize = sectorsize;

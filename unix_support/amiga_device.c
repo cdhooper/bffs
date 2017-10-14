@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <dos/dosextens.h>
+
 #define _SYS_TIME_H_
 #include <exec/types.h>
-#include "sys/types.h"
+#include "sys/systypes.h"
 #include <exec/io.h>
 #include <devices/trackdisk.h>
 #include <dos/filehandler.h>
@@ -10,30 +11,35 @@
 
 #include <fcntl.h>
 
+#undef DEBUG
+
 char	*strchr();
 #define BTOC(x) ((x)<<2)
 #define CTOB(x) ((x)>>2)
 
 char	*dos_dev_name = NULL;
-extern	int	dev_bsize;
 
 char	*disk_device	= "scsi.device";
 int	disk_unit	= 0;
-int	disk_flags	= 0;
+static int	disk_flags	= 0;
 
-int	inhibited = 0;
-ULONG	poffset	= 0;
-ULONG	pmax	= 0;
-struct	IOExtTD	*trackIO = NULL;
+int	DEV_BSIZE = 512;
+int	DEV_BSHIFT = 9;
+static int	inhibited = 0;
+static ULONG	poffset	= 0;
+static ULONG	pmax	= 0;
+static struct	IOExtTD	*trackIO = NULL;
+
 
 int bread(buf, blk, size)
 char	*buf;
 daddr_t	blk;
 long	size;
 {
-/*
-	printf("bread: blk=%d size=%d bs=%d buf=%08x poffset=%d\n", blk, size, dev_bsize, buf, poffset);
-*/
+#ifdef DEBUG
+	printf("bread: blk=%d size=%d BSIZE=%d buf=%08x poffset=%d ploc=%d\n",
+		blk, size, DEV_BSIZE, buf, poffset, blk * DEV_BSIZE + poffset);
+#endif
 	if (dos_dev_name == NULL)
 		return(fbread(buf, blk, size));
 
@@ -41,7 +47,7 @@ long	size;
 	trackIO->iotd_Req.io_Length  = size;		/* #bytes to read */
 	trackIO->iotd_Req.io_Data    = buf;		/* buffer to use */
 
-	trackIO->iotd_Req.io_Offset = blk * dev_bsize + poffset;
+	trackIO->iotd_Req.io_Offset = blk * DEV_BSIZE + poffset;
 
 	if (trackIO->iotd_Req.io_Offset + size > pmax) {
 		printf("Attempted to read past the end of the partition, block=%d size=%d\n", blk, size);
@@ -56,9 +62,10 @@ char	*buf;
 daddr_t	blk;
 long	size;
 {
-/*
-	printf("bwrite: blk=%d size=%d bs=%d buf=%08x poffset=%d\n", blk, size, dev_bsize, buf, poffset);
-*/
+#ifdef DEBUG
+	printf("bwrite: blk=%d size=%d BSIZE=%d buf=%08x poffset=%d\n",
+		blk, size, DEV_BSIZE, buf, poffset);
+#endif
 	if (dos_dev_name == NULL)
 		return(fbwrite(buf, blk, size));
 
@@ -66,7 +73,7 @@ long	size;
 	trackIO->iotd_Req.io_Length  = size;		/* #bytes to read */
 	trackIO->iotd_Req.io_Data    = buf;		/* buffer to use */
 
-	trackIO->iotd_Req.io_Offset = blk * dev_bsize + poffset;
+	trackIO->iotd_Req.io_Offset = blk * DEV_BSIZE + poffset;
 
 	if (trackIO->iotd_Req.io_Offset + size > pmax) {
 		printf("Attempted to write past the end of the partition, block=%d size=%d\n", blk, size);
@@ -74,6 +81,31 @@ long	size;
 	}
 
 	return(DoIO(trackIO));
+}
+
+static void dio_set_bsize(int bsize)
+{
+	int	tempshift = 9;
+	switch (bsize) {
+	    case 16384:	tempshift++;
+	    case 8192:	tempshift++;
+	    case 4096:	tempshift++;
+	    case 2048:	tempshift++;
+	    case 1024:	tempshift++;
+	    case 512:
+		DEV_BSIZE  = bsize;
+		DEV_BSHIFT = tempshift;
+		break;
+	    default:
+		fprintf(stderr, "Warning: physical sector size %d ignored\n",
+			bsize);
+	}
+}
+
+void dio_assign_bsize(int bsize)
+{
+	if (dos_dev_name == NULL)
+		dio_set_bsize(bsize);
 }
 
 int dio_open(name)
@@ -84,8 +116,10 @@ char *name;
 
 	dos_dev_name = name;
 
-	if (dio_init())
+	if (dio_init()) {
+		dos_dev_name = NULL;
 		return(1);
+	}
 
 	if (!(trackIO = (struct IOExtTD *) CreateExtIO(CreatePort(0, 0),
 					       sizeof(struct IOExtTD)) )) {
@@ -103,7 +137,7 @@ char *name;
 	return(0);
 }
 
-dio_close()
+int dio_close(void)
 {
 	if (dos_dev_name == NULL)
 		return(0);
@@ -140,10 +174,12 @@ int dio_init()
 	char	*lookfor;
 	char	*pos;
 	int	notfound = 1;
+	int	tempsize;
 
 	lookfor = dos_dev_name;
-	if ((pos = strchr(lookfor, ':')) != NULL)
-		*pos = '\0';
+	if ((pos = strchr(lookfor, ':')) == NULL)
+		return (1);
+	*pos = '\0';
 
 	DosBase = (struct DosLibrary *) OpenLibrary("dos.library", 0L);
 
@@ -173,12 +209,18 @@ int dio_init()
 	disk_flags	= startup->fssm_Flags;
 
 	envec		= (struct DosEnvec *) BTOC(startup->fssm_Environ);
+
+	tempsize	= envec->de_SizeBlock * sizeof(long);
+
+	dio_set_bsize(tempsize);
+
 	poffset		= envec->de_LowCyl * envec->de_Surfaces *
-			  envec->de_BlocksPerTrack * TD_SECTOR;
+			  envec->de_BlocksPerTrack * DEV_BSIZE;
 	pmax		= (envec->de_HighCyl + 1) * envec->de_Surfaces *
-			  envec->de_BlocksPerTrack * TD_SECTOR;
-/*
-	printf("pmax=%d TD=%d \n", pmax, TD_SECTOR);
+			  envec->de_BlocksPerTrack * DEV_BSIZE;
+
+#ifdef DEBUG
+	printf("pmax=%d DEV_BSIZE=%d\n", pmax, DEV_BSIZE);
 	printf("unit=%d\n", disk_unit);
 	printf("device=%s\n", disk_device);
 	printf("flags=%d\n", disk_flags);
@@ -189,9 +231,10 @@ int dio_init()
 	printf("blks/track=%d\n", envec->de_BlocksPerTrack);
 	printf("heads=%d\n", envec->de_Surfaces);
 	printf("DosType=%08x\n", envec->de_DosType);
-*/
+#endif
 
 	CloseLibrary(DosBase);
+	return (0);
 }
 
 int unstrcmp(str1, str2)
@@ -223,7 +266,7 @@ char *str2;
 }
 
 
-/*
+
 dio_checkstack(minimum)
 int minimum;
 {
@@ -242,7 +285,7 @@ int minimum;
 	} else
 		return(0);
 }
-*/
+
 
 dio_inhibit(inhibit)
 int inhibit;

@@ -3,9 +3,10 @@
 #include <sys/disklabel.h>
 #include <sys/stat.h>
 
-#define DEV_BSIZE 512
 #define BBSIZE 8192
 #define SBSIZE 8192
+
+extern int DEV_BSIZE;
 
 extern char *special;
 extern char *progname;

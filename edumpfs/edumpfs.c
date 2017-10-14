@@ -1,4 +1,4 @@
-/* edumpfs.c version 1.35
+/* edumpfs.c version 1.4
  *      This program is copyright 1994 - 1996 Chris Hooper.  All code herein
  *      is freeware.  No portion of this code may be sold for profit.
  */
@@ -7,20 +7,25 @@
 #include <stdio.h>
 #include <fcntl.h>
 
-
-#include "/fs/ufs.h"
-
 #include "fsmacros.h"
 #include "convert.h"
 
-char *version = "\0$VER: edumpfs 1.35 (10.Aug.96) © 1996 Chris Hooper";
+
+#include "ufs.h"
+#include "superblock.h"
+#include "ufs/sun_label.h"
+#include "ufs/bsd_label.h"
+
+char *version = "\0$VER: edumpfs 1.4 (20.Oct.96) © 1996 Chris Hooper";
 
 char	*strchr();
+
+extern int DEV_BSIZE;
 
 char	*progname;
 char	*devname;
 int	dev_bsize = DEV_BSIZE;
-int	sectorsize = 512;
+int	sectorsize = DEV_BSIZE;
 int	ifd = -1;
 int	ofd = -1;
 int	fpb = 4;
@@ -39,6 +44,7 @@ int	short_inodes	= 1;
 int	short_frags	= 1;
 int	sbsize;
 int	convert		= 0;
+int	invert		= 0;
 ULONG	disk16();
 ULONG	disk32();
 ULONG	disk64();
@@ -55,7 +61,7 @@ char	*argv[];
 
 	if (argc == 1)
 		print_usage();
-	
+
 	onbreak(break_abort);
 
 	for (partition = 0; partition < MAX_PART; partition++) {
@@ -76,6 +82,8 @@ char	*argv[];
 					show_cg_summary = !show_cg_summary;
 				else if (*argv[index] == 'i')
 					short_inodes = !short_inodes;
+				else if (*argv[index] == 'I')
+					invert = !invert;
 				else if (*argv[index] == 'f')
 					short_frags = !short_frags;
 				else if (*argv[index] == 'h')
@@ -91,9 +99,8 @@ char	*argv[];
 		devname = argv[index];
 
 		colonpos = strchr(devname, ':');
-		if (!colonpos)
-
-		ifd = open(devname, O_RDONLY);
+		if (!colonpos || *(colonpos + 1) != '\0')
+			ifd = open(devname, O_RDONLY);
 
 		if (ifd < 0)
 		    if (dio_open(devname))
@@ -118,7 +125,7 @@ char	*argv[];
 				partition = colonpos[1] - 'a';
 		else
 			partition = -1;
-	
+
 		if ((partition >= 0) && (partition < MAX_PART))
 			print_filesystem(partition);
 		else
@@ -163,7 +170,7 @@ int print_sun_disk_label()
 	label = (struct sun_label *) AllocMem(DEV_BSIZE,
 					      MEMF_PUBLIC | MEMF_CLEAR);
 
-	bread(label, BOOT_BLOCK, DEV_BSIZE);
+	bread(label, BOOT_BLOCK * DEV_BSIZE / DEV_BSIZE, DEV_BSIZE);
 
 	if (label->bb_magic != SunBB_MAGIC) {
 	    if (DISK16(label->bb_magic) != SunBB_MAGIC) {
@@ -212,7 +219,7 @@ int print_sun_disk_label()
 
 			disk32(label->bb_part[pnum].fs_size) / bcfact +
 			disk32(label->bb_part[pnum].fs_start_cyl),
-			
+
 			disk32(label->bb_part[pnum].fs_size) +
 			disk32(label->bb_part[pnum].fs_start_cyl) * bcfact);
 		times++;
@@ -234,7 +241,7 @@ int print_bsd44_disk_label()
 	buffer = (struct bsd44_label *) AllocMem(DEV_BSIZE,
 						 MEMF_PUBLIC | MEMF_CLEAR);
 
-	bread(buffer, BOOT_BLOCK, DEV_BSIZE);
+	bread(buffer, BOOT_BLOCK * DEV_BSIZE / DEV_BSIZE, DEV_BSIZE);
 
 	for (fs_offset = 0; fs_offset < DEV_BSIZE / sizeof(ULONG); fs_offset++) {
 		label = (struct bsd44_label *) (buffer + fs_offset);
@@ -280,14 +287,14 @@ int print_bsd44_disk_label()
 		fs_size   = disk32(label->bb_part[pnum].fs_size);
 		printf("%2d(%c)  %9d %9d ",
 			pnum, pnum + 'a', fs_offset, fs_size);
-		sprintf(buf, "%d.%03d", 
+		sprintf(buf, "%d.%03d",
 			fs_size * label->bb_secsize / 1048576,
 			(fs_size * label->bb_secsize % 1048576) / 1000);
 		printf(" %-.5s %6d  %5d ", buf,
 			label->bb_part[pnum].fs_fsize,
 			label->bb_part[pnum].fs_fsize *
 				label->bb_part[pnum].fs_frag);
-		sprintf(buf, "%5d/%d/%d", 
+		sprintf(buf, "%5d/%d/%d",
 			fs_offset / label->bb_nspc,
 			(fs_offset % label->bb_nspc) / label->bb_nspt,
 			fs_offset % label->bb_nspt);
@@ -306,6 +313,7 @@ int	partition;
 ULONG	offset;
 {
 	ULONG fs_size;
+	char buf[10];
 
 	printf("\nPartition %d at offset %d: ", partition, offset);
 
@@ -350,10 +358,29 @@ ULONG	offset;
 		disk32(superblock->fs_nspf), disk32(superblock->fs_maxbpg),
 		disk32(superblock->fs_ncg), disk32(superblock->fs_optim),
 		disk32(superblock->fs_time));
-	printf(" inopb=%-4d  nindir=%-5d  optim=%1d     minfree=%2d%%     rpm=%-4d\n",
+	sprintf(buf, "%d%%", disk32(superblock->fs_minfree));
+	printf(" inopb=%-4d  nindir=%-5d  optim=%1d     minfree=%3s     rpm=%-4d\n",
 		disk32(superblock->fs_inopb), disk32(superblock->fs_nindir),
-		disk32(superblock->fs_optim), disk32(superblock->fs_minfree),
+		disk32(superblock->fs_optim), buf,
 		disk32(superblock->fs_rps) * 60, disk32(superblock->fs_rotdelay));
+	printf(" nsect=%-4d  interleave=%-2d  trackskew=%-2d  spc=%-3d\n",
+		disk32(superblock->fs_nsect), disk32(superblock->fs_interleave),
+		disk32(superblock->fs_spc));
+	printf(" fmod=%-2d clean=%-2d ronly=%-2d flags=%-2d cgrotor=%-2d\n",
+		superblock->fs_fmod, superblock->fs_clean, superblock->fs_ronly,
+		superblock->fs_flags, disk32(superblock->fs_cgrotor));
+	printf("cpc=%d contigsumsize=%d maxsymlinklen=%d state=%d magic=%x\n",
+		disk32(superblock->fs_cpc), disk32(superblock->fs_contigsumsize),
+		disk32(superblock->fs_maxsymlinklen),
+		disk32(superblock->fs_state), disk32(superblock->fs_magic));
+	printf("qbmask=%08x %08x qfmask=%08x %08x postblformat=%d\n",
+	       disk32(superblock->fs_qbmask.val[0]),
+					disk32(superblock->fs_qbmask.val[1]),
+	       disk32(superblock->fs_qfmask.val[0]),
+					disk32(superblock->fs_qfmask.val[1]),
+		superblock->fs_postblformat, disk32(superblock->fs_nrpos));
+	printf("postbloff=%d rotbloff=%d\n",
+	       disk32(superblock->fs_postbloff), disk32(superblock->fs_rotbloff));
 }
 
 print_cg_summary()
@@ -391,8 +418,14 @@ print_cg_summary()
 		for (index2 = 0; index2 < MAXFRAG; index2++) {
 			printf("%d ", disk32(cg->cg_frsum[index2]));
 		}
+		printf("\n    clustersumoff=%d clusteroff=%d nclusterblks=%d\n",
+			disk32(cg->cg_clustersumoff), disk32(cg->cg_clusteroff),
+			disk32(cg->cg_nclusterblks));
 
-		printf("\n    iused=");
+		if (invert)
+			printf("    ifree=");
+		else
+			printf("    iused=");
 		if (short_inodes)
 			pbits((char *) cg + disk32(cg->cg_iusedoff),
 				disk32(superblock->fs_ipg));
@@ -400,7 +433,10 @@ print_cg_summary()
 			binbits((char *) cg + disk32(cg->cg_iusedoff),
 				disk32(superblock->fs_ipg));
 
-		printf("    ffree=");
+		if (invert)
+			printf("    fused=");
+		else
+			printf("    ffree=");
 
 		if (short_frags)
 			pbits((char *) cg + disk32(cg->cg_freeoff),
@@ -422,7 +458,7 @@ ULONG	sboff;
         temp_sb = (struct fs *) AllocMem(DEV_BSIZE, MEMF_PUBLIC);
 	superblock = temp_sb;
 	dev_bsize = DEV_BSIZE;
-	bread(temp_sb, SUPER_BLOCK + sboff, DEV_BSIZE);
+	bread(temp_sb, SUPER_BLOCK * DEV_BSIZE / DEV_BSIZE + sboff, DEV_BSIZE);
 	sbsize = disk32(temp_sb->fs_sbsize);
 
 	if ((sbsize < 512) || (sbsize > 32768)) {
@@ -447,7 +483,7 @@ ULONG	sboff;
 		printf("unable to allocate memory\n");
 		return(0);
 	}
-	bread(superblock, SUPER_BLOCK + sboff, sbsize);
+	bread(superblock, SUPER_BLOCK * DEV_BSIZE / DEV_BSIZE + sboff, sbsize);
 	dev_bsize = disk32(superblock->fs_fsize);
 	FreeMem(temp_sb, DEV_BSIZE);
 	temp_sb = NULL;
@@ -491,7 +527,8 @@ int max;
 	pbuf[0] = '\0';
 
 	for (i = 0; i < max; i++)
-		if (isset(cp, i)) {
+		if ((isset(cp, i) && !invert) ||
+		    (isclr(cp, i) && invert)) {
 			if (strl > 62) {
 				printf("%s\n          ", pbuf);
 				pbuf[0] = '\0';
@@ -501,7 +538,8 @@ int max;
 			sprintf(pbuf + strl, "%s%d", strl ? "," : "", i);
 			strl += strlen(pbuf + strl);
 			j = i;
-			while ((i+1)<max && isset(cp, i+1))
+			while ((i+1)<max && ((isset(cp, i+1) && !invert) ||
+					     (isclr(cp, i+1) && invert)) )
 				i++;
 			if (i != j) {
 				sprintf(pbuf + strl, "-%d", i);
@@ -514,20 +552,24 @@ int max;
 }
 
 binbits(ptr, num)
-char *ptr;
+register char *ptr;
+int num;
 {
 	int index;
 	int lpos = 11;
 	for (index = 0; index < num; index++) {
 		if (index && ((index % fpb) == 0))
-			if (lpos > 71) {
+			if (lpos > 75) {
 				printf("\n          ");
 				lpos = 11;
 			} else {
 				printf(" ");
 				lpos++;
 			}
-		printf("%d", isset(ptr, index) != 0);
+		if (invert)
+			printf("%d", isset(ptr, index) == 0);
+		else
+			printf("%d", isset(ptr, index) != 0);
 		lpos++;
 	}
 	printf("\n");
@@ -571,6 +613,7 @@ print_usage()
 	fprintf(stderr, "\t\t-c  do not show cylinder summary information\n");
 	fprintf(stderr, "\t\t-i  show bit detail of inodes available\n");
 	fprintf(stderr, "\t\t-f  show bit detail of frags available\n");
+	fprintf(stderr, "\t\t-I  invert meaning of displayed bits\n");
 	fprintf(stderr, "\t\t-h  give more help\n");
 	exit(1);
 }

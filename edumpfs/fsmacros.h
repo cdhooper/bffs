@@ -122,3 +122,8 @@
         ((disk32(cgp->cg_magic != CG_MAGIC))				\
         ? (((struct ocg *)(cgp))->cg_btot)				\
         : ((long *)((char *)(cgp) + disk32(cgp->cg_btotoff))))
+
+
+#define NBBY 8
+#define isset(a,i)      ((a)[(i)/NBBY] & (1<<((i)%NBBY)))
+#define isclr(a,i)      (((a)[(i)/NBBY] & (1<<((i)%NBBY))) == 0)

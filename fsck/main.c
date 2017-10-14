@@ -54,7 +54,11 @@ static char *rcsid = "$Id: main.c,v 1.13 1994/06/08 19:00:24 mycroft Exp $";
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>
+#ifdef cdh
 #include "fsck2.h"
+#else
+#include "fsck.h"
+#endif
 
 void	catch(), catchquit(), voidquit();
 int	returntosingle;
@@ -70,7 +74,9 @@ main(argc, argv)
 	extern char *optarg, *blockcheck();
 	extern int optind;
 
-#ifndef cdh
+#ifdef cdh
+	dio_checkstack(4000);
+#else
 	sync();
 #endif
 	while ((ch = getopt(argc, argv, "vdpnNyYb:c:l:m:")) != EOF) {

@@ -1,4 +1,8 @@
 PROG=/bin/rdb
+RM=-delete force >NIL:
 
 $(PROG): rdb.c
 	dcc -o $(PROG) rdb.c
+
+clean:
+	$(RM) $(OBJS) $(PROG)

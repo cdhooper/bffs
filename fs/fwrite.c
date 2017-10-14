@@ -5,7 +5,7 @@
 /* no need to go further if we are building the read only release */
 #ifndef RONLY
 
-#include "ufs.h"
+#include "superblock.h"
 #include "ufs/inode.h"
 #include "fsmacros.h"
 #include "file.h"
@@ -14,6 +14,7 @@
 #include "handler.h"
 #include "dos30/dos.h"
 
+extern ULONG phys_sectorsize;	/* physical disk sector size, from env */
 
 
 /* file_write();
@@ -44,14 +45,21 @@ char	*buf;
 	filesize = IC_SIZE(inode);
 
 	/* expand allocation if file will grow larger than current allocation */
-	if (sbyte + nbytes > DISK32(inode->ic_blocks) * TD_SECTOR) {
-		start  = DISK32(inode->ic_blocks) / NSPF(superblock);
-		blocks = ((sbyte + nbytes + FBSIZE - 1) / TD_SECTOR -
-			  DISK32(inode->ic_blocks)) / NSPB(superblock);
+	if (sbyte + nbytes > DISK32(inode->ic_blocks) * phys_sectorsize) {
+		start  = DISK32(inode->ic_blocks) / NDSPF;
 /*
-		start  = ((filesize + FBSIZE - 1) / FBSIZE) * FRAGS_PER_BLK;
-		blocks =  (nbytes + sbyte - filesize + FBSIZE - 1) / FBSIZE;
+		blocks = ((sbyte + nbytes + FBSIZE - 1) / phys_sectorsize -
+			  DISK32(inode->ic_blocks)) / NDSPB;
 */
+
+PRINT(("sbyte=%d nbytes=%d FBSIZE=%d ic_blocks=%d NDSPB=%d\n",
+	sbyte, nbytes, FBSIZE, DISK32(inode->ic_blocks), NDSPB));
+/*
+		blocks = ((sbyte + nbytes + FBSIZE - 1) / FBSIZE -
+			  DISK32(inode->ic_blocks)) / NDSPB;
+*/
+		blocks = (sbyte + nbytes + FBSIZE - 1 -
+			  DISK32(inode->ic_blocks) * phys_sectorsize) / FBSIZE;
 
 		PRINT(("fw: Expand %d (size=%d) at frag %d by %d blocks\n",
 			inum, filesize, start, blocks));
@@ -85,12 +93,12 @@ char	*buf;
 	efrag	= (sbyte + nbytes) / FSIZE;
 	nffrags	= efrag - sfrag;
 
-	PRINT(("fw: sbyte=%d nbytes=%d start=%d:%d end=%d:%d poff=%d\n",
-		sbyte, nbytes, spos, sfrag, epos, efrag, poffset));
+	PRINT(("fw: sbyte=%d nbytes=%d start=%d:%d end=%d:%d\n",
+		sbyte, nbytes, spos, sfrag, epos, efrag));
 
 	/* Handle the possibility that the entire write is in one frag */
 	if (sfrag == efrag) {
-/*		PRINT(("pwrite: %d:%d to %d:%d\n", spos, sfrag, epos, efrag)); */
+		PRINT(("pwrite: %d:%d to %d:%d\n", spos, sfrag, epos, efrag));
 		inode = inode_read(inum);
 		faddr = widisk_frag(sfrag, inode, inum);
 		if (faddr == 0) {
@@ -111,10 +119,11 @@ char	*buf;
 		inode = inode_read(inum);
 		faddr = widisk_frag(sfrag, inode, inum);
 		if (faddr == 0) {
-			PRINT(("bwrite: No more space left on device\n"));
+			PRINT(("fw:s: No more space left on device\n"));
 			global.Res2 = ERROR_DISK_FULL;
 			return(-1);
 		}
+		PRINT(("start -- "));
 		partial_frag_write(faddr, spos, FSIZE - spos, buf, 1);
 		sfrag++;
 		nffrags--;
@@ -125,7 +134,7 @@ char	*buf;
 	if (nffrags > 0) {
 		faddr = file_frags_write(sfrag, nffrags, buf, inum);
 		if (faddr != nffrags) {
-			PRINT(("mwrite: No more space left on device\n"));
+			PRINT(("fw:m: No more space left on device\n"));
 			return(FSIZE - spos + faddr * FSIZE);
 		}
 		buf += nffrags * FSIZE;
@@ -136,9 +145,10 @@ char	*buf;
 		inode = inode_read(inum);
 		faddr = widisk_frag(efrag, inode, inum);
 		if (faddr == 0) {
-			PRINT(("No more space left on device [ewrite]\n"));
+			PRINT(("fw:e: No more space left on device [ewrite]\n"));
 			return(FSIZE - spos + nffrags * FSIZE);
 		}
+		PRINT(("end -- "));
 		partial_frag_write(faddr, 0, epos, buf, read_last_frag);
 	}
 
@@ -155,6 +165,7 @@ ULONG	inum;
     int     frag = 0;
     int     csfrag, cefrag, lfrag, bfrags;
     struct  icommon *inode;
+    extern  ULONG tranmask;
 
     if (nfrags < 4) {
 	while (frag < nfrags)  {
@@ -165,6 +176,7 @@ ULONG	inum;
 		return(frag);
 	    } else
 		CopyMem(buf + frag * FSIZE, cache_frag_write(lfrag, 0), FSIZE);
+	    PRINT(("ffw: (nf<4) frag=%d\n", frag));
 	    frag++;
 	}
 	return(frag);
@@ -179,6 +191,9 @@ ULONG	inum;
 
     if (lfrag)
         cache_invalidate(lfrag);
+
+    PRINT(("ffw: gather frags=%d (%d to %d)\n",
+	   nfrags, sfrag, sfrag + nfrags - 1));
 
     while ((frag < nfrags) && (lfrag != 0)) {
 	csfrag = lfrag;
@@ -222,7 +237,7 @@ ULONG	inum;
     struct  icommon *inode;
 
     while (frag < nfrags)  {
-/* PRINT(("fufw: frag=%d maddr=%x\n", frag, buf)); */
+	PRINT(("fufw: frag=%d maddr=%x\n", frag, buf));
 	inode = inode_read(inum);
 	lfrag = widisk_frag(sfrag + frag, inode, inum);
 	if (lfrag == 0) {
@@ -242,6 +257,7 @@ int	size;
 char	*buf;
 {
 	char *ptr;
+	PRINT(("pfw: frag=%d offset=%d size=%d\n", frag, offset, size));
 	ptr = cache_frag_write(frag, readcache);
 	if (ptr == NULL) {
 		PRINT(("bad buffer (NULL) passed to partial_frag_write\n"));

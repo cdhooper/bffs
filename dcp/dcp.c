@@ -20,7 +20,7 @@
  * program.  Remember:  If you expect bugs, you should not be disappointed.
  *
  *
- * Thanks to Christian Brandel for code correction  isdigit() -> !isaplha()
+ * Thanks to Christian Brandel for code correction  isdigit() -> !isalpha()
  */
 
 #include <stdio.h>
@@ -172,6 +172,7 @@ char *argv[];
 		if (buffer == NULL)
 			buffer_blocks >>= 1;
 	}
+	memset(buffer, 0, buffer_blocks * TD_SECTOR);
 
 	if (buffer == NULL) {
 		fprintf(stderr, "Unable to allocate even 1 block for copy buffer!\n");

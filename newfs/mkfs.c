@@ -66,8 +66,8 @@ static char *rcsid = "$Id: mkfs.c,v 1.9.2.2 1994/07/20 20:33:46 cgd Exp $";
 #endif
 
 #ifdef cdh
-#define DEV_BSIZE 512
-#define DEV_BSHIFT 9
+extern int DEV_BSIZE;
+extern int DEV_BSHIFT;
 
 /* defined in include/ufs/fs.h
 #define S32(x) (x.val[1])
@@ -296,7 +296,8 @@ mkfs(pp, fsys, fi, fo)
 	/* fancy dancy computations?  hardcode a bazillion or so... */
 	sblock.fs_maxfilesize.val[0] = 0;
 	sblock.fs_maxfilesize.val[1] = 0;
-	S32(sblock.fs_maxfilesize) = 0xffffffff;
+/* OLD	S32(sblock.fs_maxfilesize) = 0xffffffff; */
+	S32(sblock.fs_maxfilesize) = sblock.fs_bsize * NDADDR - 1;
 #else
 	sblock.fs_maxfilesize = sblock.fs_bsize * NDADDR - 1;
 	for (sizepb = sblock.fs_bsize, i = 0; i < NIADDR; i++) {
@@ -411,7 +412,7 @@ mkfs(pp, fsys, fi, fo)
 			    fsize, sblock.fs_fsize);
 		error_exit(23);
 	}
-	/* 
+	/*
 	 * Calculate the number of cylinders per group
 	 */
 	sblock.fs_cpg = cpg;
@@ -671,7 +672,7 @@ next:
 			fsbtodb(&sblock, sblock.fs_csaddr + numfrags(&sblock, i)),
 			sblock.fs_cssize - i < sblock.fs_bsize ?
 			    sblock.fs_cssize - i : sblock.fs_bsize);
-	/* 
+	/*
 	 * Write out the duplicate super blocks
 	 */
 	for (cylno = 0; cylno < sblock.fs_ncg; cylno++)
@@ -740,7 +741,7 @@ initcg(cylno, utime)
 		acg.cg_nclusterblks = acg.cg_ndblk / sblock.fs_frag;
 	acg.cg_btotoff = &acg.cg_space[0] - (u_char *)(&acg.cg_link);
 	acg.cg_boff = acg.cg_btotoff + sblock.fs_cpg * sizeof(long);
-	acg.cg_iusedoff = acg.cg_boff + 
+	acg.cg_iusedoff = acg.cg_boff +
 		sblock.fs_cpg * sblock.fs_nrpos * sizeof(short);
 	acg.cg_freeoff = acg.cg_iusedoff + howmany(sblock.fs_ipg, NBBY);
 	if (sblock.fs_contigsumsize <= 0) {
@@ -1153,7 +1154,7 @@ calloc(size, numelm)
 free(ptr)
 	char *ptr;
 {
-	
+
 	/* do not worry about it for now */
 }
 #endif

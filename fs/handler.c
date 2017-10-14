@@ -6,9 +6,18 @@
 #include <devices/timer.h>
 #include <dos/filehandler.h>
 #include <dos30/dosextens.h>
+
+#ifdef GCC
+#include <inline/dos.h>
+struct MsgPort *CreatePort(UBYTE *name, long pri);
+ULONG SysBase;
+int __nocommandline = 1; /* Disable commandline parsing */
+/* int __initlibraries = 0;  * Disable auto-library-opening */
+#else
 #include <clib/alib_protos.h>
 #include <clib/exec_protos.h>
 #include <clib/dos_protos.h>
+#endif
 
 #include "config.h"
 #include "handler.h"
@@ -16,7 +25,6 @@
 #include "table.h"
 #include "stat.h"
 
-#define NULL 0
 #define RESTART_TIMER timerIO->tr_time.tv_secs  = timer_secs;	\
 		      timerIO->tr_time.tv_micro = 0;		\
 		      SendIO(timerIO)
@@ -27,51 +35,60 @@ extern struct InterruptData {
 } IntData;
 extern	int cache_item_dirty;
 
-struct	Process		*BFFSTask;
+static struct	Process		*BFFSTask;
+static struct	timerequest	*timerIO     = NULL;
+static struct	MsgPort		*timerPort   = NULL;
+static int	write_items	= 0;
+static int	write_delay	= 0;
+
 struct	MsgPort		*DosPort;
 struct	DosPacket	*pack;
 struct	DeviceNode	*DevNode;
 struct	DeviceList	*VolNode;
-struct	timerequest	*timerIO     = NULL;
-struct	MsgPort		*timerPort   = NULL;
 struct	global		global;
 int	inhibited	= 0;
 int	motor_is_on	= 0;
 int	dev_openfail	= 1;
 char	*handler_name	= NULL;
 int	timing		= 0;
-int	write_items	= 0;
-int	write_delay	= 0;
 int	receiving_packets = 1;
+
 extern int timer_secs;  /* delay seconda after write for cleanup */
 extern int timer_loops; /* maximum delays before forced cleanup */
 extern char *version;	/* BFFS version string */
 
 
 /* attempt to reduce stack space consumption, these are for main */
-ULONG  signal;
-ULONG  dcsignal;
-ULONG  dossignal;
-ULONG  timersignal;
-ULONG  receivedsignal;
-struct Node **msghead;
-int    msgtype;
-int    entries = 0;
 
 
 handler()
 {
     int    index = 0;
     int    ptype;
-    struct call_table *ptable;
+    struct search_table *ptable;
+    struct direct_table *dtable;
 
+    ULONG  signal;
+    ULONG  dcsignal;
+    ULONG  dossignal;
+    ULONG  timersignal;
+    ULONG  receivedsignal;
+    struct Node **msghead;
+    int    msgtype;
+    int    entries = 0;
+
+#ifdef GCC
+    SysBase = *((ULONG *) 4);
+#endif
     BFFSTask = (struct Process *) FindTask(NULL);
     DosPort  = &(BFFSTask->pr_MsgPort);
 
     InitStats();
 
-    while (packet_table[entries].packet_type != LAST_PACKET)
+    while (spacket_table[entries].packet_type != LAST_PACKET)
 	entries++;
+
+    PRINT(("%s\n", version + 7));
 
     pack = WaitPkt();  /* wait for startup packet */
 
@@ -159,7 +176,8 @@ handler()
 
 	    ptype = pack->dp_Type;
 	    if ((ptype < 41) && (ptype >= 0)) {   /* try for index table */
-		if (dev_openfail && dpacket_table[ptype].check_inhibit) {
+		dtable = &dpacket_table[ptype];
+		if (dev_openfail && dtable->check_inhibit) {
 		    open_filesystem();
 		    if (dev_openfail) {
 			global.Res1 = DOSFALSE;
@@ -169,33 +187,18 @@ handler()
 		}
 
 	        PRINT1(("%s D 1=%d 2=%d 3=%d 4=%d\n",
-			dpacket_table[ptype].name, pack->dp_Arg1,
-			pack->dp_Arg2, pack->dp_Arg3, pack->dp_Arg4));
+			dtable->name, pack->dp_Arg1, pack->dp_Arg2,
+			pack->dp_Arg3, pack->dp_Arg4));
 
-		dpacket_table[ptype].routine();   /* call the packet handler */
+		dtable->routine();   /* call the packet handler */
 
 		goto endpack;
-	    } else {
-		ptable = &packet_table[0];
-		for (index = 0, ptable = &packet_table[0];
-		     index < entries; index++, ptable++)
-		    if (ptable->packet_type == ptype)
-			if (inhibited && ptable->check_inhibit) {
-			    PRINT(("Sorry, we're inhibited.\n"));
-			    global.Res1 = DOSFALSE;
-			    global.Res2 = ERROR_NO_DISK;
-			    goto endpack;
-			} else
-			    break;
 	    }
-	    if (dev_openfail && ptable->check_inhibit) {
-	        open_filesystem();
-	        if (dev_openfail) {
-		    global.Res1 = DOSFALSE;
-		    global.Res2 = ERROR_NO_DISK;
-		    goto endpack;
-	        }
-	    }
+
+	    ptable = &spacket_table[0];
+	    for (index = 0; index < entries; index++, ptable++)
+		if (ptable->packet_type == ptype)
+			break;
 
 	    if (index == entries) {
 		PRINT1(("p=%d E 1=%d 2=%d 3=%d 4=%d unknown packet\n",
@@ -204,13 +207,29 @@ handler()
 
 		global.Res1 = DOSFALSE;
 		global.Res2 = ERROR_ACTION_NOT_KNOWN;
-	    } else {
-	        PRINT1(("%s S 1=%d 2=%d 3=%d 4=%d\n",
-			ptable->name, pack->dp_Arg1,
-			pack->dp_Arg2, pack->dp_Arg3, pack->dp_Arg4));
-
-		ptable->routine();   /* call the packet handler */
+		goto endpack;
 	    }
+
+	    if (dev_openfail && ptable->check_inhibit) {
+		if (inhibited) {
+		    PRINT(("Sorry, we're inhibited.\n"));
+		    global.Res1 = DOSFALSE;
+		    global.Res2 = ERROR_NO_DISK;
+		    goto endpack;
+		}
+	        open_filesystem();
+	        if (dev_openfail) {
+		    global.Res1 = DOSFALSE;
+		    global.Res2 = ERROR_NO_DISK;
+		    goto endpack;
+	        }
+	    }
+
+	    PRINT1(("%s S 1=%d 2=%d 3=%d 4=%d\n",
+		    ptable->name, pack->dp_Arg1,
+		    pack->dp_Arg2, pack->dp_Arg3, pack->dp_Arg4));
+
+	    ptable->routine();   /* call the packet handler */
 
 	    endpack:
 

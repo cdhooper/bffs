@@ -1,0 +1,16 @@
+testdev:
+    FileSystem = fs:bffs
+    Device = fmsdisk.device
+    Unit = 0
+    Flags = 0
+    Mount = 0
+    Stacksize = 1024
+    Priority = 0
+    GlobVec = -1
+    LowCyl = 0
+    HighCyl = 10
+    Surfaces = 2
+    BlocksPerTrack = 9
+    Buffers = 20
+    Reserved = 0;  /* Unix partition */
+#

@@ -1,6 +1,10 @@
 PROG=/bin/els
 CFLAGS=-I/ucbinclude -Dcdh
 CC=dcc
+RM=-delete force >NIL:
 
 $(PROG): els.c
 	$(CC) $(CFLAGS) -o $(PROG) %(right)
+
+clean:
+	$(RM) $(OBJS) $(PROG)

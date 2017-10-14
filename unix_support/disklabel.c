@@ -51,13 +51,12 @@ static	dgetflag();
 static	gettype();
 static	error();
 char bootarea[BBSIZE];
-int dev_bsize = 512;
 
 /* next block added by cdh */
 #define errno 0
 #define EFTYPE 0
 extern char bootarea[];
-extern int  dev_bsize;
+extern int  DEV_BSIZE;
 int force_autolabel = 0;
 
 struct disklabel *
@@ -66,7 +65,7 @@ getdiskbyname(name)
 	char *name;
 {
 	static struct	disklabel disk;
-	static char 	boot[BUFSIZ];
+	static char	boot[BUFSIZ];
 	char	*buf;
 	char	*localbuf;
 	char	*cp, *cq;	/* can't be register */
@@ -484,19 +483,9 @@ int readlabel(lpp)
 	struct disklabel *lpp;
 {
 	struct disklabel *lp;
-	int oldsize;
-	int oldssize;
-	extern int sectorsize;
-
-	oldsize = dev_bsize;
-	oldssize = sectorsize;
-	dev_bsize = BBSIZE;
-	sectorsize = 512;
 
 	if (bread(bootarea, 0, BBSIZE))
 		goto autosize_partition;
-	dev_bsize = oldsize;
-	sectorsize = oldssize;
 
 	if (force_autolabel)
 	    goto autosize_partition;
@@ -533,19 +522,14 @@ writelabel(boot, lp)
 {
 	register int i;
 	int flag;
-	int oldsize;
 
 	lp->d_magic = DISKMAGIC;
 	lp->d_magic2 = DISKMAGIC;
 	lp->d_checksum = 0;
 
-	oldsize = dev_bsize;
-	dev_bsize = lp->d_bbsize;
 	if (bwrite(boot, 0, lp->d_bbsize)) {
 		perror("write");
-		dev_bsize = oldsize;
 		return (1);
 	}
-	dev_bsize = oldsize;
 	return (0);
 }

@@ -1,4 +1,4 @@
-/*	@(#)fsdir.h 2.9 89/08/23 SMI; from UCB 4.5 82/11/13	*/
+/*  @(#)fsdir.h 8-Oct-96 CDH; 2.9 89/08/23 SMI; from UCB 4.5 82/11/13	*/
 
 /*
  * A directory consists of some number of blocks of DIRBLKSIZ
@@ -29,7 +29,11 @@
 #ifndef _ufs_fsdir_h
 #define	_ufs_fsdir_h
 
+/* OLD
 #define	DIRBLKSIZ	DEV_BSIZE
+*/
+#define DIRBLKSIZ	phys_sectorsize
+
 #ifdef	MAXNAMLEN	/* posix may have forced it to be defined as ... */
 #undef	MAXNAMLEN	/* _MAXNAMLEN already. This needs work. XXX */
 #endif
@@ -78,24 +82,7 @@ struct	odirect {
 #undef DIRSIZ
 #define	DIRSIZ(dp) \
 	((sizeof (struct direct) - (MAXNAMLEN+1)) + \
-	(((dp)->d_namlen+1 + 3) &~ 3))
+	((DISK16((dp)->d_namlen)+1 + 3) &~ 3))
 
-#ifdef KERNEL
-/*
- * Template for manipulating directories.
- * Should use struct direct's, but the name field
- * is MAXNAMLEN - 1, and this just won't do.
- */
-struct dirtemplate {
-	u_long	dot_ino;
-	short	dot_reclen;
-	short	dot_namlen;
-	char	dot_name[4];		/* must be multiple of 4 */
-	u_long	dotdot_ino;
-	short	dotdot_reclen;
-	short	dotdot_namlen;
-	char	dotdot_name[4];		/* ditto */
-};
+
 #endif
-
-#endif /*!_ufs_fsdir_h*/

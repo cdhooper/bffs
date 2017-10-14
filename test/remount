@@ -1,0 +1,22 @@
+.key fmsdisk
+.DEF fmsdisk fms
+
+assign bffssrc: exists >nil:
+if warn
+    echo reassigning bffssrc to sys:bffs
+    assign bffssrc: sys:bffs
+endif
+assign bffssrc: exists >nil:
+if not warn
+    die bffssrc:
+    if warn
+        quit 1
+    endif
+endif
+
+;newshell kcon:0/0/600/140 from bffssrc:test/debug-shell
+run bffssrc:bin/dbprint kcon:0/0/600/140//INACTIVE/FASTUPDATE/JUMP/NOMENUS
+
+assign fms: bffssrc:test/units
+assign tdev: dismount
+mount tdev: from fms:ml.<fmsdisk>

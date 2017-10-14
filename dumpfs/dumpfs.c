@@ -64,9 +64,9 @@ static char *rcsid = "$Id: dumpfs.c,v 1.6 1994/06/08 18:58:23 mycroft Exp $";
 #include <string.h>
 
 #ifdef AMIGA
-int sectorsize = 512;
+extern int DEV_BSIZE;
 void break_abort();
-int fsi = 0;
+int fsi = -1;
 #endif
 
 union {
@@ -134,17 +134,19 @@ dumpfs(name)
 	int fd, c, i, j, k, size;
 
 #ifdef AMIGA
-	if ((fd = open(name, O_RDONLY, 0)) < 0) {
-		if (dio_open(name) == 0)
-			dio_inhibit(1);
-		else
-			goto err;
-	} else
+	int odev_bsize = DEV_BSIZE;
+	if (dio_open(name) == 0) {
+		fd = -1;
+		dio_inhibit(1);
+	} else if ((fd = open(name, O_RDONLY, 0)) < 0) {
+		goto err;
+	} else {
 		fsi = fd;
-        sectorsize = 1;
+	}
+	DEV_BSIZE = 1;
 	if (bread(&afs, SBOFF, SBSIZE))
 		goto err;
-        sectorsize = 512;
+	DEV_BSIZE = odev_bsize;
 #else
 	if ((fd = open(name, O_RDONLY, 0)) < 0)
 		goto err;

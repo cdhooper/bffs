@@ -244,6 +244,7 @@ ulong	mode;
 	GetMsg(replyport);
 
 	if (packet->sp_Pkt.dp_Res1 == DOSFALSE) {
+		SetIoErr(packet->sp_Pkt.dp_Res2);
 		err = 1;
 /*		fprintf(stderr, "error %d : ", packet->sp_Pkt.dp_Res2); */
         } else {
@@ -263,6 +264,7 @@ ulong	mode;
 		GetMsg(replyport);
 
 		if (packet->sp_Pkt.dp_Res1 == DOSFALSE) {
+			SetIoErr(packet->sp_Pkt.dp_Res2);
 			err = 1;
 /*			fprintf(stderr, "error %d : ", packet->sp_Pkt.dp_Res2); */
 		}
@@ -326,6 +328,7 @@ ulong	mode;
 	GetMsg(replyport);
 
 	if (packet->sp_Pkt.dp_Res1 == DOSFALSE) {
+		SetIoErr(packet->sp_Pkt.dp_Res2);
 		err = 1;
 /*		fprintf(stderr, "error %d : ", packet->sp_Pkt.dp_Res2); */
         }
@@ -388,6 +391,7 @@ ulong	owner;
 	GetMsg(replyport);
 
 	if (packet->sp_Pkt.dp_Res1 == DOSFALSE) {
+		SetIoErr(packet->sp_Pkt.dp_Res2);
 		err = 1;
 /*		fprintf(stderr, "error %d : ", packet->sp_Pkt.dp_Res2); */
         }
@@ -480,6 +484,7 @@ ulong	*ctime;
 	GetMsg(replyport);
 
 	if (packet->sp_Pkt.dp_Res1 == DOSFALSE) {
+		SetIoErr(packet->sp_Pkt.dp_Res2);
 		err = 1;
 /*		fprintf(stderr, "error %d : ", packet->sp_Pkt.dp_Res2); */
         } else {
@@ -497,9 +502,10 @@ ulong	*ctime;
 		WaitPort(replyport);
 		GetMsg(replyport);
 
-		if (packet->sp_Pkt.dp_Res1 == DOSFALSE)
+		if (packet->sp_Pkt.dp_Res1 == DOSFALSE) {
+			SetIoErr(packet->sp_Pkt.dp_Res2);
 			err = 1;
-		else {
+		} else {
 			packet->sp_Msg.mn_Node.ln_Name = (char *) &(packet->sp_Pkt);
 			packet->sp_Pkt.dp_Link         = &(packet->sp_Msg);
 			packet->sp_Pkt.dp_Port         = replyport;
@@ -514,8 +520,10 @@ ulong	*ctime;
 			WaitPort(replyport);
 			GetMsg(replyport);
 
-			if (packet->sp_Pkt.dp_Res1 == DOSFALSE)
+			if (packet->sp_Pkt.dp_Res1 == DOSFALSE) {
+				SetIoErr(packet->sp_Pkt.dp_Res2);
 				err = 1;
+			}
 		}
 	}
 
@@ -578,6 +586,7 @@ ulong	*ctime;
 	GetMsg(replyport);
 
 	if (packet->sp_Pkt.dp_Res1 == DOSFALSE) {
+		SetIoErr(packet->sp_Pkt.dp_Res2);
 		err = 1;
 /*		fprintf(stderr, "error %d : ", packet->sp_Pkt.dp_Res2); */
         } else {
@@ -595,9 +604,10 @@ ulong	*ctime;
 		WaitPort(replyport);
 		GetMsg(replyport);
 
-		if (packet->sp_Pkt.dp_Res1 == DOSFALSE)
+		if (packet->sp_Pkt.dp_Res1 == DOSFALSE) {
+			SetIoErr(packet->sp_Pkt.dp_Res2);
 			err = 1;
-		else {
+		} else {
 			packet->sp_Msg.mn_Node.ln_Name = (char *) &(packet->sp_Pkt);
 			packet->sp_Pkt.dp_Link         = &(packet->sp_Msg);
 			packet->sp_Pkt.dp_Port         = replyport;
@@ -612,8 +622,10 @@ ulong	*ctime;
 			WaitPort(replyport);
 			GetMsg(replyport);
 
-			if (packet->sp_Pkt.dp_Res1 == DOSFALSE)
+			if (packet->sp_Pkt.dp_Res1 == DOSFALSE) {
+				SetIoErr(packet->sp_Pkt.dp_Res2);
 				err = 1;
+			}
 		}
 	}
 
@@ -690,8 +702,10 @@ ulong	type;
 	WaitPort(replyport);
 	GetMsg(replyport);
 
-	if (packet->sp_Pkt.dp_Res1 == DOSFALSE)
+	if (packet->sp_Pkt.dp_Res1 == DOSFALSE) {
+		SetIoErr(packet->sp_Pkt.dp_Res2);
 		err = 1;
+	}
 
 	if (type == 0)
 		UnLock(lock);

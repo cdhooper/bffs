@@ -36,6 +36,7 @@ struct disklabel *label;
 	char	*pos;
 	int	notfound = 1;
 	int	index;
+	int	tempsize;
 
 	if (dos_dev_name == NULL)
 		return(1);
@@ -85,7 +86,7 @@ struct disklabel *label;
 		strcpy(label->d_typename, "CBM 2090/2090A");
 	} else {
 		if (!strcmp("scsi.device", disk_device))
-			strcpy(label->d_typename, "CBM 2091/3000");
+			strcpy(label->d_typename, "CBM SCSI/IDE");
 		else if (!strcmp("gvpscsi.device", disk_device))
 			strcpy(label->d_typename, "GVP");
 		else {
@@ -98,7 +99,23 @@ struct disklabel *label;
 	}
 	label->d_subtype	= 0;
 	label->d_packname[0]	= 0;
-	label->d_secsize	= TD_SECTOR;
+
+	tempsize = envec->de_SizeBlock * sizeof(long);
+
+        switch (tempsize) {
+            case 16384:
+            case 8192:
+            case 4096:
+            case 2048:
+            case 1024:
+            case 512:
+		label->d_secsize = tempsize;
+                break;
+            default:
+		label->d_secsize	= TD_SECTOR;
+                fprintf(stderr, "Warning: physical sector size %d ignored\n",
+                        tempsize);
+        }
 	label->d_nsectors	= envec->de_BlocksPerTrack;
 	label->d_ntracks	= envec->de_Surfaces;
 	label->d_ncylinders	= envec->de_HighCyl - envec->de_LowCyl + 1;

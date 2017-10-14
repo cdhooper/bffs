@@ -1,6 +1,6 @@
 #include <stdio.h>
 extern int fsi;
-extern int sectorsize;
+extern int DEV_BSIZE;
 
 void error_exit();
 
@@ -37,10 +37,10 @@ fbread(buf, bno, size)
 
 /*
 	printf("bread %d, buf=%x bno=%d size=%d ss=%d\n",
-		fsi, buf, bno, size, sectorsize);
+		fsi, buf, bno, size, DEV_BSIZE);
 */
 
-        if (lseek(fsi, bno * sectorsize, 0) < 0) {
+        if (lseek(fsi, bno * DEV_BSIZE, 0) < 0) {
                 printf("seek error: %ld\n", bno);
                 perror("bread");
                 error_exit(33);

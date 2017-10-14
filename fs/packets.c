@@ -4,9 +4,10 @@
 #include <dos/filehandler.h>
 
 #include "config.h"
-#include "ufs.h"
+#include "superblock.h"
 #include "ufs/inode.h"
 #include "ufs/dir.h"
+#include "fsmacros.h"
 #include "packets.h"
 #include "system.h"
 #include "handler.h"
@@ -15,15 +16,15 @@
 #include "stat.h"
 
 char	*strchr();
-ULONG	path_parse();
-ULONG	parent_parse();
-struct	direct *dir_next();
-struct  PartInfo *partinfo;
+extern	ULONG	path_parse();
+extern	ULONG	parent_parse();
+extern	struct	direct *dir_next();
 
 extern	int GMT;
 extern	int resolve_symlinks;
 extern	struct DosPacket *pack;
 extern	int minfree;
+extern	ULONG phys_sectorsize;
 
 #define TYPE pack->dp_Type
 #define ARG1 pack->dp_Arg1
@@ -62,7 +63,7 @@ void PLocateObject()
 	cho = *(name + *(name - 1));
 	*(name + *(name - 1)) = '\0';
 
-	PRINT(("lock=%x name='%s' ", lock, name));
+	PRINT(("lock=%x name='%s'\n", lock, name));
 
 	if (!(pinum = parent_parse(lock, name, &sname))) {
 	    global.Res1 = DOSFALSE;
@@ -70,7 +71,9 @@ void PLocateObject()
 		global.Res2 = ERROR_DIR_NOT_FOUND;
 	    goto endlocate;
 	}
+/*
 	PRINT((" : pinum=%d subname=%s\n", pinum, sname));
+*/
 
 	if ((inum = file_name_find(pinum, sname)) == 0) {
 	    global.Res1 = DOSFALSE;
@@ -625,6 +628,11 @@ void PSeek()
     else if (mode == OFFSET_CURRENT)
 	movement += fileh->current_position;
 
+#ifdef ALLOW_SPARSE_FILES
+    /* Allow seek to any offset */
+    global.Res1 = fileh->current_position;
+    fileh->current_position = movement;
+#else
     if ((movement >= 0) && (movement <= end)) {
 	global.Res1 = fileh->current_position;
 	fileh->current_position = movement;
@@ -632,6 +640,7 @@ void PSeek()
 	global.Res1 = -1;
 	global.Res2 = ERROR_SEEK_ERROR;
     }
+#endif
 }
 
 
@@ -696,7 +705,7 @@ void PDeviceInfo()
 		infodata = (struct InfoData *) BTOC(ARG1);
 
 	infodata->id_NumSoftErrors	= 0L;
-	infodata->id_UnitNumber 	= DISK_UNIT;
+	infodata->id_UnitNumber 	= 0L;  /* was DISK_UNIT */
 	if (superblock->fs_ronly)
 		infodata->id_DiskState	= ID_WRITE_PROTECTED;
 	else
@@ -810,14 +819,12 @@ void PDeleteObject()
 	}
 	inode = inode_read(inum);
 	if (DISK16(inode->ic_nlink) < 1) {
-	    if (((DISK16(inode->ic_mode) & IFMT) != IFCHR) &&
-		((DISK16(inode->ic_mode) & IFMT) != IFBLK) &&
-		((DISK16(inode->ic_mode) & IFMT) != IFLNK))
+	    if ((DISK16(inode->ic_mode) & IFMT) == IFLNK)
+		symlink_delete(inum, IC_SIZE(inode));
+	    else if (((DISK16(inode->ic_mode) & IFMT) != IFCHR) &&
+		((DISK16(inode->ic_mode) & IFMT) != IFBLK))
 		file_deallocate(inum);
-	    if (!bsd44fs ||
-		(((DISK16(inode->ic_mode) & IFMT) == IFLNK) &&
-		  (IC_SIZE(inode) >= MAXSYMLINKLEN)))
-		file_deallocate(inum);
+
 	    inum_free(inum);
 	}
 #endif
@@ -852,12 +859,12 @@ void PMoreCache()
 
 	} else {
 	    PRINT(("morecache: cache=%d amount=%d ", cache_size, ARG1));
-	    cache_size += (ARG1 * DEV_BSIZE / FSIZE);
+	    cache_size += (ARG1 / NSPF(superblock));
 
 	    if (cache_size < 8)
 		cache_size = 8;
 
-	    global.Res1 = cache_size * FSIZE / DEV_BSIZE;
+	    global.Res1 = cache_size * NSPF(superblock);
 
 	    PRINT(("-> cache=%d\n", cache_size));
 
@@ -1272,8 +1279,8 @@ void PSetOwner()
 	struct	icommon  *inode;
 	struct	BFFSLock *lock;
 	char	*name;
-	uid_t	owner;
-	gid_t	group;
+	short	owner;
+	short	group;
 
 	lock = (struct BFFSLock *) BTOC(ARG2);
 	name = ((char *) BTOC(ARG3)) + 1;
@@ -1282,8 +1289,8 @@ void PSetOwner()
 	inum = path_parse(lock, name);
 
 	if (inum && (inode = inode_modify(inum))) {
-		owner = (uid_t) (both >> 16);
-		group = (gid_t) (both & 65535);
+		owner = both >> 16;
+		group = both & 65535;
 		if (owner != -1) {
 			inode->ic_ouid = DISK16(owner);
 			inode->ic_nuid = DISK32(owner);
@@ -1516,7 +1523,7 @@ void PFilesysStats()
 	extern int	cache_alloced;
 	extern ULONG	pmax;
 	extern int	case_independent;
-	extern int	unixflag;
+	extern int	unix_paths;
 	extern int	cache_used;
 	extern int	timer_secs;
 	extern int	timer_loops;
@@ -1524,17 +1531,18 @@ void PFilesysStats()
 	extern int	inode_comments;
 	extern int	GMT;
 	extern int	og_perm_invert;
+	extern ULONG	poffset;
 
 	stat->superblock	= (ULONG) superblock;
 	stat->cache_head	= (ULONG) &cache_stack_tail;
-	stat->cache_hash	= (ULONG *) hashtable;
+	stat->cache_hash	= (ULONG) hashtable;
 	stat->cache_size	= (ULONG *) &cache_size;
 	stat->cache_cg_size	= (ULONG *) &cache_cg_size;
 	stat->cache_item_dirty	= (ULONG *) &cache_item_dirty;
 	stat->cache_alloced	= (ULONG *) &cache_alloced;
 	stat->disk_poffset	= (ULONG *) &poffset;
 	stat->disk_pmax		= (ULONG *) &pmax;
-	stat->unixflag		= (ULONG *) &unixflag;
+	stat->unix_paths	= (ULONG *) &unix_paths;
 	stat->resolve_symlinks	= (ULONG *) &resolve_symlinks;
 	stat->case_independent	= (ULONG *) &case_independent;
 	stat->link_comments	= (ULONG *) &link_comments;
@@ -1779,21 +1787,12 @@ void PMakeLink()
 	    PRINT(("Create failed for %s\n", name));
 	    inum_free(inum);
 	    global.Res2 = ERROR_DISK_FULL;
- 	    goto doserror;
+	    goto doserror;
 	}
 
 	namelen = strlen(name_from);
 
-	if (bsd44fs && (namelen < MAXSYMLINKLEN)) {
-	    inode = inode_modify(inum);
-	    strcpy((char *) inode->ic_db, name_from);
-	    IC_SETSIZE(inode, namelen);
-	    inode->ic_mode = DISK16((DISK16(inode->ic_mode) & ~IFMT) | IFLNK);
-	    return;
-	}
-
-	if (file_write(inum, 0, namelen + 1, name_from) == namelen + 1) {
-	    file_block_retract(inum);
+	if (symlink_create(inum, inode, name_from)) {
 	    inode = inode_modify(inum);
 	    inode->ic_mode = DISK16((DISK16(inode->ic_mode) & ~IFMT) | IFLNK);
 	    return;
@@ -2196,7 +2195,7 @@ void PRemoveNotify() {
 void PGetDiskFSSM()
 {
 	PRINT(("Get the FFSM\n"));
-	global.Res1 = STARTUPMSG;
+	global.Res1 = BTOC(DevNode->dn_Startup);
 }
 
 void PFreeDiskFSSM()
@@ -2324,4 +2323,3 @@ void PExNext()
 		fib->fib_Reserved[index] = 0;
     }
 }
-

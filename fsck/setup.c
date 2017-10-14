@@ -85,13 +85,14 @@ setup(dev)
 
 #ifdef AMIGA
 	onbreak(break_abort);
+	if (dio_open(dev) == 0) {
+		fsreadfd = -1;
+		if (preen == 0)
+			printf("\n");
+		dio_inhibit(1);
+		goto opened;
+	}
 	if ((fsreadfd = open(dev, O_RDWR)) < 0) {
-		if (dio_open(dev) == 0) {
-			if (preen == 0)
-				printf("\n");
-			dio_inhibit(1);
-			goto opened;
-		}
 		Perror("Can't open %s", dev);
 		return (0);
 	}
@@ -99,7 +100,7 @@ setup(dev)
 	if (preen == 0)
 		printf("** %s", dev);
 
-	if (nflag)
+	if (nflag == 0)
 		fswritefd = fsreadfd;
 	else
 		fswritefd = -1;
@@ -153,6 +154,11 @@ setup(dev)
 		dev_bsize = secsize = lp->d_secsize;
 	else
 		dev_bsize = secsize = DEV_BSIZE;
+#ifdef cdh
+	dio_assign_bsize(dev_bsize);
+	dev_bsize = secsize = DEV_BSIZE;
+	dirblk_setup();
+#endif
 	/*
 	 * Read in the superblock, looking for alternates if necessary
 	 */
@@ -198,7 +204,7 @@ setup(dev)
 			sbdirty();
 		}
 	}
-	if (sblock.fs_interleave < 1 || 
+	if (sblock.fs_interleave < 1 ||
 	    sblock.fs_interleave > sblock.fs_nsect) {
 		pwarn("IMPOSSIBLE INTERLEAVE=%d IN SUPERBLOCK",
 			sblock.fs_interleave);
@@ -210,7 +216,7 @@ setup(dev)
 			dirty(&asblk);
 		}
 	}
-	if (sblock.fs_npsect < sblock.fs_nsect || 
+	if (sblock.fs_npsect < sblock.fs_nsect ||
 	    sblock.fs_npsect > sblock.fs_nsect*2) {
 		pwarn("IMPOSSIBLE NPSECT=%d IN SUPERBLOCK",
 			sblock.fs_npsect);
@@ -328,7 +334,7 @@ setup(dev)
 	}
 	lncntp = (short *)calloc((unsigned)(maxino + 1), sizeof(short));
 	if (lncntp == NULL) {
-		printf("cannot alloc %u bytes for lncntp\n", 
+		printf("cannot alloc %u bytes for lncntp\n",
 		    (unsigned)(maxino + 1) * sizeof(short));
 		goto badsb;
 	}
@@ -340,7 +346,7 @@ setup(dev)
 	inphead = (struct inoinfo **)calloc((unsigned)numdirs,
 	    sizeof(struct inoinfo *));
 	if (inpsort == NULL || inphead == NULL) {
-		printf("cannot alloc %u bytes for inphead\n", 
+		printf("cannot alloc %u bytes for inphead\n",
 		    (unsigned)numdirs * sizeof(struct inoinfo *));
 		goto badsb;
 	}
@@ -358,7 +364,11 @@ badsb:
 readsb(listerr)
 	int listerr;
 {
+#ifdef Amiga
+	daddr_t super = bflag ? bflag : SBOFF / DEV_BSIZE;
+#else
 	daddr_t super = bflag ? bflag : SBOFF / dev_bsize;
+#endif
 
 	if (bread((char *)&sblock, super, (long)SBSIZE) != 0)
 		return (0);
@@ -436,6 +446,11 @@ readsb(listerr)
 	if (bcmp((char *)&sblock, (char *)&altsblock, (int)sblock.fs_sbsize)) {
 		badsb(listerr,
 		"VALUES IN SUPER BLOCK DISAGREE WITH THOSE IN FIRST ALTERNATE");
+#ifdef cdh
+		printf("   bsize=0x%x primary sb=0x%x [0x%x], alt=0x%x\n",
+			dev_bsize, super / dev_bsize, sblk.b_bno,
+                        cgsblock(&sblock, sblock.fs_ncg - 1));
+#endif
 		return (0);
 	}
 	havesb = 1;
@@ -547,7 +562,7 @@ getdisklabel(s)
 	if (lp > (struct disklabel *)(bootarea+BBSIZE-sizeof(*lp)) ||
 	    lp->d_magic != DISKMAGIC || lp->d_magic2 != DISKMAGIC) {
 		/* lp = (struct disklabel *)(bootarea + LABELOFFSET); */
-		
+
 		printf("No disk label.\n");
 		if (s == NULL) {
 			free(bootarea);

@@ -27,7 +27,7 @@ struct stat {
 	ULONG	*cache_alloced;		/* updated only on packet request */
 	ULONG	*disk_poffset;		/* updated only on packet request */
 	ULONG	*disk_pmax;		/* updated only on packet request */
-	ULONG	*unixflag;		/* updated only on packet request */
+	ULONG	*unix_paths;		/* updated only on packet request */
 	ULONG	*resolve_symlinks;	/* updated only on packet request */
 	ULONG	*case_independent;	/* updated only on packet request */
 	ULONG	*link_comments;		/* updated only on packet request */

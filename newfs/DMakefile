@@ -7,7 +7,7 @@ OBJS=$(OBJ)newfs_m.o $(OBJ)mkfs_m.o $(OBJ)newfs_other_m.o $(OBJ)dkcksum_m.o $(OB
 
 CC=dcc
 CFLAGS=-I/ucbinclude -I/fs -Dcdh -mD
-RM=delete force
+RM = -delete force >NIL:
 
 #CC=gcc
 #CFLAGS=-I../ucbinclude -I1:dcc/include/amiga20 -I1:dcc/include
@@ -15,9 +15,6 @@ RM=delete force
 
 $(PROG): $(OBJS)
 	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
-
-clean:
-	$(RM) $(OBJS) $(PROG)
 
 $(OBJ)newfs_m.o: newfs.c
 	$(CC) $(CFLAGS) -c newfs.c -o %(left)
@@ -45,3 +42,6 @@ $(OBJ)amiga_device_m.o: $(DOTDOT)/unix_support/amiga_device.c
 
 $(OBJ)getopt_m.o: $(DOTDOT)/unix_support/getopt.c
 	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/getopt.c -o %(left)
+
+clean:
+	$(RM) $(OBJS) $(PROG)

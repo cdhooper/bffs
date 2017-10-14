@@ -47,6 +47,18 @@ static char *rcsid = "$Id: dir.c,v 1.7.2.5 1994/11/07 22:14:29 cgd Exp $";
 
 char	*lfname = "lost+found";
 int	lfmode = 01777;
+#ifdef cdh
+#define X_DIRBLKSIZ 512
+struct	dirtemplate emptydir = { 0, X_DIRBLKSIZ };
+struct	dirtemplate dirhead = {
+	0, 12, DT_DIR, 1, ".",
+	0, X_DIRBLKSIZ - 12, DT_DIR, 2, ".."
+};
+struct	odirtemplate odirhead = {
+	0, 12, 1, ".",
+	0, X_DIRBLKSIZ - 12, 2, ".."
+};
+#else
 struct	dirtemplate emptydir = { 0, DIRBLKSIZ };
 struct	dirtemplate dirhead = {
 	0, 12, DT_DIR, 1, ".",
@@ -56,6 +68,17 @@ struct	odirtemplate odirhead = {
 	0, 12, 1, ".",
 	0, DIRBLKSIZ - 12, 2, ".."
 };
+#endif
+
+#ifdef cdh
+void
+dirblk_setup(void)
+{
+	emptydir.dot_reclen = DIRBLKSIZ;
+	dirhead.dotdot_namlen = DIRBLKSIZ - 12;
+	odirhead.dotdot_namlen = DIRBLKSIZ - 12;
+}
+#endif
 
 struct direct	*fsck_readdir();
 struct bufarea	*getdirblk();
@@ -174,7 +197,7 @@ fsck_readdir(idesc)
 			goto dpok;
 		if (idesc->id_fix == IGNORE)
 			return (0);
-		fix = dofix(idesc, "DIRECTORY CORRUPTED");
+		fix = dofix(idesc, "DIRECTORY CORRUPTED (a)");
 		bp = getdirblk(idesc->id_blkno, blksiz);
 		dp = (struct direct *)(bp->b_un.b_buf + idesc->id_loc);
 		dp->d_reclen = DIRBLKSIZ;
@@ -205,7 +228,7 @@ dpok:
 		S32(idesc->id_filesize) -= size;
 		if (idesc->id_fix == IGNORE)
 			return (0);
-		fix = dofix(idesc, "DIRECTORY CORRUPTED");
+		fix = dofix(idesc, "DIRECTORY CORRUPTED (b)");
 		bp = getdirblk(idesc->id_blkno, blksiz);
 		dp = (struct direct *)(bp->b_un.b_buf + dploc);
 		dp->d_reclen += size;

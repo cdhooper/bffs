@@ -6,14 +6,11 @@ OBJ=$(DOTDOT)/obj.$(ARCH)/
 OBJS=$(OBJ)tunefs.o $(OBJ)tunefs_other.o $(OBJ)amiga_device.o
 
 CC=dcc
-CFLAGS=-I/ucbinclude -Dcdh
-RM=delete force
+CFLAGS=-I/ucbinclude -I/fs -Dcdh
+RM = -delete force >NIL:
 
 $(PROG): $(OBJS)
 	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
-
-clean:
-	$(RM) $(OBJS) $(PROG)
 
 $(OBJ)tunefs.o: tunefs.c
 	$(CC) $(CFLAGS) -c tunefs.c -o $(OBJ)tunefs.o
@@ -26,3 +23,6 @@ $(OBJ)getopt.o: $(DOTDOT)/unix_support/getopt.c
 
 $(OBJ)amiga_device.o: $(DOTDOT)/unix_support/amiga_device.c
 	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/amiga_device.c -o $(OBJ)amiga_device.o
+
+clean:
+	$(RM) $(OBJS) $(PROG)

@@ -14,7 +14,7 @@
  * IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
  * WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  *
- *	@(#)fs.h 2.16 89/08/23 SMI
+ *	@(#)fs.h 2.16 89/08/23 SMI	8-Oct-96 CDH
  */
 
 /*
@@ -50,7 +50,6 @@
 #define	BBOFF		((off_t)(0))
 #define	SBOFF		((off_t)(BBOFF + BBSIZE))
 #define	BBLOCK		((daddr_t)(0))
-#define	SBLOCK		((daddr_t)(BBLOCK + BBSIZE / DEV_BSIZE))
 
 /*
  * Addresses stored in inodes are capable of addressing fragments
@@ -248,7 +247,10 @@ struct	cg {
 	long	cg_iusedoff;		/* (char) used inode map */
 	long	cg_freeoff;		/* (u_char) free block map */
 	long	cg_nextfreeoff;		/* (u_char) next available space */
-	long	cg_sparecon[16];	/* reserved for future use */
+	long    cg_clustersumoff;	/* (long) counts of avail clusters */
+	long    cg_clusteroff;  	/* (char) free cluster map */
+	long    cg_nclusterblks;	/* number of clusters this cg */
+	long	cg_sparecon[13];	/* reserved for future use */
 	u_char	cg_space[1];		/* space for cylinder group maps */
 /* actually longer */
 };

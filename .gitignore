@@ -1,3 +1,5 @@
 *.o
 *.uaem
 ml/*
+.cscope_cmd*
+cscope.out

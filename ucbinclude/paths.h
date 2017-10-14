@@ -69,11 +69,5 @@
 #define _PATH_FSTAB	"/etc/fstab"
 
 #define _PATH_DISKTAB   "disktab"       /* Where disk info is stored */
-#define _PATH_TMP       "ram:tmp"
-
-#ifndef NetBSD
-#define DEV_BSIZE 512
-#define DEV_BSHIFT 9
-#endif
 
 #endif /* !_PATHS_H_ */

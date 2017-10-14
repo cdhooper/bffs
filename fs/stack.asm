@@ -28,7 +28,7 @@ stk_Pointer	EQU	$8	; Taken from <exec/tasks.i>
 __main:
 	movea.l	4,a6			; Grab ExecBase
 	move.l	#STACKSPACE+12,d0	; Also Allocate StackSwap Structure
-	clr.l	d1			; Any kind of memory  will do
+	clr.l	d1			; Any kind of memory will do
 	suba.l	#12,sp			; Allocate space for a StackSwap struct
 	jsr	_LVOAllocVec(a6)
 	tst.l	d0

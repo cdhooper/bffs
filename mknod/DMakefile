@@ -1,4 +1,8 @@
 PROG=/bin/mknod
+RM=-delete force >NIL:
 
 $(PROG): mknod.c
 	dcc -o $(PROG) mknod.c
+
+clean:
+	$(RM) $(OBJS) $(PROG)

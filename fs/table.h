@@ -11,15 +11,6 @@
 #define NOCHK		0
 #define CHECK		1
 
-struct call_table {
-	long	packet_type;
-	void	(*routine)();
-	int	check_inhibit;
-#ifdef DEBUG
-	char	*name;
-#endif
-};
-
 struct direct_table {
 	void	(*routine)();
 	int	check_inhibit;
@@ -28,5 +19,14 @@ struct direct_table {
 #endif
 };
 
-extern struct call_table   packet_table[];
+struct search_table {
+	long	packet_type;
+	void	(*routine)();
+	int	check_inhibit;
+#ifdef DEBUG
+	char	*name;
+#endif
+};
+
 extern struct direct_table dpacket_table[];
+extern struct search_table spacket_table[];

@@ -7,13 +7,10 @@ OBJS=$(OBJ)dumpfs_m.o $(OBJ)dump_other_m.o $(OBJ)getopt_m.o $(OBJ)amiga_device_m
 
 CC=dcc
 CFLAGS=-I/ucbinclude -I/fs -Dcdh -mD
-RM=delete force
+RM = -delete force >NIL:
 
 $(PROG): $(OBJS)
 	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
-
-clean:
-	$(RM) $(OBJS) $(PROG)
 
 $(OBJ)dumpfs_m.o: dumpfs.c
 	$(CC) $(CFLAGS) -c dumpfs.c -o %(left)
@@ -26,3 +23,6 @@ $(OBJ)getopt_m.o: $(DOTDOT)/unix_support/getopt.c
 
 $(OBJ)amiga_device_m.o: $(DOTDOT)/unix_support/amiga_device.c
 	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/amiga_device.c -o %(left)
+
+clean:
+	$(RM) $(OBJS) $(PROG)

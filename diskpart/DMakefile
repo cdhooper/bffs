@@ -5,7 +5,7 @@ AMI = $(DOTDOT)/unix_support/
 CC = dcc
 CFLAGS = -Dcdh -mD -I/ucbinclude -I/fs
 PROG= $(DOTDOT)/bin/diskpart
-RM = delete force
+RM = -delete force >NIL:
 
 #OBJ = ../obj/
 #INC = ../include/
@@ -19,9 +19,6 @@ HFILES = $(INC)paths.h $(INC)ufs/fs.h $(INC)sys/disklabel.h $(INC)sys/param.h
 
 $(PROG): $(OBJS)
 	$(CC) $(CFLAGS) %(right) -o %(left)
-
-clean:
-	$(RM) $(OBJS) $(PROG)
 
 $(OBJ)diskpart_m.o: diskpart.c $(HFILES)
 	$(CC) $(CFLAGS) -o %(left) -c %(*.c)
@@ -43,3 +40,6 @@ $(OBJ)amiga_device_m.o: $(AMI)amiga_device.c $(HFILES)
 
 $(OBJ)amiga_label_m.o: $(AMI)amiga_label.c $(HFILES)
 	$(CC) $(CFLAGS) -o %(left) -c $(*.c)
+
+clean:
+	$(RM) $(OBJS) $(PROG)

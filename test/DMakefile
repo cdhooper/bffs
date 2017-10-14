@@ -1,0 +1,14 @@
+RM=-delete force >NIL:
+BIN=/bin/
+PROGS=$(BIN)fst_thrash $(BIN)fst_sparse
+
+all: $(PROGS)
+
+$(BIN)fst_thrash: thrash.c
+	dcc -o %(left) %(right)
+
+$(BIN)fst_sparse: sparse.c
+	dcc -o %(left) %(right)
+
+clean:
+	$(RM) $(PROGS)

@@ -5,6 +5,7 @@
 
 #include "config.h"
 #include "handler.h"
+#include "superblock.h"
 #include "ufs.h"
 #include "ufs/inode.h"
 #include "ufs/dir.h"
@@ -19,16 +20,16 @@ char *strchr();
 
 extern	char *handler_name;
 extern	int fs_partition;
-char	*volumename;
-struct	stat *stat = NULL;
-extern	int unixflag;
-extern	struct PartInfo *partinfo;
+extern	int unix_paths;
 extern	struct  DeviceNode *DevNode;
 
-int link_comments  = 0;		/* symlink and device comments */
+int link_comments = 0;		/* symlink and device comments */
 int inode_comments = 0;		/* all inode info comments */
 int og_perm_invert = 0;		/* invert permissions on other/group */
 int GMT = 5;			/* GMT offset for localtime */
+
+char	*volumename;
+struct	stat *stat = NULL;
 
 struct icommon *inode_modify();
 
@@ -50,7 +51,7 @@ void NewVolNode()
     if (VolNode == NULL) {
 	PRINT(("NewVolNode: unable to allocate %d bytes!\n",
 		sizeof(struct DeviceList)));
-	return(NULL);
+	return;
     }
 
     volumename = (char *) AllocMem(MAXMNTLEN, MEMF_PUBLIC);
@@ -83,7 +84,7 @@ void NewVolNode()
     Permit();
 }
 
-fsname(info, volumename)
+void fsname(info, volumename)
 struct DosInfo *info;
 char *volumename;
 {
@@ -442,33 +443,32 @@ struct direct *dir_ent;
     if (inode_comments) {
 	if (bsd44fs)
 	    sprintf(fib->fib_Comment + 1,
-		    "i=%-4d p=%04o u=%-5d g=%-5d l=%-2d bl=%-4d s=%d",
+		    "i=%-4d p=%04o u=%-5d g=%-5d l=%-2d bl=%-4d",
 		    dir_ent ? DISK32(dir_ent->d_ino) : 0, fmode & 07777,
 		    DISK32(finode->ic_nuid), DISK32(finode->ic_ngid),
-		    DISK16(finode->ic_nlink),
-		    DISK32(finode->ic_blocks), IC_SIZE(finode));
+		    DISK16(finode->ic_nlink), DISK32(finode->ic_blocks));
 	else
 	    sprintf(fib->fib_Comment + 1,
-		    "i=%-4d p=%04o u=%-5d g=%-5d l=%-2d bl=%-4d s=%d",
+		    "i=%-4d p=%04o u=%-5d g=%-5d l=%-2d bl=%-4d",
 		    dir_ent ? DISK32(dir_ent->d_ino) : 0, fmode & 07777,
 		    DISK16(finode->ic_ouid), DISK16(finode->ic_ogid),
-		    DISK16(finode->ic_nlink),
-		    DISK32(finode->ic_blocks), IC_SIZE(finode));
+		    DISK16(finode->ic_nlink), DISK32(finode->ic_blocks));
 	fib->fib_Comment[0] = strlen(fib->fib_Comment + 1);
     }
 
     fib->fib_Size	= IC_SIZE(finode);	/* bytes */
-    fib->fib_NumBlocks  = DISK32(finode->ic_blocks) / NSPF(superblock);
+    fib->fib_NumBlocks  = DISK32(finode->ic_blocks) / NDSPF;
 
     if ((lock->fl_Key == ROOTINO) && (pack->dp_Type == ACTION_EXAMINE_OBJECT)) {
 	fib->fib_DirEntryType = ST_ROOT;
-	fib->fib_Size = 0;
+
+/* No reason to not return directory size.  Idiot programs still don't show it.
+ *	fib->fib_Size = 0;
+ */
     } else if ((fmode & IFMT) == IFREG)
 	fib->fib_DirEntryType = ST_FILE;
     else if ((fmode & IFMT) == IFDIR) {
 	fib->fib_DirEntryType = ST_USERDIR;
-	fib->fib_Size	    = IC_SIZE(finode);	/* bytes */
-	fib->fib_NumBlocks  = DISK32(finode->ic_blocks) / NSPF(superblock);
     } else if ((fmode & IFMT) == IFLNK) {
 	fib->fib_DirEntryType = ST_SOFTLINK;
 	if (link_comments) {
@@ -477,7 +477,8 @@ struct direct *dir_ent;
 	    strcpy(fib->fib_Comment + temp + 1, "-> ");
 	    if (finode->ic_blocks == 0) {	/* must be 4.4 fastlink */
 	        temp2 = strlen((char *) DISK32(finode->ic_db));
-		strcpy(fib->fib_Comment + temp + 4, DISK32(finode->ic_db));
+		strcpy(fib->fib_Comment + temp + 4,
+		       (char *) DISK32(finode->ic_db));
 	    } else
 	        temp2 = file_read(DISK32(dir_ent->d_ino), 0, 76 - temp,
 			          fib->fib_Comment + temp + 4);
@@ -653,22 +654,26 @@ char **name;
 		}
 	}
 
+/*
 	PRINT(("part=%s sname=%s (dif=%d) pinum=%d   ",
 		part, sname, part - sname, pinum));
+*/
 
 	if (sname != part) {
 		pinum = file_find(pinum, sname);
-		if (!unixflag && (part > sname + 1) && (*(part - 2) == '/'))
+		if (!unix_paths && (part > sname + 1) && (*(part - 2) == '/'))
 			pinum = dir_name_search(pinum, "..");
 	} else if (*part == '/') {
-
+/*
 		PRINT(("searching for parent of /\n"));
-		if (unixflag)
+*/
+		if (unix_paths)
 			pinum = 2;
 		else
 			pinum = dir_name_search(pinum, "..");
-
+/*
 		PRINT(("parent pinum found is %d\n", pinum));
+*/
 		part++;
 	}
 
@@ -677,7 +682,9 @@ char **name;
 
 	*name = part;
 
+/*
 	PRINT(("part=%s pinum=%d name=%s\n\n", part, pinum, *name));
+*/
 
 	return(pinum);
 }
@@ -695,9 +702,9 @@ char *path;
 	char	*sname;
 	ULONG	inum = 0;
 
-
+/*
 	PRINT(("path_parse l=%d path=%s addr=%x\n", lock, path, path));
-
+*/
 
 	if (inum = ResolveColon(path))
 	    if (sname = strchr(path, ':'))

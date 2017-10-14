@@ -1,0 +1,75 @@
+.KEY blksize,buffers,cylinders,trackspercyl,blkspertrack,fmsdisk
+
+.DEF fmsdisk fms
+if x<blksize> EQ x
+    echo "No blksize specified"
+LAB Usage
+.BRA (
+.KET )
+    echo "Usage: genml <blksize> <bufs> <cyl> <trackspercyl> <blkspertrack> <fms##>"
+    echo "Floppy example: genml 512 64 79 11"
+.BRA <
+.KET >
+    quit 116
+endif
+
+. if x<blksize> EQ x
+. .DEF blksize 512
+.     echo "Default blksize=<blksize>"
+. endif
+
+if x<buffers> EQ x
+.DEF buffers 64
+    echo "Default buffers=<buffers>"
+endif
+
+if x<cylinders> EQ x
+.DEF cylinders 79
+    echo "Default cylinders=<cylinders>"
+endif
+
+if x<trackspercyl> EQ x
+.DEF trackspercyl 2
+    echo "Default trackspercyl=<trackspercyl>"
+endif
+
+if x<blkspertrack> EQ x
+.DEF blkspertrack 9
+    echo "Default blkspertrack=<blkspertrack>"
+endif
+
+assign bffssrc: exists >nil:
+if warn
+    echo reassigning bffssrc to sys:bffs
+    assign bffssrc: sys:bffs
+endif
+assign bffssrc: exists >nil:
+if not warn
+    die bffssrc:
+    if warn
+        quit 1
+    endif
+endif
+
+assign fms: bffssrc:test/units
+set ml fms:ml.<fmsdisk>
+echo "Creating ml $ml"
+echo "tdev:" > $ml
+echo "    FileSystem = bffssrc:fs/bffs" >> $ml
+echo "    Device = fmsdisk.device" >> $ml
+echo "    Sectorsize = <blksize>" >> $ml
+echo "    Unit = 20" >> $ml
+echo "    Flags = 0" >> $ml
+echo "    Mount = 1" >> $ml
+echo "    Stacksize = 512" >> $ml
+echo "    Priority = -1" >> $ml
+echo "    GlobVec = -1" >> $ml
+echo "    LowCyl = 0" >> $ml
+echo "    HighCyl = <cylinders>" >> $ml
+echo "    Surfaces = <trackspercyl>" >> $ml
+echo "    BlocksPerTrack = <blkspertrack>" >> $ml
+echo "    Buffers = <buffers>" >> $ml
+echo "    Reserved = 0;" >> $ml
+echo "    PreAlloc = 1285;" >> $ml
+echo "    DosType = 0x42464653  "/* BFFS */ >> $ml
+echo "#" >> $ml

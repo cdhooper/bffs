@@ -6,15 +6,11 @@ OBJ=$(DOTDOT)/obj.$(ARCH)/
 OBJS=$(OBJ)main.o $(OBJ)fsck_inode.o $(OBJ)pass1.o $(OBJ)pass1b.o $(OBJ)pass2.o $(OBJ)pass3.o $(OBJ)pass4.o $(OBJ)pass5.o $(OBJ)preen.o $(OBJ)setup.o $(OBJ)utilities.o $(OBJ)dir.o $(OBJ)ffs_subr.o $(OBJ)ffs_tables.o $(OBJ)fsck_other.o $(OBJ)getopt.o $(OBJ)amiga_device.o $(OBJ)amiga_label.o
 
 CC=dcc
-CFLAGS=-I/ucbinclude -Dcdh
-RM=delete force
-
+CFLAGS=-I/ucbinclude -I/fs -Dcdh
+RM = -delete force >NIL:
 
 $(PROG): $(OBJS)
 	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
-
-clean:
-	$(RM) $(OBJS) $(PROG)
 
 $(OBJ)main.o: main.c
 	$(CC) $(CFLAGS) -c main.c -o $(OBJ)main.o
@@ -69,3 +65,6 @@ $(OBJ)amiga_device.o: $(DOTDOT)/unix_support/amiga_device.c
 
 $(OBJ)amiga_label.o: $(DOTDOT)/unix_support/amiga_label.c
 	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/amiga_label.c -o $(OBJ)amiga_label.o
+
+clean:
+	$(RM) $(OBJS) $(PROG)

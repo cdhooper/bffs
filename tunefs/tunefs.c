@@ -272,16 +272,18 @@ getsb(fs, file)
 	char *file;
 {
 
-	fi = open(file, 2);
 #ifdef AMIGA
-	if (fi < 0) {
+	if (dio_open(file) == 0) {
 		onbreak(break_abort);
-		if (dio_open(file) == 0)
-			dio_inhibit(1);
-		else
+		dio_inhibit(1);
+		fi = -1;
+	} else {
+		fi = open(file, 2);
+		if (fi < 0)
 			err(3, "cannot open %s", file);
 	}
 #else
+	fi = open(file, 2);
 	if (fi < 0)
 		err(3, "cannot open %s", file);
 #endif

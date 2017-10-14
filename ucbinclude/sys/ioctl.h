@@ -43,8 +43,6 @@
 #ifndef	_SYS_IOCTL_H_
 #define	_SYS_IOCTL_H_
 
-#include <sys/ttycom.h>
-
 /*
  * Pun for SunOS prior to 3.2.  SunOS 3.2 and later support TIOCGWINSZ
  * and TIOCSWINSZ (yes, even 3.2-3.5, the fact that it wasn't documented
@@ -59,11 +57,6 @@ struct ttysize {
 };
 #define	TIOCGSIZE	TIOCGWINSZ
 #define	TIOCSSIZE	TIOCSWINSZ */
-
-#include <sys/ioccom.h>
-
-#include <sys/filio.h>
-#include <sys/sockio.h>
 
 #ifndef KERNEL
 

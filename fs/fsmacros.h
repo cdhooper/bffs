@@ -76,6 +76,9 @@
 #define NSPB(fs)        (DISK32(fs->fs_nspf << (fs)->fs_fragshift))
 #define NSPF(fs)        (DISK32(fs->fs_nspf))
 
+#define NDSPF      	(FSIZE  / phys_sectorsize)
+#define NDSPB      	(FBSIZE / phys_sectorsize)
+
 /*
  * The following macros optimize certain frequently calculated
  * quantities by using shifts and masks in place of divisions

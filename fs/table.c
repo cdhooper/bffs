@@ -1,10 +1,57 @@
 #include <dos30/dosextens.h>
 
 #include "config.h"
+
 #include "table.h"
 #include "packets.h"
 
-struct call_table packet_table[] = {
+
+struct direct_table dpacket_table[] = {
+{ PNil,		  CHECK, I("NIL           ") },   /* 0 */
+{ PUnimplemented, NOCHK, I("Unknown 1     ") },   /* 1 */
+{ PUnimplemented, NOCHK, I("U GET_BLOCK   ") },   /* 2 */
+{ PUnimplemented, NOCHK, I("Unknown 3     ") },   /* 3 */
+{ PUnimplemented, NOCHK, I("U SET_MAP     ") },	  /* 4 */
+{ PDie,		  NOCHK, I("DIE           ") },   /* 5 */
+{ PUnimplemented, NOCHK, I("U EVENT       ") },   /* 6 */
+{ PCurrentVolume, CHECK, I("CURRENT_VOLUME") },   /* 7 */
+{ PLocateObject,  CHECK, I("LOCATE_OBJECT ") },   /* 8 */
+{ PRenameDisk,	  CHECK, I("RENAME_DISK   ") },   /* 9 */
+{ PUnimplemented, NOCHK, I("Unknown 10    ") },   /* 10 */
+{ PUnimplemented, NOCHK, I("Unknown 11    ") },   /* 11 */
+{ PUnimplemented, NOCHK, I("Unknown 12    ") },   /* 12 */
+{ PUnimplemented, NOCHK, I("Unknown 13    ") },   /* 13 */
+{ PUnimplemented, NOCHK, I("Unknown 14    ") },   /* 14 */
+{ PFreeLock,	  CHECK, I("FREE_LOCK     ") },   /* 15 */
+{ PDeleteObject,  CHECK, I("DELETE_OBJECT ") },   /* 16 */
+{ PRenameObject,  CHECK, I("RENAME_OBJECT ") },   /* 17 */
+{ PMoreCache,	  CHECK, I("MORE_CACHE    ") },   /* 18 */
+{ PCopyDir,	  CHECK, I("COPY_DIR      ") },   /* 19 */
+{ PUnimplemented, NOCHK, I("U WAIT_CHAR   ") },   /* 20 */
+{ PSetProtect,	  CHECK, I("SET_PROTECT   ") },   /* 21 */
+{ PCreateDir,	  CHECK, I("CREATE_DIR    ") },   /* 22 */
+{ PExamineObject, CHECK, I("EXAMINE_OBJECT") },   /* 23 */
+{ PExamineNext,	  CHECK, I("EXAMINE_NEXT  ") },   /* 24 */
+{ PDeviceInfo,	  CHECK, I("DISK_INFO     ") },   /* 25 */
+{ PDeviceInfo,	  CHECK, I("INFO          ") },   /* 26 */
+{ PFlush,	  CHECK, I("FLUSH         ") },   /* 27 */
+{ PUnimplemented, NOCHK, I("U SET_COMMENT ") },   /* 28 */
+{ PParent,	  CHECK, I("PARENT        ") },   /* 29 */
+{ PFlush,	  CHECK, I("TIMER         ") },   /* 30 */
+{ PInhibit,	  NOCHK, I("INHIBIT       ") },   /* 31 */
+{ PUnimplemented, CHECK, I("U DISK_TYPE   ") },   /* 32 */
+{ PDiskChange,	  CHECK, I("DISK_CHANGE   ") },   /* 33 */
+{ PSetDate,	  CHECK, I("SET_DATE      ") },   /* 34 */
+{ PUnimplemented, NOCHK, I("Unknown 35    ") },   /* 35 */
+{ PUnimplemented, NOCHK, I("Unknown 36    ") },   /* 36 */
+{ PUnimplemented, NOCHK, I("Unknown 37    ") },   /* 37 */
+{ PUnimplemented, NOCHK, I("Unknown 38    ") },   /* 38 */
+{ PUnimplemented, NOCHK, I("Unknown 39    ") },   /* 39 */
+{ PSameLock,	  CHECK, I("SAME_LOCK     ") },   /* 40 */
+};
+
+
+struct search_table spacket_table[] = {
 { ACTION_READ,		 PRead,		 CHECK, I("READ          ") },
 { ACTION_WRITE,		 PWrite,	 CHECK, I("WRITE         ") },
 { ACTION_FINDINPUT,	 PFindInput,	 CHECK, I("FINDINPUT     ") },
@@ -52,51 +99,6 @@ struct call_table packet_table[] = {
 */
 
 { LAST_PACKET,		 LAST_PACKET,	 NOCHK, I("LAST_PACKET   ") }
-};
-
-
-struct direct_table dpacket_table[] = {
-{ PNil,		  NOCHK, I("NIL           ") },   /* 0 */
-{ PUnimplemented, NOCHK, I("Unknown 1     ") },   /* 1 */
-{ PUnimplemented, NOCHK, I("U GET_BLOCK   ") },   /* 2 */
-{ PUnimplemented, NOCHK, I("Unknown 3     ") },   /* 3 */
-{ PUnimplemented, NOCHK, I("U SET_MAP     ") },	  /* 4 */
-{ PDie,		  NOCHK, I("DIE           ") },   /* 5 */
-{ PUnimplemented, NOCHK, I("U EVENT       ") },   /* 6 */
-{ PCurrentVolume, CHECK, I("CURRENT_VOLUME") },   /* 7 */
-{ PLocateObject,  CHECK, I("LOCATE_OBJECT ") },   /* 8 */
-{ PRenameDisk,	  CHECK, I("RENAME_DISK   ") },   /* 9 */
-{ PUnimplemented, NOCHK, I("Unknown 10    ") },   /* 10 */
-{ PUnimplemented, NOCHK, I("Unknown 11    ") },   /* 11 */
-{ PUnimplemented, NOCHK, I("Unknown 12    ") },   /* 12 */
-{ PUnimplemented, NOCHK, I("Unknown 13    ") },   /* 13 */
-{ PUnimplemented, NOCHK, I("Unknown 14    ") },   /* 14 */
-{ PFreeLock,	  CHECK, I("FREE_LOCK     ") },   /* 15 */
-{ PDeleteObject,  CHECK, I("DELETE_OBJECT ") },   /* 16 */
-{ PRenameObject,  CHECK, I("RENAME_OBJECT ") },   /* 17 */
-{ PMoreCache,	  CHECK, I("MORE_CACHE    ") },   /* 18 */
-{ PCopyDir,	  CHECK, I("COPY_DIR      ") },   /* 19 */
-{ PUnimplemented, NOCHK, I("U WAIT_CHAR   ") },   /* 20 */
-{ PSetProtect,	  CHECK, I("SET_PROTECT   ") },   /* 21 */
-{ PCreateDir,	  CHECK, I("CREATE_DIR    ") },   /* 22 */
-{ PExamineObject, CHECK, I("EXAMINE_OBJECT") },   /* 23 */
-{ PExamineNext,	  CHECK, I("EXAMINE_NEXT  ") },   /* 24 */
-{ PDeviceInfo,	  CHECK, I("DISK_INFO     ") },   /* 25 */
-{ PDeviceInfo,	  CHECK, I("INFO          ") },   /* 26 */
-{ PFlush,	  CHECK, I("FLUSH         ") },   /* 27 */
-{ PUnimplemented, NOCHK, I("U SET_COMMENT ") },   /* 28 */
-{ PParent,	  CHECK, I("PARENT        ") },   /* 29 */
-{ PFlush,	  CHECK, I("TIMER         ") },   /* 30 */
-{ PInhibit,	  NOCHK, I("INHIBIT       ") },   /* 31 */
-{ PUnimplemented, CHECK, I("U DISK_TYPE   ") },   /* 32 */
-{ PDiskChange,	  CHECK, I("DISK_CHANGE   ") },   /* 33 */
-{ PSetDate,	  CHECK, I("SET_DATE      ") },   /* 34 */
-{ PUnimplemented, NOCHK, I("Unknown 35    ") },   /* 35 */
-{ PUnimplemented, NOCHK, I("Unknown 36    ") },   /* 36 */
-{ PUnimplemented, NOCHK, I("Unknown 37    ") },   /* 37 */
-{ PUnimplemented, NOCHK, I("Unknown 38    ") },   /* 38 */
-{ PUnimplemented, NOCHK, I("Unknown 39    ") },   /* 39 */
-{ PSameLock,	  CHECK, I("SAME_LOCK     ") },   /* 40 */
 };
 
 

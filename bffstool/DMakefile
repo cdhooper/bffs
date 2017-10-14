@@ -4,6 +4,7 @@ DOTDOT=
 PROG=$(DOTDOT)/bin/bffstool
 OBJ=$(DOTDOT)/obj.$(ARCH)/
 
+RM=-delete force >NIL:
 OBJS=$(OBJ)toolres.o $(OBJ)tool.o $(OBJ)comm.o
 
 $(PROG): $(OBJS)
@@ -15,7 +16,8 @@ $(OBJ)toolres.o: toolres.c
 $(OBJ)tool.o: tool.c tool.h comm.h
 	dcc -c tool.c -o %(left)
 
-
 $(OBJ)comm.o: comm.c comm.h
 	dcc -c comm.c -o %(left)
 
+clean:
+	$(RM) $(OBJS) $(PROG)

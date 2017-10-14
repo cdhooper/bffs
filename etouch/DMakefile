@@ -11,16 +11,16 @@ OBJS=$(OBJ)etouch.o $(OBJ)amiga_unix.o
 
 CC=dcc
 CFLAGS=-Dcdh -I/ucbinclude
-RM=delete force
+RM = -delete force >NIL:
 
 $(PROG): $(OBJS)
 	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
-
-clean:
-	$(RM) $(OBJS) $(PROG)
 
 $(OBJ)etouch.o: etouch.c
 	$(CC) $(CFLAGS) -c etouch.c -o $(OBJ)etouch.o
 
 $(OBJ)amiga_unix.o: $(DOTDOT)/unix_support/amiga_unix.c
 	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/amiga_unix.c -o $(OBJ)amiga_unix.o
+
+clean:
+	$(RM) $(OBJS) $(PROG)

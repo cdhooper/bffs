@@ -107,7 +107,7 @@ char *argv[];
 		errorexit("does not have a mounted BFFS filesystem\n");
 	    }
 	    if (filesystems[index])
-	    	strcpy(handler_name, filesystems[index]);
+		strcpy(handler_name, filesystems[index]);
 	    else {
 		fprintf(stderr, "Unable to find %s ", argv[1]);
 		errorexit("as a mounted BFFS filesystem\n");
@@ -118,7 +118,7 @@ char *argv[];
 	    fprintf(stderr, "Error communicating with %s ", handler_name);
 	    errorexit("handler.\n");
 	}
-	
+
 	stat = get_stat();
 	if (!stat) {
 	    if (*handler_name == '\0')
@@ -198,7 +198,7 @@ setup_gadgets()
 	do_ng(608, ypos, 20, 8, "Unix Paths", ID_PATH,
 	      NG_HIGHLABEL | PLACETEXT_LEFT);
 	upgad = gad = CreateGadget(CHECKBOX_KIND, gad, &ng, GTCB_Checked,
-			   *stat->unixflag, TAG_DONE);
+			   *stat->unix_paths, TAG_DONE);
 	ypos += 12;
 
 	do_ng(608, ypos, 20, 8, "Read Only", ID_RONLY,
@@ -254,7 +254,7 @@ setup_gadgets()
 	vertical_int(stat_start +  2);	/* read misses */
 	vertical_int(stat_start +  1);	/* write hits */
 	vertical_int(stat_start +  3);	/* write misses */
-	
+
 	vertical_int(stat_start +  4);	/* cgread hits */
 	vertical_int(stat_start +  6);	/* cgread misses */
 	vertical_int(stat_start +  5);	/* cgwrite hits */
@@ -312,7 +312,7 @@ setup_gadgets()
 
 	prealloc = (*stat->resolve_symlinks ?  0 : 1 ) |
 		   (*stat->case_independent ?  0 : 2 ) |
-		   (*stat->unixflag         ?  0 : 4 ) |
+		   (*stat->unix_paths         ?  0 : 4 ) |
 		   (*stat->link_comments    ?  8 : 0 ) |
 		   (*stat->inode_comments   ? 16 : 0 ) |
 		   (*stat->og_perm_invert   ? 32 : 0 ) |
@@ -558,7 +558,7 @@ UWORD	code;
 		refresh_information();
 		break;
 	    case ID_PATH:
-		*stat->unixflag = !*stat->unixflag;
+		*stat->unix_paths = !*stat->unix_paths;
 		refresh_prealloc();
 		break;
 	    case ID_RESOLVE:
@@ -695,7 +695,7 @@ refresh_information()
 			  *stat->inode_comments, TAG_DONE);
 
 	GT_SetGadgetAttrs(upgad, window, NULL, GTCB_Checked,
-			  *stat->unixflag, TAG_DONE);
+			  *stat->unix_paths, TAG_DONE);
 
 	GT_SetGadgetAttrs(rogad, window, NULL, GTCB_Checked,
 			  superblock->fs_ronly, TAG_DONE);
@@ -717,7 +717,7 @@ refresh_information()
 
 	prealloc = (*stat->resolve_symlinks ?  0 : 1 ) |
 		   (*stat->case_independent ?  0 : 2 ) |
-		   (*stat->unixflag         ?  0 : 4 ) |
+		   (*stat->unix_paths       ?  0 : 4 ) |
 		   (*stat->link_comments    ?  8 : 0 ) |
 		   (*stat->inode_comments   ? 16 : 0 ) |
 		   (*stat->og_perm_invert   ? 32 : 0 ) |
@@ -775,7 +775,7 @@ refresh_prealloc()
 
 	prealloc = (*stat->resolve_symlinks ?  0 : 1 ) |
 		   (*stat->case_independent ?  0 : 2 ) |
-		   (*stat->unixflag         ?  0 : 4 ) |
+		   (*stat->unix_paths       ?  0 : 4 ) |
 		   (*stat->link_comments    ?  8 : 0 ) |
 		   (*stat->inode_comments   ? 16 : 0 ) |
 		   (*stat->og_perm_invert   ? 32 : 0 ) |

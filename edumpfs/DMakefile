@@ -3,7 +3,7 @@ PROG=$(DOTDOT)/bin/edumpfs
 OBJ = $(DOTDOT)/obj.ami/
 AMI=$(DOTDOT)/unix_support
 OBJS=$(OBJ)amiga_device.o $(OBJ)edumpfs.o $(OBJ)file_blockio.o
-RM=delete force
+RM=-delete force >nil:
 CFLAGS=-I/fs -Dcdh -I/ucbinclude
 
 $(PROG): $(OBJS)

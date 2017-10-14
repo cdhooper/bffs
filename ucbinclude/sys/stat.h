@@ -70,8 +70,10 @@ struct stat {
     short   st_nlink;	    /*	not used, compat    */
 };
 
+/*
 extern int stat(const char *, struct stat *);
 extern int fstat(int, struct stat *);
+*/
 
 
 /*
@@ -172,16 +174,5 @@ struct	stat {
 #endif !_POSIX_SOURCE
 
 #endif
-
-#ifdef ARF
-#ifndef	KERNEL
-int	chmod(/* char *path, mode_t mode */);
-int	fstat(/* int fd; struct stat *sbuf */);
-int	mkdir(/* char *path; mode_t mode */);
-int	mkfifo(/* char *path; mode_t mode */);
-int	stat(/* char *path; struct stat *sbuf */);
-mode_t	umask(/* mode_t mask */);
-#endif !KERNEL
-#endif !ARF
 
 #endif	/* !__sys_stat_h */

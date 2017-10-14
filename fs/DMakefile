@@ -3,14 +3,12 @@ FS=/fs/bffs
 CC=dcc
 CFLAGS=-ms -r
 ASM=das
+RM = -delete force >NIL:
 
 OD=obj/
 OBJS=$(OD)stack.o $(OD)handler.o $(OD)debug.o $(OD)packets.o $(OD)ufs.o $(OD)system.o $(OD)fread.o $(OD)fwrite.o $(OD)file.o $(OD)inode.o $(OD)cache.o $(OD)dir.o $(OD)table.o $(OD)alloc.o $(OD)config.o $(OD)request.o $(OD)inthand.o
 
 all:  $(FS) $(PROG)
-
-clean:
-	delete $(OBJS) force
 
 $(FS): $(OBJS)
 	$(CC) $(CFLAGS) %(right) -o %(left)
@@ -68,3 +66,6 @@ $(OD)inthand.o: inthand.asm
 
 $(OD)stack.o: stack.asm
 	$(ASM) %(*.asm) -o %(left)
+
+clean:
+	$(RM) $(OBJS) $(PROG) $(FS)

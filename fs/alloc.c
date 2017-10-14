@@ -5,8 +5,8 @@
 /* no need to go further if we are building the read only release */
 #ifndef RONLY
 
+#include "superblock.h"
 #include "alloc.h"
-#include "ufs.h"
 #include "fsmacros.h"
 #include "cache.h"
 

@@ -2,6 +2,8 @@
 #include <dos/filehandler.h>
 
 #include "config.h"
+
+#include "superblock.h"
 #include "ufs.h"
 #include "fsmacros.h"
 #include "cache.h"
@@ -69,7 +71,7 @@ int blk;
 #ifndef RONLY
 /* cache_frag_write()
 	This routine will return a buffer to write the given block into.
-	The buffer is preset to be a dirty block.  The caching mechanism
+	The buffer is pre-set to be a dirty block.  The caching mechanism
 	will automatically take care of flushing dirty frags once the
 	buffer is full.  If readflag is set (non-zero), the calling routine
 	is guaranteed the current contents of the fragment is read into the
@@ -331,7 +333,7 @@ open_cache()
 	cache_alloced	 = 0;
 	cache_used	 = 0;
 	cache_item_dirty = 0;
-	cache_size	 = (ENVIRONMENT->de_NumBuffers * DEV_BSIZE) / FSIZE;
+	cache_size	 = ENVIRONMENT->de_NumBuffers / NSPF(superblock);
 	if (cache_size < 8)
 		cache_size = 8;
 	PRINT(("cache=%d  cache_cg=%d\n", cache_size, cache_cg_size));

@@ -6,8 +6,13 @@ CFLAGS=-Dcdh -I$(DOTDOT)/ucbinclude
 OBJ=$(DOTDOT)/obj.ami/
 OBJS=$(OBJ)echmod.o
 
+RM = -delete force >NIL:
+
 $(PROG): $(OBJS)
 	$(CC) -o $(PROG) $(OBJS)
 
 $(OBJ)echmod.o: echmod.c
 	$(CC) $(CFLAGS) -c echmod.c -o $(OBJ)echmod.o
+
+clean:
+	$(RM) $(OBJS) $(PROG)

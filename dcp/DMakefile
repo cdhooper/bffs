@@ -1,4 +1,8 @@
 PROG=/bin/dcp
+RM=-delete force >NIL:
 
 $(PROG): dcp.c
 	dcc -o $(PROG) dcp.c
+
+clean:
+	$(RM) $(PROG)

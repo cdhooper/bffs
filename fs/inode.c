@@ -1,12 +1,13 @@
 #include <exec/memory.h>
 
 #include "config.h"
-#include "ufs.h"
+#include "superblock.h"
 #include "ufs/inode.h"
 #include "fsmacros.h"
 #include "file.h"
 #include "cache.h"
 #include "alloc.h"
+#include "ufs.h"
 
 
 /* Special file block address handling
@@ -183,8 +184,7 @@ ULONG	newblk;
 	    block_erase(curblk);
 	    inode = inode_modify(inum); /* modify inode on disk */
 	    inode->ic_ib[level - 1] = DISK32(curblk);
-	    inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) +
-				      NSPB(superblock));
+	    inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NDSPB);
 	}
 
 	do {
@@ -211,8 +211,7 @@ ULONG	newblk;
 		    block_erase(curblk);
 
 		    inode = inode_modify(inum);   /* modify inode on disk */
-		    inode->ic_blocks = DISK32(DISK32(inode->ic_blocks ) +
-					      NSPB(superblock));
+		    inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NDSPB);
 
 		    /* update parent index block pointer */
 		    temp = (ULONG *) cache_frag_write(ocurblk + fragno[level], 1);
@@ -284,8 +283,7 @@ ULONG	inum;
 		    return(0);
 		}
 		inode = inode_modify(inum);
-		inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) +
-					  NSPB(superblock));
+		inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NDSPB);
 		inode->ic_db[file_blk_num] = DISK32(curblk);
 	    }
 	    return(curblk + frac);
@@ -309,8 +307,7 @@ ULONG	inum;
 		return(0);
 	    }
 	    inode = inode_modify(inum);
-	    inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) +
-				      NSPB(superblock));
+	    inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NDSPB);
 	    inode->ic_ib[level - 1] = DISK32(curblk);
 	    block_erase(curblk);
 	}
@@ -336,8 +333,7 @@ ULONG	inum;
 		    return(0);
 		}
 		inode = inode_modify(inum);
-		inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) +
-					  NSPB(superblock));
+		inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NDSPB);
 		temp[ptrnum[level]] = DISK32(curblk);
 		if (level)
 		    block_erase(curblk);
@@ -361,10 +357,10 @@ ULONG fsblock;
 {
 	int	index;
 
-	for (index = 0; index < FRAGS_PER_BLK ; index++) {
-		PRINT(("block erase, frag %d of fsblock %d\n", index, fsblock));
+	PRINT(("block erase, frags 0-%d of fsblock %d\n",
+		index, FRAGS_PER_BLK));
+	for (index = 0; index < FRAGS_PER_BLK ; index++)
 		ZeroMem(cache_frag_write(fsblock + index, 0), FSIZE);
-	}
 
 }
 #endif

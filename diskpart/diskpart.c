@@ -148,18 +148,19 @@ main(argc, argv)
 	specname	= argv[0];
 
 	onbreak(break_abort);
-	ifd = open(specname, op == READ ? O_RDONLY : O_RDWR);
-	if (ifd < 0) {
-	    if (dio_open(specname)) {
-		fprintf("Unable to open device %s\n", specname);
-		exit(1);
-	    }
+        if (dio_open(specname) == 0) {
 	    dio_inhibit(1);
-	} else {
-	    special = specname;
-	    if (op != READ)
-		ofd = ifd;
+            ifd = -1;
+        } else {
+		ifd = open(specname, op == READ ? O_RDONLY : O_RDWR);
+		if (ifd < 0) {
+			fprintf("Unable to open device %s\n", specname);
+			exit(1);
+		}
 	}
+	special = specname;
+	if (op != READ)
+		ofd = ifd;
 
 	switch(op) {
 	case EDIT:

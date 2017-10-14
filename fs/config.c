@@ -10,12 +10,11 @@ int     cache_cg_size = 4;	/* number of cylinder group fsblock buffers */
 int case_independent = 0;	/* 1=always case independent dir name searches */
 
 /* file.c */
-int     resolve_symlinks = 0;   /* 1=always resolve sym links for AmigaDOS */
-int     unixflag = 0;           /* 1=always Unix pathnames 0=AmigaDOS pathnames */
-int     read_link = 0;          /* 1=currently reading a link */
+int     resolve_symlinks = 0;	/* 1=always resolve sym links for AmigaDOS */
+int     unix_paths = 0;		/* 1=always Unix pathnames 0=AmigaDOS pathnames */
+int     read_link = 0;          /* 1=attempt to resolve links for OS (sneaky) */
 
 /* handler.c */
 int     timer_secs  = 1;	/* delay seconda after write for cleanup */
-int     timer_loops = 10;	/* maximum delays before forced cleanup */
-char    *version    = "\0$VER: BFFSFileSystem 1.5f (10.Aug.96) © 1996 Chris Hooper";
-
+int     timer_loops = 12;	/* maximum delays before forced cleanup */
+char    *version    = "\0$VER: BFFSFileSystem 1.6 (13.Oct.2017) © Chris Hooper";

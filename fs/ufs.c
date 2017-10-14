@@ -4,48 +4,67 @@
 #include <devices/hardblocks.h>
 #include <dos/filehandler.h>
 
+/*
+#define SYS_TYPES_H
+*/
+
+#ifdef GCC
+#include <proto/exec.h>
+#include <inline/dos.h>
+struct MsgPort *CreatePort(UBYTE *name, long pri);
+#else
 #include <clib/exec_protos.h>
 #include <clib/alib_protos.h>
 #include <ctype.h>
+#include <string.h>
+#include <strings.h>
+#endif
 
 #include "config.h"
+#include "superblock.h"
 #include "handler.h"
 #include "ufs.h"
+#include "ufs/sun_label.h"
+#include "ufs/bsd_label.h"
 #include "fsmacros.h"
 #include "file.h"
 #include "stat.h"
 #include "request.h"
-#include <string.h>
-#include <strings.h>
+
+#define S static
+
+S struct IOExtTD *trackIO = NULL;/* trackdisk IORequest for data	  */
+S struct IOExtTD *dchangeIO = NULL; /* trackdisk IORequest for disk change */
+S struct MsgPort *devport = NULL;/* pointer to port for comm. with device  */
+S struct MsgPort *dchangePort = NULL; /* port for disk change notification */
+S char	*cgsummary_base;	/* memory copy of cg summary information  */
+S int	no_Sun_label;		/* 1 = Sun disk label not found		  */
+S int	no_BSD_label;		/* 1 = BSD disk label not found		  */
+S int	env_setup = 1;		/* set up the ufs environment (once)	  */
+S char    *TRACKDISK = "trackdisk.device"; /* use this device for changeint */
+S char    *MESSYDISK = "messydisk.device"; /* if this device is specified   */
+S ULONG	superblock_sector = SUPER_BLOCK; /* default superblock location   */
 
 struct	fs *superblock = NULL; 	/* current superblock			  */
-struct	IOExtTD *trackIO = NULL;/* trackdisk IORequest for data		  */
-struct	IOExtTD *dchangeIO = NULL; /* trackdisk IORequest for disk change */
-int	fs_partition;		/* current partition			  */
-ULONG	poffset;		/* computed byte offset for fs byte zero  */
-ULONG	pmax;			/* computed byte maximum for fs byte zero */
-struct	MsgPort *devport = NULL;/* pointer to port for comm. with device  */
-struct	MsgPort	*dchangePort = NULL; /* port for disk change notification */
-ULONG	tranmask = 0;		/* device DMA transfer mask		  */
-char	*cgsummary_base;	/* memory copy of cg summary information  */
-int	openerror = 1;		/* 1 = OpenDevce failed			  */
-int	no_Sun_label;		/* 1 = Sun disk label not found		  */
-int	no_BSD_label;		/* 1 = BSD disk label not found		  */
-int	env_setup = 1;		/* set up the ufs environment (once)	  */
-int	physical_ro = 0;	/* disk is physically write-protected	  */
-extern	ULONG GMT;		/* GMT time offset			  */
-extern	char *handler_name;	/* device name handler was started as     */
-long	fsize;			/* superblock filesystem fragment size	  */
-long	bsize;			/* superblock filesystem block size	  */
-char    *TRACKDISK = "trackdisk.device"; /* use this device for changeint */
-char    *MESSYDISK = "messydisk.device"; /* if this device is specified   */
 int	bsd44fs = 0;		/* 0 = 4.3 BSD fs, 1 = 4.4 BSD fs	  */
+int	openerror = 1;		/* 1 = OpenDevce failed			  */
+int	physical_ro = 0;	/* disk is physically write-protected	  */
+int	fs_partition;		/* current partition			  */
 ULONG	fs_lfmask;		/* global for faster access, ~fmask	  */
 ULONG	fs_lbmask;		/* global for faster access, ~bmask	  */
+ULONG	phys_sectorsize = 512;	/* physical disk sector size, from env	  */
+ULONG	poffset;		/* computed byte offset for fs byte zero  */
+ULONG	pmax;			/* computed byte maximum for fs byte zero */
+ULONG	tranmask = 0;		/* device DMA transfer mask		  */
+long	fsize;			/* superblock filesystem fragment size	  */
+long	bsize;			/* superblock filesystem block size	  */
+
+extern	ULONG GMT;		/* GMT time offset			  */
+extern	char *handler_name;	/* device name handler was started as     */
 
 /* interrupt handler declarations for disk change routines */
 extern VOID   IntHandler(VOID);
-struct InterruptData {		/* stack space for int handler (data) */
+struct InterruptData {	/* stack space for int handler (data) */
 	struct	Task *sigTask;
 	ULONG	sigMask;
 } IntData;
@@ -58,7 +77,7 @@ int    dcsubmitted = 0;		/* whether a disk change interrupt IO
 
 /* data_read()
  *	This routine is the only interface to read the raw disk
- *	data use which is used by the filesystem.
+ *	data which is used by the filesystem.
  *
  *	   buf = memory buffer address (where to put data)
  *	   num = starting disk fragment (fragment size specified in FSIZE)
@@ -81,8 +100,8 @@ int num;
 	trackIO->iotd_Req.io_Data    = buf;		/* buffer to read into */
 	trackIO->iotd_Req.io_Offset  = num * FSIZE + poffset;
 
-	PRINT(("data_read from faddr=%d abs_addr=%d size=%d\n",
-		num, trackIO->iotd_Req.io_Offset / TD_SECTOR, size));
+	PRINT(("data_read from faddr=%d sector=%d size=%d\n",
+		num, trackIO->iotd_Req.io_Offset / phys_sectorsize, size));
 
 	UPSTAT(direct_reads);
 	UPSTATVALUE(direct_read_bytes, size);
@@ -95,16 +114,18 @@ int num;
 	}
 #endif
 
-	if (DoIO(trackIO)) {
-	    PRINT2(("drf faddr=%d abs_addr=%d size=%d\n", num,
-		    trackIO->iotd_Req.io_Offset / TD_SECTOR, size));
-	    while (do_request(REQUEST_BLOCK_BAD_R, num * FSIZE/TD_SECTOR, size))
-		for (index = 0; index < 8; index++)
-		    if (!DoIO(trackIO))
+	if (DoIO((struct IORequest *) trackIO)) {
+	    PRINT2(("drf faddr=%d sector=%d size=%d\n", num,
+		    trackIO->iotd_Req.io_Offset / phys_sectorsize, size));
+	    while (do_request(REQUEST_BLOCK_BAD_R,
+			      num * FSIZE / phys_sectorsize, size))
+		for (index = 0; index < 4; index++)
+		    if (!DoIO((struct IORequest *) trackIO))
 			return(0);
 		    else
-			PRINT2(("drf faddr=%d abs_addr=%d size=%d\n", num,
-				trackIO->iotd_Req.io_Offset / TD_SECTOR, size));
+			PRINT2(("drf faddr=%d sector=%d size=%d\n", num,
+				trackIO->iotd_Req.io_Offset / phys_sectorsize,
+				size));
 	    return(1);
 	}
 
@@ -137,8 +158,8 @@ int num;
 	trackIO->iotd_Req.io_Data    = buf;		/* buffer to read into */
 	trackIO->iotd_Req.io_Offset  = num * FSIZE + poffset;
 
-	PRINT(("data_write to faddr=%d abs_addr=%d size=%d\n", num,
-		trackIO->iotd_Req.io_Offset / TD_SECTOR, size));
+	PRINT(("data_write to faddr=%d sector=%d size=%d\n", num,
+		trackIO->iotd_Req.io_Offset / phys_sectorsize, size));
 
 	UPSTAT(direct_writes);
 	UPSTATVALUE(direct_write_bytes, size);
@@ -151,16 +172,18 @@ int num;
 	}
 #endif
 
-	if (DoIO(trackIO)) {
-	    PRINT2(("dwf faddr=%d abs_addr=%d size=%d\n", num,
-		    trackIO->iotd_Req.io_Offset / TD_SECTOR, size));
-	    while (do_request(REQUEST_BLOCK_BAD_W, num * FSIZE/TD_SECTOR, size))
-		for (index = 0; index < 8; index++)
-		    if (!DoIO(trackIO))
+	if (DoIO((struct IORequest *) trackIO)) {
+	    PRINT2(("dwf faddr=%d sector=%d size=%d\n", num,
+		    trackIO->iotd_Req.io_Offset / phys_sectorsize, size));
+	    while (do_request(REQUEST_BLOCK_BAD_W, num *
+			      FSIZE / phys_sectorsize, size))
+		for (index = 0; index < 4; index++)
+		    if (!DoIO((struct IORequest *) trackIO))
 			return(0);
 		    else
-			PRINT2(("dwf faddr=%d abs_addr=%d size=%d\n", num,
-				trackIO->iotd_Req.io_Offset / TD_SECTOR, size));
+			PRINT2(("dwf faddr=%d sector=%d size=%d\n", num,
+				trackIO->iotd_Req.io_Offset / phys_sectorsize,
+				size));
 	    return(1);
 	}
 
@@ -177,9 +200,10 @@ int num;
 int open_ufs()
 {
 	ULONG flags;
+	ULONG temp;
 	extern int resolve_symlinks;
 	extern int case_independent;
-	extern int unixflag;
+	extern int unix_paths;
 	extern int link_comments;
 	extern int inode_comments;
 	extern int og_perm_invert;
@@ -252,7 +276,7 @@ int open_ufs()
 	    if (trackIO = (struct IOExtTD *)
 		CreateExtIO(devport, sizeof(struct IOExtTD)) )
 		if (OpenDevice(DISK_DEVICE, DISK_UNIT,
-			       trackIO, DISK_FLAGS))
+			       (struct IORequest *) trackIO, DISK_FLAGS))
 		    openerror = 1;
 		else
 		    goto good_open;
@@ -270,7 +294,7 @@ int open_ufs()
 	trackIO->iotd_Req.io_Command = TD_CHANGESTATE;
 
 	/* if request succeeds and NO disk present, give up */
-	if (!DoIO(trackIO) && trackIO->iotd_Req.io_Actual) {
+	if (!DoIO((struct IORequest *) trackIO) && trackIO->iotd_Req.io_Actual) {
 		PRINT(("no disk present, closing ufs\n"));
 		close_ufs();
 		sprintf(stat->disk_type, "%s:%cd%d Dsk?", handler_name,
@@ -282,7 +306,7 @@ int open_ufs()
 	/* check to see if disk in drive is write-protected */
 	trackIO->iotd_Req.io_Command = TD_PROTSTATUS;
 
-	if (!(DoIO(trackIO) && !(trackIO->iotd_Req.io_Error)))
+	if (!(DoIO((struct IORequest *) trackIO) && !(trackIO->iotd_Req.io_Error)))
 		physical_ro = trackIO->iotd_Req.io_Actual;
 	else
 		physical_ro = 0;
@@ -303,22 +327,45 @@ int open_ufs()
 
 	if (env_setup) {
 		env_setup = 0;
-		pmax = ENVIRONMENT->de_BlocksPerTrack * TD_SECTOR *
-		       (ENVIRONMENT->de_HighCyl + 1) * ENVIRONMENT->de_Surfaces;
-
 		tranmask = ~ENVIRONMENT->de_Mask;
-		flags    =  ENVIRONMENT->de_PreAlloc;
+		flags	 =  ENVIRONMENT->de_PreAlloc;
+		temp	 =  ENVIRONMENT->de_SizeBlock * sizeof(long);
+		switch (temp) {
+		     case 512:
+		     case 1024:
+		     case 2048:
+		     case 4096:
+		     case 8192:
+		     case 16384:
+			phys_sectorsize = temp;
+			break;
+		     default:
+			PRINT2(("Invalid RDB sector size of %d\n", temp));
+		}
+		pmax = ENVIRONMENT->de_BlocksPerTrack * phys_sectorsize *
+		       (ENVIRONMENT->de_HighCyl + 1) * ENVIRONMENT->de_Surfaces;
 
 		resolve_symlinks ^= (flags) & 1;
 		case_independent ^= (flags >> 1) & 1;
-		unixflag	 ^= (flags >> 2) & 1;
+		unix_paths	 ^= (flags >> 2) & 1;
 		link_comments	 ^= (flags >> 3) & 1;
 		inode_comments	 ^= (flags >> 4) & 1;
 		og_perm_invert	 ^= (flags >> 5) & 1;
 		minfree		 ^= (flags >> 6) & 1;
 		temp_gmt	  = (flags >> 8) & 255;
 		GMT		  = *((char *) &temp_gmt);
+
+		PRINT(("tm=%x rs=%d ci=%d up=%d lc=%d ",
+			tranmask, ENVIRONMENT->de_Reserved, case_independent,
+			unix_paths, link_comments));
+		PRINT(("ic=%d pi=%d mf=%d gmt=%d\n",
+			inode_comments, og_perm_invert, minfree, temp_gmt));
+
 	}
+
+	/* must be reset for every disk change */
+	superblock_sector = SUPER_BLOCK * 512 / phys_sectorsize;
+
 	return(0);
 }
 
@@ -333,7 +380,7 @@ int close_ufs()
 	if (openerror)
 		PRINT(("Failed to open device.\n"));
 	else if (trackIO)
-		CloseDevice(trackIO);
+		CloseDevice((struct IORequest *) trackIO);
 
 	if (devport) {
 		DeletePort(devport);
@@ -359,7 +406,6 @@ int partition;
 {
 	int	index	   = 0;
 	int	csize 	   = 1;
-	int	sb_boffset = SUPER_BLOCK;
 	int	ssector	   = 0;
 	struct fs *temp_sb;
 
@@ -367,9 +413,10 @@ int partition;
 		fs_partition = 0;
 
 	superblock = NULL;
-	temp_sb = (struct fs *) AllocMem(DEV_BSIZE, MEMF_PUBLIC);
+	temp_sb = (struct fs *) AllocMem(phys_sectorsize, MEMF_PUBLIC);
 	if (temp_sb == NULL) {
-		PRINT(("superblock_read: unable to allocate %d bytes!\n", DEV_BSIZE));
+		PRINT(("superblock_read: unable to allocate %d bytes!\n",
+			phys_sectorsize));
 		return(1);
 	}
 
@@ -389,8 +436,8 @@ int partition;
 			ssector = 240;
 			break;
 	    }
-	    FSIZE = DEV_BSIZE;
-	    if (data_read(temp_sb, sb_boffset, DEV_BSIZE)) {
+	    FSIZE = phys_sectorsize;
+	    if (data_read(temp_sb, superblock_sector, phys_sectorsize)) {
 		PRINT2(("** data read fault for superblock_read\n"));
 		break;
 	    }
@@ -403,24 +450,27 @@ int partition;
 		    PRINT2(("superblock_read: could not allocate %d bytes\n",
 			   FBSIZE));
 		break;
+#ifdef DEBUG
 	    } else {
-		PRINT(("Superblock not found at sector %d\n", ssector + SUPER_BLOCK));
+		PRINT(("Superblock not found at sector %d\n", ssector +
+			superblock_sector));
 	        if ((FBSIZE != 4096)  && (FBSIZE != 8192) &&
 		    (FBSIZE != 16384) && (FBSIZE != 32768))
 			PRINT(("bsize %d ", FBSIZE));
 		PRINT(("\n"));
+#endif
 	    }
-	    poffset += DEV_BSIZE;
+	    poffset += phys_sectorsize;
 	}
 
 	if (superblock == NULL) {
-		FreeMem(temp_sb, DEV_BSIZE);
+		FreeMem(temp_sb, phys_sectorsize);
 		return(1);
 	}
 
-	FSIZE = DEV_BSIZE;
-	data_read(superblock, sb_boffset, FBSIZE);
-	FreeMem(temp_sb, DEV_BSIZE);
+	FSIZE = phys_sectorsize;
+	data_read(superblock, superblock_sector, FBSIZE);
+	FreeMem(temp_sb, phys_sectorsize);
 	FSIZE = DISK32(superblock->fs_fsize);
 
 
@@ -560,9 +610,9 @@ int partition;
 	int ret = 0;
 
 	poffset = ENVIRONMENT->de_LowCyl * ENVIRONMENT->de_Surfaces *
-		  ENVIRONMENT->de_BlocksPerTrack * TD_SECTOR;
+		  ENVIRONMENT->de_BlocksPerTrack * phys_sectorsize;
 
-	FSIZE = DEV_BSIZE;
+	FSIZE = phys_sectorsize;
 
 	if (sun_label_read(partition) && bsd44_label_read(partition))
 		ret = 1;		/* could not read either */
@@ -590,27 +640,25 @@ int new_partition;
 	old_poffset = poffset;
 	poffset = 0;
 
-	rdb = (struct RigidDiskBlock *) AllocMem(TD_SECTOR, MEMF_PUBLIC);
+	rdb = (struct RigidDiskBlock *) AllocMem(phys_sectorsize, MEMF_PUBLIC);
 	if (rdb == NULL) {
-		PRINT(("rdb_label_read: unable to allocate %d bytes!\n", TD_SECTOR));
+		PRINT(("rdb_label_read: unable to allocate %d bytes!\n",
+			phys_sectorsize));
 		return(1);
 	}
 	for (rdb_pos = 0; rdb_pos < RDB_LOCATION_LIMIT; rdb_pos++) {
-	    data_read(rdb, rdb_pos, DEV_BSIZE);
+	    data_read(rdb, rdb_pos, phys_sectorsize);
 	    if (rdb->rdb_ID == IDNAME_RIGIDDISK) {
 		ENVIRONMENT->de_Surfaces = rdb->rdb_Heads;
 		ENVIRONMENT->de_BlocksPerTrack = rdb->rdb_Sectors;
 		ENVIRONMENT->de_LowCyl = 0;
-/*
-		ENVIRONMENT->de_LowCyl = ;
-*/
 		PRINT(("rdb(%d): surf=%d bpt=%d\n", rdb_pos, rdb->rdb_Heads,
 			rdb->rdb_Sectors));
 
 		pblock = (struct PartitionBlock *) rdb;
 		partblk = rdb->rdb_PartitionList;
 		do {
-		    data_read(pblock, partblk, DEV_BSIZE);
+		    data_read(pblock, partblk, phys_sectorsize);
 		    PRINT(("blk=%d name=%*s next=%d\n", partblk,
 			   pblock->pb_DriveName[0], pblock->pb_DriveName + 1,
 			   pblock->pb_Next));
@@ -618,13 +666,13 @@ int new_partition;
 		} while (pblock->pb_Next != -1);
 
 		poffset = ENVIRONMENT->de_LowCyl * ENVIRONMENT->de_Surfaces *
-			  ENVIRONMENT->de_BlocksPerTrack * TD_SECTOR;
-		FreeMem(rdb, TD_SECTOR);
+			  ENVIRONMENT->de_BlocksPerTrack * phys_sectorsize;
+		FreeMem(rdb, phys_sectorsize);
 		return(0);
 	    }
 	}
 
-	FreeMem(rdb, TD_SECTOR);
+	FreeMem(rdb, phys_sectorsize);
 	poffset = old_poffset;
 
 	return(1);
@@ -656,44 +704,46 @@ int new_partition;
 
 	part_off = poffset;
 
-	label = (struct sun_label *) AllocMem(DEV_BSIZE, MEMF_PUBLIC);
+	label = (struct sun_label *) AllocMem(phys_sectorsize, MEMF_PUBLIC);
 	if (label == NULL) {
-		PRINT(("sun_label_read: unable to allocate %d bytes!\n", DEV_BSIZE));
+		PRINT(("sun_label_read: unable to allocate %d bytes!\n",
+			phys_sectorsize));
 		return(1);
 	}
-	if (data_read(label, BOOT_BLOCK, DEV_BSIZE)) {
+	if (data_read(label, BOOT_BLOCK, phys_sectorsize)) {
 		PRINT2(("** data read fault for Sun label\n"));
 		no_Sun_label = 1;
-		FreeMem(label, DEV_BSIZE);
+		FreeMem(label, phys_sectorsize);
 		return(1);
 	}
 
 	poffset = part_off +
 		  DISK32((label->bb_part[new_partition]).fs_start_cyl) *
-		  DISK32(label->bb_heads) * DISK32(label->bb_nspt) * DEV_BSIZE;
+		  DISK32(label->bb_heads) * DISK32(label->bb_nspt) * phys_sectorsize;
 
 	part_end = (ENVIRONMENT->de_HighCyl + 1) * ENVIRONMENT->de_Surfaces *
-		    ENVIRONMENT->de_BlocksPerTrack * TD_SECTOR;
+		    ENVIRONMENT->de_BlocksPerTrack * phys_sectorsize;
 
 	if (DISK32(label->bb_magic) != SunBB_MAGIC) {
 		poffset = part_off;
-		FreeMem(label, DEV_BSIZE);
+		FreeMem(label, phys_sectorsize);
 		no_Sun_label = 1;
 		return(1);
 	}
 
 	if ((label->bb_part[new_partition].fs_size == 0) ||
-	    (DISK32(label->bb_part[new_partition].fs_size) * TD_SECTOR >
+	    (DISK32(label->bb_part[new_partition].fs_size) * phys_sectorsize >
 	     part_end - part_off)) {
 		PRINT(("bad values for Sun disk label partition=%d\n",
 			new_partition));
 		PRINT(("handler_begin=%d handler_end=%d size=%d\n", part_off,
 			part_end, part_end - part_off));
 		PRINT(("part_begin=%d part_end=%d size=%d\n", poffset, poffset +
-			DISK32(label->bb_part[new_partition].fs_size) * TD_SECTOR,
+			DISK32(label->bb_part[new_partition].fs_size) *
+			phys_sectorsize,
 			DISK32(label->bb_part[new_partition].fs_size)));
 		poffset = part_off;
-		FreeMem(label, DEV_BSIZE);
+		FreeMem(label, phys_sectorsize);
 		no_Sun_label = 1;
 		return(1);
 	}
@@ -702,7 +752,7 @@ int new_partition;
 	fs_partition = new_partition;
 	strcat(stat->disk_type, "Sun ");
 
-	FreeMem(label, DEV_BSIZE);
+	FreeMem(label, phys_sectorsize);
 	return(0);
 }
 
@@ -733,20 +783,21 @@ int new_partition;
 	new_partition &= 7;
 	part_off = poffset;
 
-	buffer = (ULONG *) AllocMem(DEV_BSIZE, MEMF_PUBLIC);
+	buffer = (ULONG *) AllocMem(phys_sectorsize, MEMF_PUBLIC);
 
 	if (buffer == NULL) {
-		PRINT(("bsd44_label_read: unable to allocate %d bytes!\n", DEV_BSIZE));
+		PRINT(("bsd44_label_read: unable to allocate %d bytes!\n",
+			phys_sectorsize));
 		return(1);
 	}
 
-	if (rc = data_read(buffer, BOOT_BLOCK, DEV_BSIZE)) {
+	if (rc = data_read(buffer, BOOT_BLOCK, phys_sectorsize)) {
 		PRINT2(("** data read fault for bsd label\n"));
 		no_BSD_label = 1;
 		goto retvalue;
 	}
 
-	for (fs_offset = 0; fs_offset < DEV_BSIZE / sizeof(ULONG); fs_offset++) {
+	for (fs_offset = 0; fs_offset < phys_sectorsize / sizeof(ULONG); fs_offset++) {
 		label = (struct bsd44_label *) (buffer + fs_offset);
 		if ((DISK32(label->bb_magic)  == B44BB_MAGIC) &&
 		    (DISK32(label->bb_magic2) == B44BB_MAGIC))
@@ -757,10 +808,10 @@ int new_partition;
 	goto retvalue;
 
 	good_value:
-	poffset += DISK32(label->bb_part[new_partition].fs_start_sec) * DEV_BSIZE;
+	poffset += DISK32(label->bb_part[new_partition].fs_start_sec) * phys_sectorsize;
 
 	part_end = (ENVIRONMENT->de_HighCyl + 1) * ENVIRONMENT->de_Surfaces *
-		    ENVIRONMENT->de_BlocksPerTrack * TD_SECTOR;
+		    ENVIRONMENT->de_BlocksPerTrack * phys_sectorsize;
 
 	if ((label->bb_part[new_partition].fs_size == 0) ||
 	    (DISK32(label->bb_part[new_partition].fs_size) *
@@ -795,7 +846,7 @@ int new_partition;
 	rc = 0;
 
 	retvalue:
-	FreeMem(buffer, DEV_BSIZE);
+	FreeMem(buffer, phys_sectorsize);
 	return(rc);
 }
 
@@ -849,7 +900,7 @@ int motor_off()
 	trackIO->iotd_Req.io_Command	= TD_MOTOR;
 	trackIO->iotd_Req.io_Flags	= 0x0;	/* Motor status */
 	trackIO->iotd_Req.io_Length	= 0;	/* define 0=off, 1=on */
-	DoIO(trackIO);
+	DoIO((struct IORequest *) trackIO);
 #endif
 }
 
@@ -871,7 +922,7 @@ int motor_on()
 	trackIO->iotd_Req.io_Command	= TD_MOTOR;
 	trackIO->iotd_Req.io_Flags	= 0x0;	/* Motor status */
 	trackIO->iotd_Req.io_Length	= 1;	/* define 0=off, 1=on */
-	DoIO(trackIO);
+	DoIO((struct IORequest *) trackIO);
 #endif
 }
 
@@ -895,7 +946,7 @@ superblock_flush()
 	    superblock->fs_fmod = 0;
 
 	    if (data_write(superblock, lfragno(superblock,
-			   SUPER_BLOCK * DEV_BSIZE), FBSIZE))
+			   superblock_sector * phys_sectorsize), FBSIZE))
 		PRINT2(("** data write fault for superblock"));
 
 	    if (data_write(cgsummary_base, DISK32(superblock->fs_csaddr),
@@ -945,11 +996,13 @@ open_dchange()
 	   TD_REMCHANGEINT packet correctly */
 
 	if (!strcmp(DISK_DEVICE, MESSYDISK)) {
-	    if (OpenDevice(TRACKDISK, DISK_UNIT, dchangeIO, DISK_FLAGS)) {
+	    if (OpenDevice(TRACKDISK, DISK_UNIT, (struct IORequest *) dchangeIO,
+		DISK_FLAGS)) {
 		PRINT(("unable to open dchange device %s\n", DISK_DEVICE));
 		return(1);
 	    }
-	} else if (OpenDevice(DISK_DEVICE, DISK_UNIT, dchangeIO, DISK_FLAGS)) {
+	} else if (OpenDevice(DISK_DEVICE, DISK_UNIT,
+			      (struct IORequest *) dchangeIO, DISK_FLAGS)) {
 	    PRINT(("unable to open dchange device %s\n", DISK_DEVICE));
 	    return(1);
 	}
@@ -963,7 +1016,7 @@ open_dchange()
 	IntData.sigTask = FindTask(0L);
 	IntData.sigMask = 1L << dcsigBit;
 
-	PRINT(("task=%08x mask=%08x\n", IntData.sigTask, IntData.sigMask));
+	PRINT(("Inttask=%08x Intmask=%08x\n", IntData.sigTask, IntData.sigMask));
 
 	/* Init the Node structure to something nice */
 	IntHand.is_Node.ln_Name = "BFFSdiskchange_int";
@@ -979,7 +1032,7 @@ open_dchange()
 
 	SendIO((struct IORequest *) dchangeIO);
 
-	PRINT(("submitted\n"));
+	PRINT(("db request submitted\n"));
 	dcsubmitted = 1;
 	return(0);
 #else
@@ -1009,7 +1062,7 @@ int normal;
 			dcsigBit = 0;
 		}
 
-		CloseDevice(dchangeIO);
+		CloseDevice((struct IORequest *) dchangeIO);
 	}
 
 	if (dchangeIO) {
@@ -1075,5 +1128,5 @@ ffs_oldfscompat()
 	}
 
 
-	PRINT(("masks=%08x %08x\n", fs_lfmask, fs_lbmask));
+	PRINT(("lfmask=%08x lbmask=%08x\n", fs_lfmask, fs_lbmask));
 }

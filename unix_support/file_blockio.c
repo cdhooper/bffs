@@ -1,9 +1,11 @@
 #include <stdio.h>
-#include <sys/types.h>
+#include "sys/types.h"
+
+#undef DEBUG
 
 extern int ifd;
 extern int ofd;
-extern int sectorsize;
+extern int DEV_BSIZE;
 
 /*
  * read a block from the file system
@@ -19,10 +21,11 @@ bread(bf, bno, size)
 {
 	int n;
 
-/*
-printf("bread %d, buf=%x bno=%d size=%d ss=%d\n", ifd, bf, bno, size, sectorsize);
-*/
-	if (lseek(ifd, (off_t)bno * sectorsize, 0) < 0) {
+#ifdef DEBUG
+	printf("bread %d, buf=%x bno=%d size=%d ss=%d\n",
+		ifd, bf, bno, size, DEV_BSIZE);
+#endif
+	if (lseek(ifd, (off_t)bno * DEV_BSIZE, 0) < 0) {
 		printf("seek error: %ld\n", bno);
 		perror("bread");
 		exit(33);
@@ -55,11 +58,12 @@ bwrite(bf, bno, size)
 	if (ofd < 0)
 		return(0);
 
-/*
-printf("bwrite %d, buf=%x bno=%d size=%d ss=%d\n", ofd, bf, bno, size, sectorsize);
-*/
+#ifdef DEBUG
+	printf("bwrite %d, buf=%x bno=%d size=%d ss=%d\n",
+		ofd, bf, bno, size, DEV_BSIZE);
+#endif
 
-	if (lseek(ofd, (off_t)bno * sectorsize, 0) < 0) {
+	if (lseek(ofd, (off_t)bno * DEV_BSIZE, 0) < 0) {
 		printf("seek error: %ld\n", bno);
 		perror("bwrite");
 		exit(35);

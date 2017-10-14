@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "ufs.h"
+#include "superblock.h"
 #include "ufs/inode.h"
 #include "fsmacros.h"
 #include "file.h"
@@ -46,11 +47,8 @@ char	*buf;
 	efrag	= lfragno(superblock, sbyte + nbytes);
 	nffrags	= efrag - sfrag;
 
-
 	PRINT(("sbyte=%d nbytes=%d start=%d:%d end=%d:%d poff=%d\n", sbyte,
 		nbytes, sfrag, spos, efrag, epos, poffset));
-
-
 
 	/* Handle the possibility that the entire read is in one frag */
 	if (sfrag == efrag) {

@@ -1,5 +1,4 @@
 #define MAXFRAG		8	/* superblock frsum count (max frags/block) */
-#define oDEV_BSIZE 512
 
 #include "sys/systypes.h"
 #include "ufs/fs.h"

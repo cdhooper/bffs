@@ -47,7 +47,11 @@ extern int verbose;
 
 pass5()
 {
+#ifdef cdh
+	int c, blk, frags, basesize, sumsize, imapsize, fmapsize, savednrpos;
+#else
 	int c, blk, frags, basesize, sumsize, mapsize, savednrpos;
+#endif
 	register struct fs *fs = &sblock;
 	register struct cg *cg = &cgrp;
 	daddr_t dbase, dmax;
@@ -112,8 +116,15 @@ pass5()
 	case FS_42POSTBLFMT:
 		basesize = (char *)(&ocg->cg_btot[0]) - (char *)(&ocg->cg_link);
 		sumsize = &ocg->cg_iused[0] - (char *)(&ocg->cg_btot[0]);
+#ifdef cdh
+		/*
+		 * XXX: Missing code here looks like a bug -- not sure what
+		 *	should be here because I wrote this 21 years ago!
+		 */
+#else
 		mapsize = &ocg->cg_free[howmany(fs->fs_fpg, NBBY)] -
 			(u_char *)&ocg->cg_iused[0];
+#endif
 		ocg->cg_magic = CG_MAGIC;
 		savednrpos = fs->fs_nrpos;
 		fs->fs_nrpos = 8;
@@ -145,7 +156,12 @@ pass5()
 		newcg->cg_magic = CG_MAGIC;
 		basesize = (int) &newcg->cg_space[0] - (int) (&newcg->cg_link);
 		sumsize = (int) newcg->cg_iusedoff - (int) newcg->cg_btotoff;
+#ifdef cdh
+		imapsize = (int) newcg->cg_freeoff - (int) newcg->cg_iusedoff;
+		fmapsize = (int) newcg->cg_nextfreeoff - (int) newcg->cg_freeoff;
+#else
 		mapsize = (int) newcg->cg_nextfreeoff - (int) newcg->cg_iusedoff;
+#endif
 		break;
 
 	default:
@@ -196,8 +212,13 @@ pass5()
 		else
 			newcg->cg_irotor = 0;
 		bzero((char *)&newcg->cg_frsum[0], sizeof newcg->cg_frsum);
+#ifdef cdh
+		bzero((char *)&cg_blktot(newcg)[0],
+		      (size_t)(sumsize + imapsize + fmapsize));
+#else
 		bzero((char *)&cg_blktot(newcg)[0],
 		      (size_t)(sumsize + mapsize));
+#endif
 		if (fs->fs_postblformat == FS_42POSTBLFMT)
 			ocg->cg_magic = CG_MAGIC;
 		j = fs->fs_ipg * c;
@@ -300,14 +321,34 @@ pass5()
 			continue;
 		}
 
+#ifdef cdh
+		if (bcmp(cg_inosused(newcg), cg_inosused(cg), imapsize) != 0) {
+		    bprnt(cg_inosused(newcg), cg_inosused(cg), imapsize, 'I');
+		    if (dofix(&idesc[1], "BLK(S) MISSING IN CG INODE BIT MAPS")) {
+			bcopy(cg_inosused(newcg), cg_inosused(cg),
+			      (size_t)imapsize);
+			cgdirty();
+		    }
+		}
+
+		if (bcmp(cg_blksfree(newcg), cg_blksfree(cg), fmapsize) != 0) {
+		    bprnt(cg_blksfree(newcg), cg_blksfree(cg), fmapsize, 'I');
+		    if (dofix(&idesc[1], "BLK(S) MISSING IN CG FRAG BIT MAPS")) {
+			bcopy(cg_blksfree(newcg), cg_blksfree(cg),
+			      (size_t)fmapsize);
+			cgdirty();
+		    }
+		}
+#else
 		if (bcmp(cg_inosused(newcg), cg_inosused(cg), mapsize) != 0) {
 		    bprnt(cg_inosused(newcg), cg_inosused(cg), mapsize, 'I');
-		    if (dofix(&idesc[1], "BLK(S) MISSING IN CG INODE BIT MAPS")) {
+		    if (dofix(&idesc[1], "BLK(S) MISSING IN CG INODE/FRAG BIT MAPS")) {
 			bcopy(cg_inosused(newcg), cg_inosused(cg),
 			      (size_t)mapsize);
 			cgdirty();
 		    }
 		}
+#endif
 
 		newcg->cg_time = cg->cg_time;
 		if (bcmp((char *)newcg, (char *)cg, basesize) != 0) {
@@ -359,21 +400,34 @@ unsigned char *ptr2;
 int size;
 char ch;
 {
-	int index;
+	register int index;
 
 	if (!verbose)
 		return(1);
 
+#ifdef REVERSE
+	printf("%c  ondisk:", ch);
+	for (ptr1 += size, index = 0; index < size; index++) {
+		printf("%02x", ((int) (*ptr1)) & 255);
+		ptr1--;
+	}
+	printf("\n%ccomputed:", ch);
+	for (ptr2 += size, index = 0; index < size; index++) {
+		printf("%02x", ((int) (*ptr2)) & 255);
+		ptr2--;
+	}
+#else
 	printf("%c  ondisk:", ch);
 	for (index = 0; index < size; index++) {
-		printf("%02x", ((int) *ptr2) & 255);
-		ptr2++;
+		printf("%02x", ((int) (*ptr1)) & 255);
+		ptr1++;
 	}
 	printf("\n%ccomputed:", ch);
 	for (index = 0; index < size; index++) {
-		printf("%02x", ((int) *ptr1) & 255);
-		ptr1++;
+		printf("%02x", ((int) (*ptr2)) & 255);
+		ptr2++;
 	}
+#endif
 	printf("\n");
 	return(1);
 }

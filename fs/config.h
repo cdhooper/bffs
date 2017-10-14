@@ -57,7 +57,7 @@ unsigned int	disk32();
 #else MOTOROLA
 /* Big Endian is straight-forward on this architecture */
 #	define	DISK16(x)	x
-#	define	DISK32(x, y)	x
+#	define	DISK32(x)	x
 #	define	DISK64(x)	x.val[1]
 #	define	DISK64SET(x,y)	x.val[1] = y
 #	define	IC_SIZE(inode) (inode->ic_size.val[1])

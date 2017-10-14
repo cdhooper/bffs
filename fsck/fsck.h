@@ -215,8 +215,8 @@ void getblk();
 ino_t allocino();
 int findino();
 
-#define DEV_BSIZE 512
-#define DEV_BSHIFT 9
+extern int DEV_BSIZE;
+extern int DEV_BSHIFT;
 
 /* #define S32(x) (x.val[1]) */
 #define btodb(bytes)                    /* calculates (bytes / DEV_BSIZE) */ \

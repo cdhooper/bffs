@@ -2,6 +2,7 @@
 #include <dos30/dos.h>
 
 #include "config.h"
+#include "superblock.h"
 #include "ufs.h"
 #include "ufs/inode.h"
 #include "ufs/dir.h"
@@ -28,7 +29,7 @@ extern int case_independent;	/* 1=case independent dir name searches */
  *		Read directory, one block at a time
  *		If at beginning of block and inode=0, add file there
  *		If reclen of new entry < (reclen of current - actual)
- *			adjuct reclen of current, add entry after current,
+ *			adjust reclen of current, add entry after current,
  *			size = remainder
  *		If entire dir full, call allocate routine for another block
  *			near last dir block allocated.
@@ -70,49 +71,91 @@ int	type;
 		return(0);
 	}
 
+#undef DIR_DEBUG
+#ifdef DIR_DEBUG
 	PRINT(("name='%s' len=%d needed=%d ", name, strlen(name), needed));
+#endif
 
 	fblks = (IC_SIZE(pinode) + FSIZE - 1) / FSIZE;
 	spill =  IC_SIZE(pinode)              % FSIZE;
 
-	PRINT(("cre: fblks=%d dblks=%d fblks=%d pinum=%d\n", fblks,
-		IC_SIZE(pinode), DISK32(pinode->ic_blocks), pinum));
+#ifdef DIR_DEBUG
+	PRINT(("cre: fblks=%d spill=%d dblks=%d icblks=%d pinum=%d\n", fblks,
+		spill, IC_SIZE(pinode), DISK32(pinode->ic_blocks), pinum));
+#endif
 
 	for (blk = 0; blk < fblks; blk++) {
-/*	    PRINT(("_")); */
+#ifdef DIR_DEBUG
+	    PRINT(("_"));
+#endif
 	    buf     = cache_frag(ridisk_frag(blk, pinode = inode_read(pinum)));
 	    if (buf == NULL)
 		break;
 	    current = (struct direct *) buf;
 	    bend   = (struct direct *) (buf + ((blk < fblks - 1) ? FSIZE :
 			(spill ? spill : FSIZE)));
+#ifdef DIR_DEBUG
+	    PRINT(("current=%p bend=%p\n", current, bend));
+#endif
 	    while (current < bend) {
-/*		PRINT((":%s", current->d_name)); */
+#ifdef DIR_DEBUG
+		PRINT((":%s", current->d_name));
+#endif
 		if ((DISK16(current->d_reclen) - DIRSIZ(current)) > needed) {
 		    buf = cache_frag_write(ridisk_frag(blk, pinode), 1);
 		    if (buf == NULL)
 			break;
-		    goto breakloop;
+		    /* otherwise, we found a place to put new name */
+		    oldsize = DISK16(current->d_reclen);
+		    current->d_reclen = DISK16(DIRSIZ(current));
+		    oldsize -= DISK16(current->d_reclen);
+		    current = (struct direct *) ((char *) current +
+			DISK16(current->d_reclen));
+		    goto finish_success;
 		}
 #ifndef FAST
-		if (DISK16(current->d_reclen) > DIRBLKSIZ)
+		if (DISK16(current->d_reclen) > DIRBLKSIZ) {
+			PRINT2(("INCON: directory corrupt - reclen %d > %d\n",
+				DISK16(current->d_reclen), DIRBLKSIZ));
 			return(0);
+		}
 #endif
 		current = (struct direct *) ((char *) current +
 			   DISK16(current->d_reclen));
 	    }
 	}
 
-/*	PRINT(("\n")); */
+#ifdef DIR_DEBUG
+	PRINT(("\n"));
+#endif
 
-	/* if we've searched all directory blocks and no space is available,
-	   then we must allocate another frag to the directory. */
-	newfrag = frag_expand(pinum);
-	if (newfrag == 0) {
+	if (spill != 0) {
+	    /*
+	     * No space is available in all directory blocks, but there is
+	     * space in the frag for at least one more directory block.
+	     * Update the inode to expand the directory.
+	     */
+	    pinode = inode_modify(pinum);
+	    PRINT(("inum %d size=%d blocks=%d",
+		   pinum, IC_SIZE(pinode), DISK32(pinode->ic_blocks)));
+	    IC_INCSIZE(pinode, FSIZE - spill);
+	    PRINT((" -> size=%d blocks=%d\n",
+		   IC_SIZE(pinode), DISK32(pinode->ic_blocks)));
+	    blk = fblks - 1;
+	    newfrag = ridisk_frag(blk, pinode);
+	    buf = cache_frag_write(newfrag, 1);
+	} else {
+	    /*
+	     * Searched all directory blocks and no space is available.
+	     * We must allocate another frag to the directory.
+	     */
+	    newfrag = frag_expand(pinum);
+	    if (newfrag == 0) {
 		PRINT(("No space left in dir!\n"));
 		return(0);
+	    }
+	    buf = cache_frag_write(newfrag, 0);
 	}
-	buf = cache_frag_write(newfrag, 0);
 
 #ifndef FAST
 	if (buf == NULL) {
@@ -120,28 +163,24 @@ int	type;
 		return(0);
 	}
 #endif
-	PRINT(("fragfilling %d\n", newfrag));
-	dir_fragfill(0, buf);
-	current = (struct direct *) buf;
+	dir_fragfill(spill, buf);
+	current = (struct direct *) (buf + spill);
+	oldsize = DIRBLKSIZ;
+	goto finish_success;
+
+#if 0
 	strcpy(current->d_name, name);
 	current->d_ino    = DISK32(inum);
+	current->d_reclen = DISK16(oldsize);
 	current->d_namlen = strlen(name);
 	if (bsd44fs)
 		current->d_type  = type;
 	else
 		current->d_type  = 0;		/* dir type unknown now */
-	PRINT(("returning %d\n", FSIZE * blk));
-	return(FSIZE * blk);
+	return(FSIZE * blk + spill);
+#endif
 
-
-	/* otherwise, we found a place to put new name */
-	breakloop:
-	oldsize = DISK16(current->d_reclen);
-	current->d_reclen = DISK16(DIRSIZ(current));
-	oldsize -= DISK16(current->d_reclen);
-	current = (struct direct *) ((char *) current +
-		   DISK16(current->d_reclen));
-
+finish_success:
 	strcpy(current->d_name, name);
 	current->d_ino    = DISK32(inum);
 	current->d_reclen = DISK16(oldsize);
@@ -234,7 +273,8 @@ int	check;
 		last = current;
 #ifndef FAST
 		if (DISK16(current->d_reclen) > DIRBLKSIZ) {
-			PRINT2(("INCON: directory corrupt - DIRBLKSIZ > 512\n"));
+			PRINT2(("INCON: directory corrupt - DIRBLKSIZ > %d\n",
+				DIRBLKSIZ));
 			return(0);
 		}
 #endif
@@ -279,13 +319,17 @@ int	check;
 	}
 #endif
 	if (last == NULL) { /* at beginning */
+/*
 		PRINT(("%d is at beginning %s\n", inum, current->d_name));
+*/
 		current->d_ino = 0;
 	} else {
+/*
 		PRINT(("%d is in middle: last=%d(%d)%s current=%d(%d)%s\n",
 			inum, DISK16(last->d_reclen), DISK32(last->d_ino),
 			last->d_name, DISK16(current->d_reclen),
 			DISK32(current->d_ino), current->d_name));
+*/
 
 #ifndef FAST
 		if (DISK16(current->d_reclen) > DIRBLKSIZ)
@@ -350,7 +394,9 @@ int	type;
 	if (isdir)
 	    while (inum != 2) {
 		inum = dir_name_search(inum, "..");
+/*
 		PRINT2(("ltp inum=%d\n", inum));
+*/
 		if (inum == inumfrom) {
 			PRINT2(("rename: attempted to put parent %d in child %d\n",
 				toinum, inumfrom));
@@ -360,7 +406,7 @@ int	type;
 
 	if (offsetto = dir_create(toinum, toname, inumfrom, type))
 	    if ((inum = dir_offset_delete(frominum, offsetfrom, 0)) == 0) {
-		PRINT2(("bummer, can't delete old %s, deleting new\n", toname));
+		PRINT2(("dr: ** can't delete old %s, deleting new\n", toname));
 		dir_offset_delete(toinum, offsetto, 1);
 	    } else
 		return(inum);
@@ -436,19 +482,17 @@ ULONG tinum;
  * 	warning - this routine will modify the last frag in a dir block
  *	to have blank directory entries starting at the spill position.
  */
-dir_fragfill(spill, buf)
-int	spill;
-struct	direct	*buf;
+dir_fragfill(int spill, char *buf)
 {
-	int	index;
+	int index;
 
-	for (index = spill; index < FSIZE / DIRBLKSIZ; index++) {
-		buf->d_ino    = 0;
-		buf->d_namlen = 0;
-		buf->d_type   = 0;
-		buf->d_reclen = DISK16(DIRBLKSIZ);
-		buf->d_name[0]= '\0';
-		buf = (struct direct *) (((char *) buf) + DIRBLKSIZ);
+	for (index = spill; index < FSIZE; index += DIRBLKSIZ) {
+		struct direct *ptr = (struct direct *) (buf + index);
+		ptr->d_ino     = 0;
+		ptr->d_namlen  = 0;
+		ptr->d_type    = 0;
+		ptr->d_reclen  = DISK16(DIRBLKSIZ);
+		ptr->d_name[0] = '\0';
 	}
 }
 #endif
@@ -571,10 +615,10 @@ char	*name;
 	spill =  IC_SIZE(pinode)              % FSIZE;
 
 	for (blk = 0; blk < fblks; blk++) {
-	    PRINT(("_"));
+/*	    PRINT(("_")); */
 	    buf    = cache_frag(ridisk_frag(blk, pinode = inode_read(pinum)));
 	    if (buf == NULL) {
-		PRINT2(("cache gave null buffer\n"));
+		PRINT2(("** INCON: cache gave null buffer\n"));
 		break;
 	    }
 	    dirent = (struct direct *) buf;
@@ -589,12 +633,13 @@ char	*name;
 		}
 #ifndef FAST
 		if (DISK16(dirent->d_reclen) > DIRBLKSIZ) {
-			PRINT2(("\n** dir reclen %d > BLKSIZ\n",
+			PRINT2(("** dir reclen %d > BLKSIZ\n",
 				DISK16(dirent->d_reclen)));
 			return(0);
 		}
 		if (dirent->d_reclen == 0) {
-			PRINT2(("** panic, dir record size 0\n"));
+			PRINT2(("** panic, dir record size 0 at offset %d\n",
+				(ULONG)((char *)dirent - buf)));
 			return(0);
 		}
 #endif
@@ -713,7 +758,7 @@ ULONG	offset;
 	}
 
 	if (ptr = cache_frag(frag))
-		return(ptr + (offset % FSIZE));
+		return((struct direct *) (ptr + (offset % FSIZE)));
 	else {
 		PRINT2(("** cache did not give dir_next frag %d\n", frag));
 		return(NULL);
