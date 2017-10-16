@@ -16,6 +16,8 @@
 #include <libraries/dos.h>
 #include <dos/dosextens.h>
 #include <dos/filehandler.h>
+#include <clib/alib_protos.h>
+#include <clib/exec_protos.h>
 #include <exec/memory.h>
 #include <devices/hardblocks.h>
 
@@ -33,7 +35,7 @@ void break_abort();
 ULONG chars_to_long();
 
 struct	IOExtTD *trackIO = NULL; /* device packet pointer */
-ULONG devport = NULL; /* device communication port */
+struct  MsgPort *devport = NULL; /* device communication port */
 
 char	*version = "\0$VER: rdb 1.1 (20.Jan.94) © 1994 Chris Hooper";
 
@@ -91,7 +93,7 @@ struct RigidDiskBlock newrigid =
 	-1,					/* WritePreComp		*/
 	-1,					/* ReducedWrite		*/
 	-1,					/* StepRate		*/
-	0,0,0, 0,0				/* Reserved3[5]		*/
+	0,0,0, 0,0,				/* Reserved3[5]		*/
 	0,					/* RDBBlocksLo		*/
 	67,					/* RDBBlocksHi		*/
 	1,					/* LoCylinder		*/
@@ -118,7 +120,7 @@ struct PartitionBlock newpart =
 	0,					/* Flags	*/
 	0, 0,					/* Reserved1[2]	*/
 	0,					/* DevFlags	*/
-	"\004XXXX"				/* DriveName	*/
+	"\004XXXX",				/* DriveName	*/
 	0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,	/* Reserved2[15]*/
 	17,					/* TableSize	*/
 	128,					/* SizeBlock	*/
@@ -137,7 +139,7 @@ struct PartitionBlock newpart =
 	0xfffffffe,				/* Mask		*/
 	0,					/* BootPri	*/
 	0x58585858,  /* 'XXXX' */		/* DosType	*/
-	0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,	/* EReserved[15]*/
+	0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0		/* EReserved[15]*/
 };
 
 #define PART	0
@@ -182,10 +184,10 @@ struct accept_info {
 	"ControllerVendor",	47,	 STR,	0,	RIGID,
 	"ControllerProduct",	49,	 STR,	0,	RIGID,
 	"ControllerRev",	53,	 STR,	0,	RIGID,
-	"Next",			4,	 INT,  	0,	PART,
-	"Flags",		5,	 INT,  	0,	PART,
-	"DevFlags",		8,	 INT,  	0,	PART,
-	"DriveName",		9,	 STR,  	0,	PART,
+	"Next",			4,	 INT,	0,	PART,
+	"Flags",		5,	 INT,	0,	PART,
+	"DevFlags",		8,	 INT,	0,	PART,
+	"DriveName",		9,	 STR,	0,	PART,
 	"Surfaces",		32 + 3,  INT,	0,	PART,
 	"BlocksPerTrack",	32 + 5,  INT,	0,	PART,
 	"Reserved",		32 + 6,  INT,	0,	PART,
@@ -199,7 +201,7 @@ struct accept_info {
 	"Mask",			32 + 14, INT,	0,	PART,
 	"BootPri",		32 + 15, INT,	0,	PART,
 	"DosType",		32 + 16, INT,	0,	PART,
-	NULL,			NULL,	 NULL,	NULL,	NULL
+	NULL,			0,	 0,	0,	0
 };
 
 main(argc, argv)
@@ -378,12 +380,13 @@ char *argv[];
 		close_device();
 		exit(1);
 	}
-	rdb  = (struct RigidDiskBlock *) (buffer + TD_SECTOR * 0);
-	part = (struct RigidDiskBlock *) (buffer + TD_SECTOR * 1);
-	fs   = (struct RigidDiskBlock *) (buffer + TD_SECTOR * 2);
-	seg  = (struct RigidDiskBlock *) (buffer + TD_SECTOR * 3);
-	bad  = (struct RigidDiskBlock *) (buffer + TD_SECTOR * 4);
-	ppart= (struct RigidDiskBlock *) (buffer + TD_SECTOR * 4); /* same */
+	rdb   = (struct RigidDiskBlock *)     (buffer + TD_SECTOR * 0);
+	part  = (struct PartitionBlock *)     (buffer + TD_SECTOR * 1);
+	fs    = (struct FileSysHeaderBlock *) (buffer + TD_SECTOR * 2);
+	seg   = (struct LoadSegBlock *)       (buffer + TD_SECTOR * 3);
+	bad   = (struct BadBlockBlock *)      (buffer + TD_SECTOR * 4);
+	ppart = (struct PartitionBlock *)     (buffer + TD_SECTOR * 4);
+	/* Note that "ppart" shares the same RDB position as "bad" */
 
 	for (index = 0; index < RDB_LOCATION_LIMIT; index++) {
 		blk_read(rdb, index);
@@ -414,7 +417,7 @@ char *argv[];
 open_device()
 {
 	/* create port to use when talking with handler */
-	devport = CreatePort(0, 0);
+	devport = CreatePort(NULL, 0);
 	if (devport)
 		trackIO = (struct IOExtTD *)
 			CreateExtIO(devport, sizeof(struct IOExtTD));
@@ -428,11 +431,12 @@ open_device()
 		return(1);
 	}
 
-	if (OpenDevice(disk_device, disk_unit, trackIO, disk_flags)) {
+	if (OpenDevice(disk_device, disk_unit, (struct IORequest *)trackIO,
+			disk_flags)) {
 		fprintf(stderr, "fatal: Unable to open %s unit %d.\n",
 			disk_device, disk_unit);
 		DeletePort(devport);
-		DeleteExtIO(trackIO);
+		DeleteExtIO((struct IORequest *)trackIO);
 		return(1);
 	}
 
@@ -443,16 +447,15 @@ open_device()
 close_device()
 {
 	if (trackIO)
-		CloseDevice(trackIO);
+		CloseDevice((struct IORequest *)trackIO);
 	if (devport)
 		DeletePort(devport);
 	if (trackIO)
-		DeleteExtIO(trackIO);
+		DeleteExtIO((struct IORequest *)trackIO);
 }
 
-blk_read(buf, blk)
-char	*buf;
-ULONG	blk;
+long
+blk_read(void *buf, ULONG blk)
 {
 	if (blk > maxaccess)
 		maxaccess = blk;
@@ -461,12 +464,11 @@ ULONG	blk;
 	trackIO->iotd_Req.io_Length = TD_SECTOR;	/* one sector */
 	trackIO->iotd_Req.io_Offset = TD_SECTOR * blk;	/* sector addr */
 	trackIO->iotd_Req.io_Data = buf;		/* memory addr */
-	return(DoIO(trackIO));
+	return (DoIO((struct IORequest *)trackIO));
 }
 
-blk_write(buf, blk)
-char	*buf;
-ULONG	blk;
+long
+blk_write(void *buf, ULONG blk)
 {
 	if (blk > maxaccess)
 		maxaccess = blk;
@@ -475,7 +477,7 @@ ULONG	blk;
 	trackIO->iotd_Req.io_Length = TD_SECTOR;	/* one sector */
 	trackIO->iotd_Req.io_Offset = TD_SECTOR * blk;	/* sector addr */
 	trackIO->iotd_Req.io_Data = buf;		/* memory addr */
-	return(DoIO(trackIO));
+	return (DoIO((struct IORequest *)trackIO));
 }
 
 
@@ -894,11 +896,12 @@ print_bad_blocks()
 	printf("\n");
 }
 
-chksum(buf)
-LONG *buf;
+LONG
+chksum(void *ptr)
 {
 	LONG size;
 	LONG csum = 0;
+	LONG *buf = (LONG *) ptr;
 
 	size = buf[1];
 	if (size > (TD_SECTOR >> 2)) {
@@ -912,14 +915,13 @@ LONG *buf;
 	return(csum);
 }
 
-fixsum(buf, blk)
-LONG *buf;
-ULONG blk;
+int
+fixsum(void *ptr, ULONG blk)
 {
 	LONG *temp;
 	LONG size;
-	LONG old;
 	LONG csum = 0;
+	LONG *buf = (LONG *) ptr;
 
 	temp = buf;
 	size = buf[1];
@@ -939,6 +941,7 @@ ULONG blk;
 		fprintf(stderr, "fixed checksum could not be written!\n");
 		return(1);
 	}
+	return (0);
 }
 
 getans()
@@ -969,10 +972,8 @@ getans()
 	return(ret);
 }
 
-int dofix(buf, blk, name)
-char *buf;
-ULONG blk;
-ULONG name;
+int
+dofix(void *buf, ULONG blk, ULONG name)
 {
 	if (autofix) {
 		printf("fixing block %d\n", blk);
@@ -1024,7 +1025,7 @@ rigid_operation()
 
 		if (accept[index].type == STR) { /* it's a string */
 		    name = (char *) &((ULONG *) rdb)[accept[index].offset];
-		    newname = &((ULONG *) &newrigid)[accept[index].offset];
+		    newname = (char *) &((ULONG *) &newrigid)[accept[index].offset];
 
 		    if (bstr)
 			printf(" %.*s to %s?\n", name[0], name + 1, newname);
@@ -1098,7 +1099,7 @@ int parent;
 
 		if (accept[index].type == STR) {	/* it's a string */
 		    name = (char *) &((ULONG *) part)[accept[index].offset];
-		    newname = &((ULONG *) &newpart)[accept[index].offset];
+		    newname = (char *) &((ULONG *) &newpart)[accept[index].offset];
 
 		    if (bstr)
 			printf(" %.*s to %s?\n", name[0], name + 1, newname);
@@ -1146,9 +1147,6 @@ int parent;
 			2. Point this partition's Next to newchild
 			3. Point rdb at this partition
 		*/
-		int newchild;
-		int oldchild;
-
 		printf("promote partition?\n");
 		switch(getans()) {
 		    case NO:
@@ -1257,7 +1255,7 @@ char *name;
 			return(1);
 		}
 		memcpy(current, seg, TD_SECTOR);
-		current->lsb_Next = NULL;
+		current->lsb_Next = (ULONG) NULL;
 
 		if (parent == NULL)
 			start = current;

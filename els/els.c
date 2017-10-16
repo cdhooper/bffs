@@ -196,11 +196,8 @@ char *argv[];
 listname(name)
 char *name;
 {
-	ulong lock;
 	struct FileInfoBlock *fib;
 	struct Lock *lock;
-	int ret;
-	int temp;
 	ulong fmode = 0;
 
 	max_namelength = 1;
@@ -506,9 +503,7 @@ ulong plock;
 struct FileInfoBlock *pfib;
 char *name;
 {
-	ulong lock;
 	ulong fmode = 0;
-	struct FileInfoBlock *fib;
 	char buf[1024];
 	char ec = '\0';
 	char *ptr;
@@ -559,8 +554,6 @@ print_amiga_rwx(p, x)
 ulong p;
 char x;
 {
-	char pchar;
-
 	putchar(p & FIBF_READ        ? '-' : 'r');
 
 	if (p & FIBF_DELETE)
@@ -691,7 +684,7 @@ ulong	*mode;
 	struct Lock		*dlock;
 	char			buf[512];
 
-	msgport = (struct Process *) DeviceProc(name, NULL);
+	msgport = (struct MsgPort *) DeviceProc(name, NULL);
 	if (msgport == NULL)
 		return(1);
 
@@ -720,7 +713,7 @@ ulong	*mode;
 	packet->sp_Pkt.dp_Link         = &(packet->sp_Msg);
 	packet->sp_Pkt.dp_Port         = replyport;
 	packet->sp_Pkt.dp_Type         = ACTION_GET_PERMS;
-	packet->sp_Pkt.dp_Arg1         = dlock;
+	packet->sp_Pkt.dp_Arg1         = (ULONG) dlock;
 	packet->sp_Pkt.dp_Arg2         = CTOB(buf);
 
 	PutMsg(msgport, (struct Message *) packet);
@@ -750,10 +743,8 @@ printf("file=%s perms=%o\n", name, *mode);
  * which = 3 for last inode change
  * which = 5 for last access
  */
-int GetTimes(name, which, timevalue)
-char	*name;
-int	which;
-ulong	*timevalue;
+int
+GetTimes(char *name, int which, struct timeval *timevalue)
 {
 	int			err = 0;
 	struct MsgPort		*msgport;
@@ -766,7 +757,7 @@ ulong	*timevalue;
 printf("GetTimes %s %d %d\n", name, which, timevalue);
 */
 
-	msgport = (struct Process *) DeviceProc(name, NULL);
+	msgport = (struct MsgPort *) DeviceProc(name, NULL);
 	if (msgport == NULL)
 		return(1);
 
@@ -796,7 +787,7 @@ printf("GetTimes %s %d %d\n", name, which, timevalue);
 	packet->sp_Pkt.dp_Port         = replyport;
 	packet->sp_Pkt.dp_Type         = ACTION_SET_TIMES;
 	packet->sp_Pkt.dp_Arg1         = which;
-	packet->sp_Pkt.dp_Arg2         = dlock;
+	packet->sp_Pkt.dp_Arg2         = (ULONG) dlock;
 	packet->sp_Pkt.dp_Arg3         = CTOB(buf);
 	packet->sp_Pkt.dp_Arg4         = (ULONG) timevalue;
 

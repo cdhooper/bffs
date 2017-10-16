@@ -20,10 +20,7 @@ char *version = "\0$VER: echmod 1.0 (11.Aug.96) © 1996 Chris Hooper";
 
 #include <sys/dir.h>
 
-/* #include </ucbinclude/sys/types.h> /* utimes, chown, mknod, mkfifo */
-#include </ucbinclude/sys/stat.h>  /* chmod, mknod, mkfifo */
-/* #include </ucbinclude/sys/time.h>  /* utimes */
-
+#include </ucbinclude/sys/stat.h>    /* chmod, mknod, mkfifo */
 #include </ucbinclude/ufs/dinode.h>  /* inode info */
 
 /* Amiga includes */
@@ -535,7 +532,7 @@ ulong	mode;
 	struct Lock		*dlock;
 	char			buf[512];
 
-	msgport = (struct Process *) DeviceProc(name, NULL);
+	msgport = (struct MsgPort *) DeviceProc(name, NULL);
 	if (msgport == NULL)
 		return(1);
 
@@ -564,7 +561,7 @@ ulong	mode;
 	packet->sp_Pkt.dp_Link         = &(packet->sp_Msg);
 	packet->sp_Pkt.dp_Port         = replyport;
 	packet->sp_Pkt.dp_Type         = ACTION_SET_PERMS;
-	packet->sp_Pkt.dp_Arg1         = dlock;
+	packet->sp_Pkt.dp_Arg1         = (ULONG) dlock;
 	packet->sp_Pkt.dp_Arg2         = CTOB(buf);
 	packet->sp_Pkt.dp_Arg3         = mode;
 
@@ -597,7 +594,7 @@ ulong	*mode;
 	struct Lock		*dlock;
 	char			buf[512];
 
-	msgport = (struct Process *) DeviceProc(name, NULL);
+	msgport = (struct MsgPort *) DeviceProc(name, NULL);
 	if (msgport == NULL)
 		return(1);
 
@@ -626,7 +623,7 @@ ulong	*mode;
 	packet->sp_Pkt.dp_Link         = &(packet->sp_Msg);
 	packet->sp_Pkt.dp_Port         = replyport;
 	packet->sp_Pkt.dp_Type         = ACTION_GET_PERMS;
-	packet->sp_Pkt.dp_Arg1         = dlock;
+	packet->sp_Pkt.dp_Arg1         = (LONG) dlock;
 	packet->sp_Pkt.dp_Arg2         = CTOB(buf);
 
 	PutMsg(msgport, (struct Message *) packet);

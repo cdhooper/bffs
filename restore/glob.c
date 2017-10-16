@@ -340,7 +340,9 @@ globtilde(pattern, patbuf, pglob)
 	Char *patbuf;
 	glob_t *pglob;
 {
+#ifndef AMIGA
 	struct passwd *pwd;
+#endif
 	char *h;
 	const Char *p;
 	Char *b;
@@ -581,7 +583,11 @@ glob3(pathbuf, pathend, pattern, restpattern, pglob)
 	 * and dirent.h as taking pointers to differently typed opaque
 	 * structures.
 	 */
+#ifdef cdh
+	struct dirent *(*readdirfunc)(void *);
+#else
 	struct dirent *(*readdirfunc)();
+#endif
 
 	*pathend = EOS;
 	errno = 0;

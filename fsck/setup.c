@@ -80,7 +80,9 @@ setup(dev)
 	long bmapsize;
 	struct disklabel *lp;
 	off_t sizepb;
+#ifndef AMIGA
 	struct stat statb;
+#endif
 	struct fs proto;
 
 #ifdef AMIGA

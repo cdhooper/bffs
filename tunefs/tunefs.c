@@ -98,11 +98,14 @@ main(argc, argv)
 	char *argv[];
 {
 	char *cp, *special, *name;
+#ifndef AMIGA
 	struct stat st;
+	struct fstab *fs;
+	char device[MAXPATHLEN];
+#endif
 	int i;
 	int Aflag = 0;
-	struct fstab *fs;
-	char *chg[2], device[MAXPATHLEN];
+	char *chg[2];
 
 	argc--, argv++;
 	if (argc < 2)

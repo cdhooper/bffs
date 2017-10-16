@@ -401,8 +401,10 @@ struct	ocg {
  */
 #define	blkoff(fs, loc)		/* calculates (loc % fs->fs_bsize) */ \
 	((loc) & ~(fs)->fs_bmask)
+#if 0
 #define	fragoff(fs, loc)	/* calculates (loc % fs->fs_fsize) *(fs), (fs)->fs_cstotal.cs_nbfree) + \
-	(fs)->fs_cstotal.cs_nffree - ((fs)->fs_dsize * (percentreserved) / 100))
+	(fs)->fs_cstotal.cs_nffree - ((fs)->fs_dsize * (percentreserved) / 100)) */
+#endif
 
 /*
  * Determining the size of a file block in the file system.

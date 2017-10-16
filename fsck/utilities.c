@@ -521,6 +521,18 @@ dofix(idesc, msg)
 	/* NOTREACHED */
 }
 
+#ifndef lint
+/*
+ * Stub for routines from kernel.
+ */
+panic(s)
+	char *s;
+{
+	pfatal("INTERNAL INCONSISTENCY:");
+	errexit(s);
+}
+
+#endif
 /* VARARGS1 */
 errexit(s1, s2, s3, s4)
 	char *s1;
@@ -566,16 +578,3 @@ pwarn(s, a1, a2, a3, a4, a5, a6)
 		printf("%s: ", cdevname);
 	printf(s, a1, a2, a3, a4, a5, a6);
 }
-
-#ifndef lint
-/*
- * Stub for routines from kernel.
- */
-panic(s)
-	char *s;
-{
-
-	pfatal("INTERNAL INCONSISTENCY:");
-	errexit(s);
-}
-#endif

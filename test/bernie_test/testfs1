@@ -1,0 +1,14 @@
+lab again
+Failat 65535
+Copy TEST:File TEST:File.2 All Quiet Clone Noreq
+Wait 60
+Delete Test:File All Quiet
+Wait 30
+MakeLink Test:file Test:file.2 hard force
+Makelink test:filesoft test:file.2 soft force
+Wait 30
+Delete TEST:file quiet
+Delete TEST:filesoft quiet
+Move TEST:File.2 TEST:File
+Wait 4
+Skip back again

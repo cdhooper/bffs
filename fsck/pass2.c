@@ -48,6 +48,12 @@ static char *rcsid = "$Id: pass2.c,v 1.6.2.1 1994/11/07 22:14:32 cgd Exp $";
 #define MINDIRSIZE	(sizeof (struct dirtemplate))
 
 int	pass2check(), blksort();
+#ifdef cdh
+int	pass2check();
+int	blksort(struct inoinfo **inpp1, struct inoinfo **inpp2);
+#else
+int	pass2check(), blksort();
+#endif
 
 pass2()
 {

@@ -130,9 +130,9 @@ iblock(idesc, ilevel, isize)
 	register daddr_t *ap;
 	register daddr_t *aplim;
 	register struct bufarea *bp;
-	int i, n, (*func)(), nif;
+	int i, n, (*func)(void *), nif;
 	unsigned long sizepb;
-	extern int dirscan(), pass1check();
+	extern int dirscan(), pass1check(struct inodesc *);
 	char *buf;
 
 	if (idesc->id_type == ADDR) {
@@ -453,8 +453,8 @@ pinode(ino)
 {
 	register struct dinode *dp;
 	register char *p;
-	struct passwd *pw;
 #ifdef unix
+	struct passwd *pw;
 	char *ctime();
 #endif
 

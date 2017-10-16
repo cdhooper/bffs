@@ -242,9 +242,13 @@ main(argc, argv)
 	struct disklabel *getdisklabel();
 	struct partition oldpartition;
 	struct stat st;
+#ifdef cdh
+	char *cp, *opstring;
+#else
 	struct statfs *mp;
 	int len, n;
 	char *cp, *s1, *s2, *opstring;
+#endif
 
 	if (progname = rindex(*argv, '/'))
 		++progname;

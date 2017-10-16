@@ -486,7 +486,6 @@ ULONG frags;
 {
 	int	index;
 	int	fragoffset;
-	int	cylinder;
 	int	count_low  = 0;
 	int	count_high = 0;
 	struct	cg *mycg;
@@ -572,7 +571,6 @@ ULONG frags;
 {
 	int	index;
 	int	fragoffset;
-	int	cylinder;
 	int	count_low  = 0;
 	int	count_high = 0;
 	struct	cg *mycg;

@@ -204,7 +204,7 @@ ulong	mode;
 	struct Lock		*dlock;
 	char			buf[512];
 
-	msgport = (struct Process *) DeviceProc(name, NULL);
+	msgport = (struct MsgPort *) DeviceProc(name, NULL);
 	if (msgport == NULL)
 		return(1);
 
@@ -233,7 +233,7 @@ ulong	mode;
 	packet->sp_Pkt.dp_Link         = &(packet->sp_Msg);
 	packet->sp_Pkt.dp_Port         = replyport;
 	packet->sp_Pkt.dp_Type         = ACTION_CREATE_OBJECT;
-	packet->sp_Pkt.dp_Arg1         = dlock;
+	packet->sp_Pkt.dp_Arg1         = (LONG) dlock;
 	packet->sp_Pkt.dp_Arg2         = CTOB(buf);
 	packet->sp_Pkt.dp_Arg3         = type;
 	packet->sp_Pkt.dp_Arg4         = device;
@@ -252,7 +252,7 @@ ulong	mode;
 		packet->sp_Pkt.dp_Link         = &(packet->sp_Msg);
 		packet->sp_Pkt.dp_Port         = replyport;
 		packet->sp_Pkt.dp_Type         = ACTION_SET_PERMS;
-		packet->sp_Pkt.dp_Arg1         = dlock;
+		packet->sp_Pkt.dp_Arg1         = (LONG) dlock;
 		packet->sp_Pkt.dp_Arg2         = CTOB(buf);
 		packet->sp_Pkt.dp_Arg3         = mode;
 		packet->sp_Pkt.dp_Arg4         = device;
@@ -289,7 +289,7 @@ ulong	mode;
 	char			buf[512];
 
 	err = 0;
-	msgport = (struct Process *) DeviceProc(name, NULL);
+	msgport = (struct MsgPort *) DeviceProc(name, NULL);
 	if (msgport == NULL)
 		return(1);
 
@@ -318,7 +318,7 @@ ulong	mode;
 	packet->sp_Pkt.dp_Link         = &(packet->sp_Msg);
 	packet->sp_Pkt.dp_Port         = replyport;
 	packet->sp_Pkt.dp_Type         = ACTION_SET_PERMS;
-	packet->sp_Pkt.dp_Arg1         = dlock;
+	packet->sp_Pkt.dp_Arg1         = (LONG) dlock;
 	packet->sp_Pkt.dp_Arg2         = CTOB(buf);
 	packet->sp_Pkt.dp_Arg3         = mode;
 
@@ -351,7 +351,7 @@ ulong	owner;
 	struct Lock		*dlock;
 	char			buf[512];
 
-	msgport = (struct Process *) DeviceProc(name, NULL);
+	msgport = (struct MsgPort *) DeviceProc(name, NULL);
 	if (msgport == NULL)
 		return(1);
 
@@ -380,8 +380,8 @@ ulong	owner;
 	packet->sp_Pkt.dp_Link         = &(packet->sp_Msg);
 	packet->sp_Pkt.dp_Port         = replyport;
 	packet->sp_Pkt.dp_Type         = ACTION_SET_OWNER;
-	packet->sp_Pkt.dp_Arg1         = NULL;
-	packet->sp_Pkt.dp_Arg2         = dlock;
+	packet->sp_Pkt.dp_Arg1         = (LONG) NULL;
+	packet->sp_Pkt.dp_Arg2         = (LONG) dlock;
 	packet->sp_Pkt.dp_Arg3         = CTOB(buf);
 	packet->sp_Pkt.dp_Arg4         = owner;
 
@@ -444,7 +444,7 @@ ulong	*ctime;
 	struct Lock		*dlock;
 	char			buf[512];
 
-	msgport = (struct Process *) DeviceProc(name, NULL);
+	msgport = (struct MsgPort *) DeviceProc(name, NULL);
 	if (msgport == NULL)
 		return(1);
 
@@ -474,7 +474,7 @@ ulong	*ctime;
 	packet->sp_Pkt.dp_Port         = replyport;
 	packet->sp_Pkt.dp_Type         = ACTION_SET_TIMES;
 	packet->sp_Pkt.dp_Arg1         = 4;	/* set last access */
-	packet->sp_Pkt.dp_Arg2         = dlock;
+	packet->sp_Pkt.dp_Arg2         = (LONG) dlock;
 	packet->sp_Pkt.dp_Arg3         = CTOB(buf);
 	packet->sp_Pkt.dp_Arg4         = (ULONG) atime;
 
@@ -493,7 +493,7 @@ ulong	*ctime;
 		packet->sp_Pkt.dp_Port         = replyport;
 		packet->sp_Pkt.dp_Type         = ACTION_SET_TIMES;
 		packet->sp_Pkt.dp_Arg1         = 0;	/* set last modify */
-		packet->sp_Pkt.dp_Arg2         = dlock;
+		packet->sp_Pkt.dp_Arg2         = (LONG) dlock;
 		packet->sp_Pkt.dp_Arg3         = CTOB(buf);
 		packet->sp_Pkt.dp_Arg4         = (ULONG) mtime;
 
@@ -511,7 +511,7 @@ ulong	*ctime;
 			packet->sp_Pkt.dp_Port         = replyport;
 			packet->sp_Pkt.dp_Type         = ACTION_SET_TIMES;
 			packet->sp_Pkt.dp_Arg1         = 2;	/* set create time */
-			packet->sp_Pkt.dp_Arg2         = dlock;
+			packet->sp_Pkt.dp_Arg2         = (LONG) dlock;
 			packet->sp_Pkt.dp_Arg3         = CTOB(buf);
 			packet->sp_Pkt.dp_Arg4         = (ULONG) ctime;
 
@@ -546,7 +546,7 @@ ulong	*ctime;
 	struct Lock		*dlock;
 	char			buf[512];
 
-	msgport = (struct Process *) DeviceProc(name, NULL);
+	msgport = (struct MsgPort *) DeviceProc(name, NULL);
 	if (msgport == NULL)
 		return(1);
 
@@ -576,7 +576,7 @@ ulong	*ctime;
 	packet->sp_Pkt.dp_Port         = replyport;
 	packet->sp_Pkt.dp_Type         = ACTION_SET_TIMES;
 	packet->sp_Pkt.dp_Arg1         = 5;	/* get last access */
-	packet->sp_Pkt.dp_Arg2         = dlock;
+	packet->sp_Pkt.dp_Arg2         = (LONG) dlock;
 	packet->sp_Pkt.dp_Arg3         = CTOB(buf);
 	packet->sp_Pkt.dp_Arg4         = (ULONG) atime;
 
@@ -595,7 +595,7 @@ ulong	*ctime;
 		packet->sp_Pkt.dp_Port         = replyport;
 		packet->sp_Pkt.dp_Type         = ACTION_SET_TIMES;
 		packet->sp_Pkt.dp_Arg1         = 1;	/* get last modify */
-		packet->sp_Pkt.dp_Arg2         = dlock;
+		packet->sp_Pkt.dp_Arg2         = (LONG) dlock;
 		packet->sp_Pkt.dp_Arg3         = CTOB(buf);
 		packet->sp_Pkt.dp_Arg4         = (ULONG) mtime;
 
@@ -613,7 +613,7 @@ ulong	*ctime;
 			packet->sp_Pkt.dp_Port         = replyport;
 			packet->sp_Pkt.dp_Type         = ACTION_SET_TIMES;
 			packet->sp_Pkt.dp_Arg1         = 3;	/* get create time */
-			packet->sp_Pkt.dp_Arg2         = dlock;
+			packet->sp_Pkt.dp_Arg2         = (LONG) dlock;
 			packet->sp_Pkt.dp_Arg3         = CTOB(buf);
 			packet->sp_Pkt.dp_Arg4         = (ULONG) ctime;
 
@@ -649,7 +649,7 @@ ulong	type;
 	char			buf[1024];
 	char			buf2[1024];
 
-	msgport = (struct Process *) DeviceProc(dname, NULL);
+	msgport = (struct MsgPort *) DeviceProc(dname, NULL);
 	if (msgport == NULL)
 		return(1);
 
@@ -678,7 +678,7 @@ ulong	type;
 	packet->sp_Pkt.dp_Link         = &(packet->sp_Msg);
 	packet->sp_Pkt.dp_Port         = replyport;
 	packet->sp_Pkt.dp_Type         = ACTION_MAKE_LINK;
-	packet->sp_Pkt.dp_Arg1         = dlock;
+	packet->sp_Pkt.dp_Arg1         = (LONG) dlock;
 	packet->sp_Pkt.dp_Arg2         = CTOB(buf);
 
 	if (type == 0) {	/* hard */
@@ -689,7 +689,7 @@ ulong	type;
 			fprintf(stderr, "MakeLink: hard source %s not found!\n", dname);
 			return(1);
 		}
-		packet->sp_Pkt.dp_Arg3 = lock;
+		packet->sp_Pkt.dp_Arg3 = (LONG) lock;
 	} else {		/* soft */
 		strcpy(buf2 + 1, dname);
 		buf2[0] = strlen(dname);

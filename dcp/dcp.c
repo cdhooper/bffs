@@ -424,7 +424,6 @@ char *name;
 	struct	RootNode *rootnode;
 	struct	DosInfo *dosinfo;
 	struct	DevInfo *devinfo;
-	struct	DosEnvec *envec;
 	static  struct FileSysStartupMsg *startup;
 	char	*devname;
 	char	*pos;

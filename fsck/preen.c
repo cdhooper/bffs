@@ -70,12 +70,16 @@ checkfstab(preen, maxrun, docheck, chkit)
 	int preen, maxrun;
 	int (*docheck)(), (*chkit)();
 {
+#ifdef unix
 	register struct fstab *fsp;
-	register struct disk *dk, *nextdisk;
-	register struct part *pt;
-	int ret, pid, retcode, passno, sumstatus, status;
+	register struct disk *dk;
+	int ret, pid, passno, sumstatus;
 	long auxdata;
 	char *name;
+#endif
+	register struct disk *nextdisk;
+	register struct part *pt;
+	int ret, passno, sumstatus;
 
 	sumstatus = 0;
 #ifdef unix

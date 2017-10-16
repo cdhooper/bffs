@@ -33,6 +33,43 @@ struct	stat *stat = NULL;
 
 struct icommon *inode_modify();
 
+static void
+fsname(struct DosInfo *info, char *volumename)
+{
+    struct DeviceList *tmp;
+    char *name;
+
+    if (superblock == NULL) {
+	PRINT2(("** superblock is null in fsname()\n"));
+	return;
+    }
+    for (name = superblock->fs_fsmnt + MAXMNTLEN - 2;
+	 name > superblock->fs_fsmnt + 1; name--)
+	if (*name == '\0') {
+	    name++;
+	    break;
+	}
+
+    if (*name == '\0') {
+	name = "BFFS0";
+	name[strlen(name) - 1] = 'a' + fs_partition;
+    }
+
+    /* rename if already exists */
+    Forbid();
+	tmp = (struct DeviceList *) BTOC(info->di_DevInfo);
+	while (tmp != NULL)
+	    if (streqv(((char *) BTOC(tmp->dl_Name)) + 1, name)) {
+		name[strlen(name) - 1]++;
+		tmp = (struct DeviceList *) BTOC(info->di_DevInfo);
+	    } else
+		tmp = (struct DeviceList *) BTOC(tmp->dl_Next);
+    Permit();
+
+    strcpy(volumename + 1, name);
+    volumename[0] = strlen(volumename + 1);
+}
+
 void NewVolNode()
 {
     ULONG ttime;
@@ -82,44 +119,6 @@ void NewVolNode()
 	VolNode->dl_Next = info->di_DevInfo;
 	info->di_DevInfo = (BPTR) CTOB(VolNode);
     Permit();
-}
-
-void fsname(info, volumename)
-struct DosInfo *info;
-char *volumename;
-{
-    struct DeviceList *tmp;
-    char *name;
-
-    if (superblock == NULL) {
-	PRINT2(("** superblock is null in fsname()\n"));
-	return;
-    }
-    for (name = superblock->fs_fsmnt + MAXMNTLEN - 2;
-	 name > superblock->fs_fsmnt + 1; name--)
-	if (*name == '\0') {
-	    name++;
-	    break;
-	}
-
-    if (*name == '\0') {
-	name = "BFFS0";
-	name[strlen(name) - 1] = 'a' + fs_partition;
-    }
-
-    /* rename if already exists */
-    Forbid();
-	tmp = (struct DeviceList *) BTOC(info->di_DevInfo);
-	while (tmp != NULL)
-	    if (streqv(((char *) BTOC(tmp->dl_Name)) + 1, name)) {
-		name[strlen(name) - 1]++;
-		tmp = (struct DeviceList *) BTOC(info->di_DevInfo);
-	    } else
-		tmp = (struct DeviceList *) BTOC(tmp->dl_Next);
-    Permit();
-
-    strcpy(volumename + 1, name);
-    volumename[0] = strlen(volumename + 1);
 }
 
 void RemoveVolNode()
@@ -299,7 +298,6 @@ char *name;
 {
     struct	DosInfo *info;
     struct	DeviceList *tmp;
-    int		length;
     char	*pos;
     struct	BFFSLock *fl;
 

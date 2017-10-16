@@ -5,4 +5,4 @@ $(PROG): rdb.c
 	dcc -o $(PROG) rdb.c
 
 clean:
-	$(RM) $(OBJS) $(PROG)
+	$(RM) $(PROG)

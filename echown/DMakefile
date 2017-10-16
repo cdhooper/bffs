@@ -5,4 +5,4 @@ $(PROG): echown.c
 	dcc -o $(PROG) echown.c
 
 clean:
-	$(RM) $(OBJS) $(PROG)
+	$(RM) $(PROG)

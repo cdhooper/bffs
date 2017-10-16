@@ -637,7 +637,9 @@ ULONG inum;
 	int	index;
 	ULONG	cgx;
 	struct	cg *mycg;
+#ifdef INTEL
 	ULONG	temp;
+#endif
 
 	inode = inode_modify(inum);
 

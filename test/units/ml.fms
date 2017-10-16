@@ -1,0 +1,19 @@
+tdev:
+    FileSystem = bffssrc:fs/bffs
+    Device = fmsdisk.device
+    Sectorsize = 512
+    Unit = 20
+    Flags = 0
+    Mount = 1
+    Stacksize = 512
+    Priority = -1
+    GlobVec = -1
+    LowCyl = 0
+    HighCyl = 1800
+    Surfaces = 4
+    BlocksPerTrack = 100
+    Buffers = 64
+    Reserved = 0;
+    PreAlloc = 1285;
+    DosType = 0x42464653   /* BFFS */
+#

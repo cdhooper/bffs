@@ -85,7 +85,7 @@ ulong	device;
 	struct Lock		*lock;
 	char			buf[512];
 
-	msgport = (struct Process *) DeviceProc(name, NULL);
+	msgport = (struct MsgPort *) DeviceProc(name, NULL);
 	if (msgport == NULL)
 		return(1);
 
@@ -114,7 +114,7 @@ ulong	device;
 	packet->sp_Pkt.dp_Link         = &(packet->sp_Msg);
 	packet->sp_Pkt.dp_Port         = replyport;
 	packet->sp_Pkt.dp_Type         = ACTION_CREATE_OBJECT;
-	packet->sp_Pkt.dp_Arg1         = lock;
+	packet->sp_Pkt.dp_Arg1         = (ULONG) lock;
 	packet->sp_Pkt.dp_Arg2         = CTOB(buf);
 	packet->sp_Pkt.dp_Arg3         = (type ? ST_CDEVICE : ST_BDEVICE);
 	packet->sp_Pkt.dp_Arg4         = device;

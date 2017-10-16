@@ -660,7 +660,6 @@ int	inum;
 	ULONG	nblkfrags;
 	int	index;
 	int	cgx;
-	int	level;
 	struct	cg *mycg;
 	struct	icommon *inode;
 
@@ -775,7 +774,6 @@ ULONG inum;
 	ULONG	cgx;
 	ULONG	dblk;
 	ULONG	fblk;
-	ULONG	nblk;
 	ULONG	fspill;
 	ULONG	startoff;
 	ULONG	cgblk;

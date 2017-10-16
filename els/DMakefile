@@ -7,4 +7,4 @@ $(PROG): els.c
 	$(CC) $(CFLAGS) -o $(PROG) %(right)
 
 clean:
-	$(RM) $(OBJS) $(PROG)
+	$(RM) $(PROG)

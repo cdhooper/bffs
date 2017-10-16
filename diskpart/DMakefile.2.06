@@ -21,25 +21,25 @@ $(PROG): $(OBJS)
 	$(CC) $(CFLAGS) -o %(left) %(right)
 
 $(OBJ)diskpart_m.o: diskpart.c $(HFILES)
-	$(CC) $(CFLAGS) -o %(left) -c %(right:*.c)
+	$(CC) $(CFLAGS) -o %(left) -c %(*.c)
 
 $(OBJ)getopt_m.o: $(AMI)getopt.c $(HFILES)
-	$(CC) $(CFLAGS) -o %(left) -c %(right:*.c)
+	$(CC) $(CFLAGS) -o %(left) -c %(*.c)
 
 $(OBJ)disklabel_m.o: $(AMI)disklabel.c $(HFILES)
-	$(CC) $(CFLAGS) -o %(left) -c %(right:*.c)
+	$(CC) $(CFLAGS) -o %(left) -c %(*.c)
 
 $(OBJ)file_blockio_m.o: $(AMI)file_blockio.c $(HFILES)
-	$(CC) $(CFLAGS) -o %(left) -c %(right:*.c)
+	$(CC) $(CFLAGS) -o %(left) -c %(*.c)
 
 $(OBJ)file_label_m.o: $(AMI)file_label.c $(HFILES)
-	$(CC) $(CFLAGS) -o %(left) -c %(right:*.c)
+	$(CC) $(CFLAGS) -o %(left) -c %(*.c)
 
 $(OBJ)amiga_device_m.o: $(AMI)amiga_device.c $(HFILES)
-	$(CC) $(CFLAGS) -o %(left) -c %(right:*.c)
+	$(CC) $(CFLAGS) -o %(left) -c %(*.c)
 
 $(OBJ)amiga_label_m.o: $(AMI)amiga_label.c $(HFILES)
-	$(CC) $(CFLAGS) -o %(left) -c %(right:*.c)
+	$(CC) $(CFLAGS) -o %(left) -c %(*.c)
 
 clean:
 	$(RM) $(OBJS) $(PROG)

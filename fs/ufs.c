@@ -83,9 +83,8 @@ int    dcsubmitted = 0;		/* whether a disk change interrupt IO
  *	   num = starting disk fragment (fragment size specified in FSIZE)
  *	  size = number of bytes to read from the disk
  */
-int data_read(buf, num, size)
-char *buf;
-int num;
+int
+data_read(void *buf, int num, int size)
 {
 	int index;
 
@@ -141,9 +140,8 @@ int num;
  *	  size = number of bytes to write to the disk
  */
 #ifndef RONLY
-int data_write(buf, num, size)
-char *buf;
-int num;
+int
+data_write(void *buf, int num, int size)
 {
 	int index;
 
@@ -388,7 +386,7 @@ int close_ufs()
 	}
 
 	if (trackIO) {
-		DeleteExtIO(trackIO);
+		DeleteExtIO((struct IORequest *) trackIO);
 		trackIO = NULL;
 	}
 }
@@ -1022,7 +1020,7 @@ open_dchange()
 	IntHand.is_Node.ln_Name = "BFFSdiskchange_int";
 	IntHand.is_Node.ln_Type = NT_INTERRUPT;
 	IntHand.is_Node.ln_Pri  = 0;
-	IntHand.is_Code	    	= &IntHandler;	/* code pointer */
+	IntHand.is_Code	    	= IntHandler;	/* code pointer */
 	IntHand.is_Data	    	= &IntData;	/* data pointer */
 
 	dchangeIO->iotd_Req.io_Command	= TD_ADDCHANGEINT;

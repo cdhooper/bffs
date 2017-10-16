@@ -5,4 +5,4 @@ $(PROG): mknod.c
 	dcc -o $(PROG) mknod.c
 
 clean:
-	$(RM) $(OBJS) $(PROG)
+	$(RM) $(PROG)

@@ -292,7 +292,6 @@ void PFindInput()
     struct  BFFSfh *fileh;
     struct  icommon *inode;
     ULONG   inum;
-    char    *buf;
     char    cho;
 
     UPSTAT(findinput);
@@ -893,8 +892,6 @@ void PCreateDir()
 	ULONG	pinum;
 	struct	BFFSLock *lock;
 	struct	icommon *inode;
-	int	pos;
-	int	inum;
 	int	newinum;
 	ULONG	ioffset;
 
@@ -2272,6 +2269,7 @@ at most 64 bytes in length; return UID buffer?
 }
 #endif
 
+/* XXX: This needs work to implement support for AS225 ls */
 void PExObject()
 {
     struct FileInfoBlock *fib;

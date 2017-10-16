@@ -284,7 +284,7 @@ setup_gadgets()
 	rkbytes = (stat->direct_read_bytes) / 1024;
 	gad_addresses[rkbytes_pos] = &rkbytes;    /* rkbytes calculated */
 	vertical_int(rkbytes_pos);
-/*	vertical_int(stat_start + 18);	/* read bytes */
+/*	vertical_int(stat_start + 18);	 * read bytes */
 
 	vertical_int(stat_start + 25);	/* write opens */
 	vertical_int(stat_start + 17);	/* write groups */
@@ -292,7 +292,7 @@ setup_gadgets()
 	wkbytes = (stat->direct_write_bytes) / 1024;
 	gad_addresses[wkbytes_pos] = &wkbytes;    /* wkbytes calculated */
 	vertical_int(wkbytes_pos);
-/*	vertical_int(stat_start + 19);	/* write bytes */
+/*	vertical_int(stat_start + 19);	 * write bytes */
 
 	vertical_int(stat_start + 20);	/* locates */
 	vertical_int(stat_start + 21);	/* examines */
@@ -652,7 +652,6 @@ refresh_information()
 	struct stat	*tstat;
 	struct MsgPort	*ofs;
 	struct fs	*osb;
-	int		diff;
 
 	ofs = fs;
 	osb = superblock;
@@ -849,6 +848,6 @@ assign_superblock_addresses()
 	gad_addresses[current++] = &superblock->fs_minfree; 	    /* minfree */
 	gad_addresses[current++] = &sb_mod;		 	    /* modified */
 	gad_addresses[current++] = &sb_clean;		 	    /* clean */
-/*	gad_addresses[current++] = &superblock->fs_fmod; 	    /* modified */
-/*	gad_addresses[current++] = &superblock->fs_clean; 	    /* clean */
+/*	gad_addresses[current++] = &superblock->fs_fmod; 	     * modified */
+/*	gad_addresses[current++] = &superblock->fs_clean; 	     * clean */
 }

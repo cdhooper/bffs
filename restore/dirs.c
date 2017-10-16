@@ -679,15 +679,15 @@ genliteraldir(name, ino)
 	char *name;
 	ino_t ino;
 {
-	register struct inotab *itp;
-	int ofile, dp, i, size;
-	char buf[BUFSIZ];
-
 #ifdef AMIGA
 	fprintf(stderr, "genliteraldir: not supported on amiga %d:%s\n",
 		name, ino);
 	return (FAIL);
 #else
+	register struct inotab *itp;
+	int ofile, dp, i, size;
+	char buf[BUFSIZ];
+
 	itp = inotablookup(ino);
 	if (itp == NULL)
 		panic("Cannot find directory inode %d named %s\n", ino, name);

@@ -20,8 +20,6 @@ char *argv[];
 	int type = HARD;
 	char buf[68];
 	char *src;
-	char *dest;
-	void *dest;
 
 	if (argc < 3)
 		print_usage(argv[0]);
@@ -36,11 +34,8 @@ char *argv[];
 	if (index >= argc)
 		print_usage(argv[0]);
 
-
-	dest = (void *) src;
-
 	for (; index < argc; index++)
-		if (PMakeLink(dest, argv[index], type)) {
+		if (PMakeLink(src, argv[index], type)) {
 			long err = IoErr();
 			if (err == 0)
 				strcpy(buf, "unknown reason");

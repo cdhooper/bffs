@@ -1,0 +1,9 @@
+.KEY arg1,arg2,arg3
+set checkfile DMakefile.2.06
+
+Search "" FILE $checkfile >NIL:
+if not warn
+    dmake -s -f $checkfile <arg1> <arg2> <arg3>
+else
+    dmake <arg1> <arg2> <arg3>
+endif

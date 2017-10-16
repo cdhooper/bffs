@@ -46,7 +46,6 @@ int	type;
 	int	blk;
 	int	spill;
 	int	fblks;
-	int	index;
 	int	needed;
 	int	oldsize;
 	int	newfrag;

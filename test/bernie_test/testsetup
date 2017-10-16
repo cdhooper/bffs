@@ -1,0 +1,3 @@
+assign TEST: TDEV:
+dcp nil: TDEV:File -b 1024 -m 1024
+dcp nil: TDEV:3013 -b 1024 -m 1024

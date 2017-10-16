@@ -1,6 +1,6 @@
 DOTDOT=
 PROG=$(DOTDOT)/bin/edumpfs
-OBJ = $(DOTDOT)/obj.ami/
+OBJ=$(DOTDOT)/obj.ami/
 AMI=$(DOTDOT)/unix_support
 OBJS=$(OBJ)amiga_device.o $(OBJ)edumpfs.o $(OBJ)file_blockio.o
 RM=-delete force >nil:
@@ -10,16 +10,17 @@ $(PROG): $(OBJS)
 	dcc -o $(PROG) $(OBJS)
 
 $(OBJ)edumpfs.o: edumpfs.c
-	dcc $(CFLAGS) -c %(*.c) -o %(left)
+	dcc $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)edumpfs_other.o: edumpfs_other.c
-	dcc $(CFLAGS) -c %(*.c) -o %(left)
+	dcc $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)amiga_device.o: $(AMI)/amiga_device.c
-	dcc $(CFLAGS) -c %(*.c) -o %(left)
+	dcc $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)file_blockio.o: $(AMI)/file_blockio.c
-	dcc $(CFLAGS) -c %(*.c) -o %(left)
+	dcc $(CFLAGS) -c %(right) -o %(left)
+
 
 clean:
 	$(RM) $(OBJS) $(PROG)

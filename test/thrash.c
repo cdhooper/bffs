@@ -3,7 +3,7 @@
 #include <signal.h>
 #endif
 
-#define OPS 300000
+#define OPS 3000000
 
 #ifdef AMIGA
 char *path = "tdev:run";

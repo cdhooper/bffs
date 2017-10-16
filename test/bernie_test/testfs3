@@ -1,0 +1,8 @@
+Failat 4
+lab again
+Copy test:3013 test:3013.dup quiet
+For NOQUOTE TEST:3013/#? DO diff >NIL: TEST:3013/%s TEST:3013.dup/%s
+Wait 2
+Delete test:3013.dup all quiet
+Wait 1
+skip back again

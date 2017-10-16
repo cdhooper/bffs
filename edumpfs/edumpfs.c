@@ -238,8 +238,7 @@ int print_bsd44_disk_label()
 	struct	bsd44_label *label;	/* disk partition table */
 	char	buf[32];
 
-	buffer = (struct bsd44_label *) AllocMem(DEV_BSIZE,
-						 MEMF_PUBLIC | MEMF_CLEAR);
+	buffer = (ULONG *) AllocMem(DEV_BSIZE, MEMF_PUBLIC | MEMF_CLEAR);
 
 	bread(buffer, BOOT_BLOCK * DEV_BSIZE / DEV_BSIZE, DEV_BSIZE);
 
@@ -452,7 +451,6 @@ read_superblock(partition, sboff)
 int	partition;
 ULONG	sboff;
 {
-        int index;
         int csize = 1;
 
         temp_sb = (struct fs *) AllocMem(DEV_BSIZE, MEMF_PUBLIC);

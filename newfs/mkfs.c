@@ -160,11 +160,9 @@ mkfs(pp, fsys, fi, fo)
 	long used, mincpgcnt, bpcg;
 	long mapcramped, inodecramped;
 	long postblsize, rotblsize, totalsbsize;
-	int ppid, status;
 	time_t utime;
-#ifdef cdh
-	long sizepb;
-#else
+#ifndef cdh
+	int ppid, status;
 	quad_t sizepb;
 #endif
 	void started();
@@ -710,7 +708,7 @@ initcg(cylno, utime)
 	time_t utime;
 {
 	daddr_t cbase, d, dlower, dupper, dmax, blkno;
-	long i, j, s;
+	long i;
 	register struct csum *cs;
 
 	/*
@@ -898,7 +896,9 @@ char buf[MAXBSIZE];
 fsinit(utime)
 	time_t utime;
 {
+#ifdef LOSTDIR
 	int i;
+#endif
 
 	/*
 	 * initialize the node

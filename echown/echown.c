@@ -19,7 +19,6 @@ int  argc;
 char *argv[];
 {
 	int	index;
-	ulong	type;
 	ulong	owner;
 	ulong	group;
 
@@ -73,7 +72,7 @@ ulong	owner;
 	struct Lock		*lock;
 	char			buf[512];
 
-	msgport = (struct Process *) DeviceProc(name, NULL);
+	msgport = (struct MsgPort *) DeviceProc(name, NULL);
 	if (msgport == NULL)
 		return(1);
 
@@ -102,8 +101,8 @@ ulong	owner;
 	packet->sp_Pkt.dp_Link         = &(packet->sp_Msg);
 	packet->sp_Pkt.dp_Port         = replyport;
 	packet->sp_Pkt.dp_Type         = ACTION_SET_OWNER;
-	packet->sp_Pkt.dp_Arg1         = NULL;
-	packet->sp_Pkt.dp_Arg2         = lock;
+	packet->sp_Pkt.dp_Arg1         = (LONG) NULL;
+	packet->sp_Pkt.dp_Arg2         = (LONG) lock;
 	packet->sp_Pkt.dp_Arg3         = CTOB(buf);
 	packet->sp_Pkt.dp_Arg4         = owner;
 

@@ -141,7 +141,6 @@ char *name;
 {
 	struct	DosInfo	   *info;
 	struct	DeviceList *temp;
-	struct	FileLock   *lock;
 	int	index = 0;
 	int	ret = -1;
 

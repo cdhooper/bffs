@@ -136,3 +136,22 @@ will look value up in array to determine if message should be sent.
 verify Lock("") does exactly the same thing as what Lock(".") does.
 This was a bug in bffs 1.5 reported by Todd Vierling <tv@pobox.com> in 1997
 
+From Todd Vierling
+  : > If you don't know about it, here's the problem:  Many programs fail on
+  : > bffs because Lock("") doesn't do what Lock(".") does (though it is
+  : > expected filesystem behavior on Amiga).  An "empty" (not null, but empty
+  : > string) pathname refers to the current directory.
+
+  : There are no newer versions of BFFS around.  I wasn't aware of
+  : the problem with Lock("").
+
+  Looking deeper, I see that the main problems I have with bffs deal with
+  SameLock() (ACTION_SAME_LOCK); seems that this packet isn't implemented, or
+  returns failure in any case, and a simple comparison of inode numbers should
+  suffice here....  This quickly explains weirdness like left out icons that
+  still appear in the original directory, and getcwd() emulation that fails.
+
+  muFS style file protection, maybe?
+
+  the ability to stale a file, deleting underneath a lock?)
+

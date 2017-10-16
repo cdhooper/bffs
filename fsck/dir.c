@@ -82,6 +82,8 @@ dirblk_setup(void)
 
 struct direct	*fsck_readdir();
 struct bufarea	*getdirblk();
+int chgino(struct inodesc *idesc);
+int mkentry(struct inodesc *idesc);
 
 /*
  * Propagate connected state through the tree.
@@ -424,7 +426,9 @@ linkup(orphan, parentdir)
 	char *tempname;
 	extern int pass4check();
 
+#ifndef cdh
 	bzero((char *)&idesc, sizeof(struct inodesc));
+#endif
 	dp = ginode(orphan);
 	lostdir = (dp->di_mode & IFMT) == IFDIR;
 	pwarn("UNREF %s ", lostdir ? "DIR" : "FILE");

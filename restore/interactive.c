@@ -106,7 +106,9 @@ static void	 printlist __P((char *, char *));
 void
 runcmdshell()
 {
+#ifndef cdh
 	char dummy1[64];
+#endif
 	register struct entry *np;
 	ino_t ino;
 	struct arglist arglist;

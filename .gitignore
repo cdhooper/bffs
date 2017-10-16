@@ -1,5 +1,7 @@
 *.o
 *.uaem
-ml/*
+bin/*
 .cscope_cmd*
 cscope.out
+bffs
+test/units/Unit20

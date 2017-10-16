@@ -1,7 +1,6 @@
 PROG=/bin/dbprint
 FS=/fs/bffs
 CC=dcc
-#CFLAGS=-ms -r -proto
 CFLAGS=-ms -r
 ASM=das
 RM = -delete force >NIL:
@@ -12,61 +11,61 @@ OBJS=$(OD)stack.o $(OD)handler.o $(OD)debug.o $(OD)packets.o $(OD)ufs.o $(OD)sys
 all:  $(FS) $(PROG)
 
 $(FS): $(OBJS)
-	$(CC) $(CFLAGS) %(right:*.o) -o %(left)
+	$(CC) $(CFLAGS) %(right) -o %(left)
 
 $(PROG): dbprint.c
-	$(CC) $(CFLAGS) %(right:*.c) -o %(left)
+	$(CC) $(CFLAGS) %(right) -o %(left)
 
 $(OD)ufs.o: ufs.c config.h handler.h superblock.h ufs.h fsmacros.h file.h stat.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)handler.o: handler.c config.h handler.h packets.h table.h stat.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)debug.o: debug.c config.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)packets.o: packets.c config.h superblock.h fsmacros.h packets.h system.h handler.h file.h cache.h stat.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)system.o: system.c config.h handler.h superblock.h ufs.h fsmacros.h packets.h system.h stat.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)fread.o: fread.c config.h ufs.h superblock.h fsmacros.h file.h handler.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)fwrite.o: fwrite.c config.h fsmacros.h file.h alloc.h cache.h handler.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)file.o: file.c config.h handler.h ufs.h file.h cache.h alloc.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)inode.o: inode.c config.h superblock.h file.h cache.h alloc.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)cache.o: cache.c config.h superblock.h ufs.h fsmacros.h cache.h file.h handler.h stat.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)dir.o: dir.c config.h ufs.h file.h handler.h cache.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)table.o: table.c config.h table.h packets.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)request.o: request.c config.h request.h config.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)alloc.o: alloc.c config.h superblock.h alloc.h fsmacros.h cache.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)config.o: config.c alloc.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)inthand.o: inthand.asm
-	$(ASM) %(right:*.asm) -o %(left)
+	$(ASM) %(*.asm) -o %(left)
 
 $(OD)stack.o: stack.asm
-	$(ASM) %(right:*.asm) -o %(left)
+	$(ASM) %(*.asm) -o %(left)
 
 clean:
 	$(RM) $(OBJS) $(PROG) $(FS)

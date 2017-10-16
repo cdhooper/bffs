@@ -43,7 +43,7 @@
 struct mtop {
 	short	mt_op;		/* operations defined below */
 	long	mt_count;	/* how many of them */
-/*	daddr_t	mt_count;	/* how many of them */
+/*	daddr_t	mt_count;	 * how many of them */
 };
 
 /* operations */

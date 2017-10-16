@@ -520,8 +520,10 @@ writelabel(boot, lp)
 	char *boot;
 	register struct disklabel *lp;
 {
+#ifndef cdh
 	register int i;
 	int flag;
+#endif
 
 	lp->d_magic = DISKMAGIC;
 	lp->d_magic2 = DISKMAGIC;

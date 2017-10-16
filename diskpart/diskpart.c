@@ -36,10 +36,12 @@ static char sccsid[] = "@(#)disklabel.c	5.19 (Berkeley) 6/1/90";
 #include "sys/disklabel.h"
 #include "paths.h"
 
-/* next three lines added by cdh */
-
+#ifdef cdh
+#include <fcntl.h>
 #define rindex strchr
 char *rindex();
+#endif
+
 int ifd = -1;
 int ofd = -1;
 int sectorsize = 512;
@@ -154,7 +156,7 @@ main(argc, argv)
         } else {
 		ifd = open(specname, op == READ ? O_RDONLY : O_RDWR);
 		if (ifd < 0) {
-			fprintf("Unable to open device %s\n", specname);
+			fprintf(stderr, "Unable to open device %s\n", specname);
 			exit(1);
 		}
 	}
@@ -260,7 +262,6 @@ makebootarea(boot, dp)
 {
 	struct disklabel *lp;
 	register char *p;
-	int b;
 
 	lp = (struct disklabel *)(boot + (LABELSECTOR * dp->d_secsize) +
 	    LABELOFFSET);
@@ -443,8 +444,6 @@ edit(lp)
 
 editit()
 {
-	register int pid, xpid;
-	int stat, omask;
 	extern char *getenv();
 	char *command;
 

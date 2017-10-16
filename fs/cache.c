@@ -771,7 +771,6 @@ struct cache_set *node;
 struct cache_set *cache_node(blk)
 int blk;
 {
-	int index;
 	struct cache_set *temp;
 
 	temp = hashtable[CACHE_HASH(blk)];

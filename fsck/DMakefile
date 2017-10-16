@@ -2,69 +2,75 @@ ARCH=ami
 DOTDOT=
 #PROG=$(DOTDOT)/bin/fsck.$(ARCH)
 PROG=$(DOTDOT)/bin/fsck
-OBJ=$(DOTDOT)/obj.$(ARCH)/
+OBJ=obj.$(ARCH)/
+#OBJ=$(DOTDOT)/obj.$(ARCH)/
 OBJS=$(OBJ)main.o $(OBJ)fsck_inode.o $(OBJ)pass1.o $(OBJ)pass1b.o $(OBJ)pass2.o $(OBJ)pass3.o $(OBJ)pass4.o $(OBJ)pass5.o $(OBJ)preen.o $(OBJ)setup.o $(OBJ)utilities.o $(OBJ)dir.o $(OBJ)ffs_subr.o $(OBJ)ffs_tables.o $(OBJ)fsck_other.o $(OBJ)getopt.o $(OBJ)amiga_device.o $(OBJ)amiga_label.o
 
 CC=dcc
 CFLAGS=-I/ucbinclude -I/fs -Dcdh
-RM = -delete force >NIL:
+RM = -delete quiet force >nil:
 
 $(PROG): $(OBJS)
 	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
 
+$(OBJS): $(OBJ)
+
+$(OBJ): $(OBJ)
+	makedir %(left)
+
 $(OBJ)main.o: main.c
-	$(CC) $(CFLAGS) -c main.c -o $(OBJ)main.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)fsck_inode.o: fsck_inode.c
-	$(CC) $(CFLAGS) -c fsck_inode.c -o $(OBJ)fsck_inode.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)pass1.o: pass1.c
-	$(CC) $(CFLAGS) -c pass1.c -o $(OBJ)pass1.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)pass1b.o: pass1b.c
-	$(CC) $(CFLAGS) -c pass1b.c -o $(OBJ)pass1b.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)pass2.o: pass2.c
-	$(CC) $(CFLAGS) -c pass2.c -o $(OBJ)pass2.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)pass3.o: pass3.c
-	$(CC) $(CFLAGS) -c pass3.c -o $(OBJ)pass3.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)pass4.o: pass4.c
-	$(CC) $(CFLAGS) -c pass4.c -o $(OBJ)pass4.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)pass5.o: pass5.c
-	$(CC) $(CFLAGS) -c pass5.c -o $(OBJ)pass5.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)preen.o: preen.c
-	$(CC) $(CFLAGS) -c preen.c -o $(OBJ)preen.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)setup.o: setup.c
-	$(CC) $(CFLAGS) -c setup.c -o $(OBJ)setup.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)utilities.o: utilities.c
-	$(CC) $(CFLAGS) -c utilities.c -o $(OBJ)utilities.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)dir.o: dir.c
-	$(CC) $(CFLAGS) -c dir.c -o $(OBJ)dir.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)fsck_other.o: fsck_other.c
-	$(CC) $(CFLAGS) -c fsck_other.c -o $(OBJ)fsck_other.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)getopt.o: $(DOTDOT)/unix_support/getopt.c
-	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/getopt.c -o $(OBJ)getopt.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)ffs_subr.o: $(DOTDOT)/unix_support/ffs_subr.c
-	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/ffs_subr.c -o $(OBJ)ffs_subr.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)ffs_tables.o: $(DOTDOT)/unix_support/ffs_tables.c
-	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/ffs_tables.c -o $(OBJ)ffs_tables.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)amiga_device.o: $(DOTDOT)/unix_support/amiga_device.c
-	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/amiga_device.c -o $(OBJ)amiga_device.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)amiga_label.o: $(DOTDOT)/unix_support/amiga_label.c
-	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/amiga_label.c -o $(OBJ)amiga_label.o
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 clean:
 	$(RM) $(OBJS) $(PROG)

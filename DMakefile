@@ -1,20 +1,19 @@
 DOTDOT=
-BIN=bin/
-BINS=$(BIN)echown $(BIN)edumpfs $(BIN)etouch $(BIN)newfs $(BIN)bffstool $(BIN)dcp $(BIN)eln $(BIN)fsck $(BIN)rdb $(BIN)tunefs $(BIN)echmod $(BIN)els $(BIN)mknod $(BIN)restore $(BIN)dumpfs $(BIN)diskpart $(BIN)dbprint fs/bffs $(BIN)fst_thrash
 DIR=
 DIRS=$(DIR)echown $(DIR)edumpfs $(DIR)etouch $(DIR)newfs $(DIR)bffstool $(DIR)dcp $(DIR)eln $(DIR)fsck $(DIR)rdb $(DIR)tunefs $(DIR)echmod $(DIR)els $(DIR)mknod $(DIR)restore $(DIR)dumpfs $(DIR)diskpart $(DIR)fs $(DIR)fs $(DIR)test
-CLEANDIRS = $(DIRS:"*":"clean.*")
+DUMMYDIRS=$(DIRS:"*":"*.dummy")
+CLEANDIRS=$(DIRS:"*":"*.clean")
 
-all: $(BINS)
-
-$(BINS): $(DIRS)
-	cd %(right)
-	dmake -s $(DOTDOT)/%(left)
-	cd
+all: $(DUMMYDIRS)
 
 clean: $(CLEANDIRS)
 
-$(CLEANDIRS):
-	cd $(left:"clean.*":"*")
-	dmake -s clean
-	cd
+$(DUMMYDIRS) : $(DUMMYDIRS)
+	cd %(left:*.dummy:*)
+	@dmake -q
+	@cd
+
+$(CLEANDIRS) : $(CLEANDIRS)
+	cd %(left:*.clean:*)
+	@dmake -q clean
+	@cd

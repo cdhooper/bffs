@@ -93,7 +93,9 @@ main(argc, argv)
 	int argc;
 	char *argv[];
 {
+#ifndef AMIGA
 	register struct fstab *fs;
+#endif
 	int ch, eval;
 
 	dev_bsize = 1;

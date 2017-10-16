@@ -27,7 +27,7 @@ int __nocommandline = 1; /* Disable commandline parsing */
 
 #define RESTART_TIMER timerIO->tr_time.tv_secs  = timer_secs;	\
 		      timerIO->tr_time.tv_micro = 0;		\
-		      SendIO(timerIO)
+		      SendIO(&timerIO->tr_node)
 
 extern struct InterruptData {
 	struct	Task *sigTask;
@@ -53,7 +53,7 @@ char	*handler_name	= NULL;
 int	timing		= 0;
 int	receiving_packets = 1;
 
-extern int timer_secs;  /* delay seconda after write for cleanup */
+extern int timer_secs;  /* delay seconds after write for cleanup */
 extern int timer_loops; /* maximum delays before forced cleanup */
 extern char *version;	/* BFFS version string */
 
@@ -310,7 +310,7 @@ open_timer()
 		return(1);
 	}
 
-	if (OpenDevice(TIMERNAME, UNIT_VBLANK, timerIO, 0)) {
+	if (OpenDevice(TIMERNAME, UNIT_VBLANK, &timerIO->tr_node, 0)) {
 		PRINT(("unable to open timer device %s\n", TIMERNAME));
 		return(1);
 	}
@@ -323,8 +323,8 @@ int normal;
 {
 	if (normal && timerIO) {
 		if (timing)
-			WaitIO(timerIO);
-		CloseDevice(timerIO);
+			WaitIO(&timerIO->tr_node);
+		CloseDevice(&timerIO->tr_node);
 	}
 
 	if (timerPort) {
@@ -333,7 +333,7 @@ int normal;
 	}
 
 	if (timerIO) {
-		DeleteExtIO(timerIO);
+		DeleteExtIO(&timerIO->tr_node);
 		timerIO = NULL;
 	}
 }
