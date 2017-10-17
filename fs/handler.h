@@ -34,3 +34,7 @@ extern int	cache_flush_pending;
 #undef BTOC
 #endif
 #define BTOC(x) (((unsigned long) x)<<2)
+
+/* Calculate number of elements in an array */
+#define ARRAY_SIZE(x) ((sizeof (x) / sizeof ((x)[0])))
+

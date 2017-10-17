@@ -61,12 +61,10 @@ extern char *version;	/* BFFS version string */
 /* attempt to reduce stack space consumption, these are for main */
 
 
-handler()
+void
+handler(void)
 {
     int    index = 0;
-    int    ptype;
-    struct search_table *ptable;
-    struct direct_table *dtable;
 
     ULONG  signal;
     ULONG  dcsignal;
@@ -75,7 +73,9 @@ handler()
     ULONG  receivedsignal;
     struct Node **msghead;
     int    msgtype;
-    int    entries = 0;
+    packet_func_t pkt_func;
+    const char   *pkt_name;
+    int	          check_inhibit;
 
 #ifdef GCC
     SysBase = *((ULONG *) 4);
@@ -84,9 +84,6 @@ handler()
     DosPort  = &(BFFSTask->pr_MsgPort);
 
     InitStats();
-
-    while (spacket_table[entries].packet_type != LAST_PACKET)
-	entries++;
 
     PRINT(("%s\n", version + 7));
 
@@ -103,7 +100,6 @@ handler()
 	receiving_packets = 0;
 	goto ignore_packets;
     }
-
 
     if (open_dchange()) {
 	close_dchange(0);
@@ -129,7 +125,6 @@ handler()
     msgtype = 5;
 
     goto interpacket;
-
 
     while (receiving_packets) {
 	receivedsignal = Wait(signal);
@@ -174,62 +169,25 @@ handler()
 	    global.Res1 = DOSTRUE;
 	    global.Res2 = 0L;
 
-	    ptype = pack->dp_Type;
-	    if ((ptype < 41) && (ptype >= 0)) {   /* try for index table */
-		dtable = &dpacket_table[ptype];
-		if (dev_openfail && dtable->check_inhibit) {
-		    open_filesystem();
-		    if (dev_openfail) {
-			global.Res1 = DOSFALSE;
-			global.Res2 = ERROR_NO_DISK;
+	    pkt_func = packet_lookup(pack->dp_Type, &pkt_name, &check_inhibit);
+	    if (pkt_func != NULL) {
+	        PRINT1(("%-14s 1=%d 2=%d 3=%d 4=%d\n", pkt_name, pack->dp_Arg1,
+			pack->dp_Arg2, pack->dp_Arg3, pack->dp_Arg4));
+
+		if (dev_openfail && check_inhibit)
+		    if (open_filesystem())
 			goto endpack;
-		    }
-		}
 
-	        PRINT1(("%s D 1=%d 2=%d 3=%d 4=%d\n",
-			dtable->name, pack->dp_Arg1, pack->dp_Arg2,
-			pack->dp_Arg3, pack->dp_Arg4));
-
-		dtable->routine();   /* call the packet handler */
-
+		pkt_func();
 		goto endpack;
-	    }
-
-	    ptable = &spacket_table[0];
-	    for (index = 0; index < entries; index++, ptable++)
-		if (ptable->packet_type == ptype)
-			break;
-
-	    if (index == entries) {
+	    } else {
 		PRINT1(("p=%d E 1=%d 2=%d 3=%d 4=%d unknown packet\n",
 			pack->dp_Type, pack->dp_Arg1, pack->dp_Arg2,
 			pack->dp_Arg3, pack->dp_Arg4));
 
 		global.Res1 = DOSFALSE;
 		global.Res2 = ERROR_ACTION_NOT_KNOWN;
-		goto endpack;
 	    }
-
-	    if (dev_openfail && ptable->check_inhibit) {
-		if (inhibited) {
-		    PRINT(("Sorry, we're inhibited.\n"));
-		    global.Res1 = DOSFALSE;
-		    global.Res2 = ERROR_NO_DISK;
-		    goto endpack;
-		}
-	        open_filesystem();
-	        if (dev_openfail) {
-		    global.Res1 = DOSFALSE;
-		    global.Res2 = ERROR_NO_DISK;
-		    goto endpack;
-	        }
-	    }
-
-	    PRINT1(("%s S 1=%d 2=%d 3=%d 4=%d\n",
-		    ptable->name, pack->dp_Arg1,
-		    pack->dp_Arg2, pack->dp_Arg3, pack->dp_Arg4));
-
-	    ptable->routine();   /* call the packet handler */
 
 	    endpack:
 
@@ -267,14 +225,16 @@ handler()
 
     while (1) {
 	pack = WaitPkt();
-	if (pack->dp_Type == ACTION_FS_STATS) {
-		receiving_packets = 1;
+	switch (pack->dp_Type) {
+	    case ACTION_FS_STATS:
 		inhibited = 0;
-		open_filesystem();
+		if (open_filesystem()) {
+			PRINT(("cannot open filesystem\n"));
+			continue;
+		}
 		if (open_timer()) {
 			close_timer(0);
 			PRINT(("cannot open timer\n"));
-			receiving_packets = 0;
 			continue;
 		}
 		if (open_dchange()) {
@@ -283,11 +243,20 @@ handler()
  *  Don't consider it fatal that dchange is not supported
  *
 			PRINT(("cannot open disk change service\n"));
-			receiving_packets = 0;
 			continue;
 */
 		}
+		receiving_packets = 1;
 		goto endpack;
+	    case ACTION_FREE_LOCK:
+		FreeLock((struct BFFSLock *) BTOC(pack->dp_Arg1));
+		goto ignore_packets;
+	    case ACTION_END: {
+		struct BFFSfh *fileh = (struct BFFSfh *) pack->dp_Arg1;
+		FreeLock(fileh->lock);
+		FreeMem(fileh, sizeof(struct BFFSfh));
+		goto ignore_packets;
+	    }
 	}
 	PRINT(("dead: p=%d, 1=%d 2=%d 3=%d 4=%d\n", pack->dp_Type,
 		pack->dp_Arg1, pack->dp_Arg2, pack->dp_Arg3, pack->dp_Arg4));

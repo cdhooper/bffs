@@ -6,6 +6,9 @@
 	dbprint will now exit cleanly if the debug port is already open
 	Fixed directory corrupting bug in file dirent create code
 	fsck command now checks for sufficient stack at startup
+	Switched from DICE 2.06.34 to DICE 3.16
+	Added support for AS225 "ls" ACTION_EX_OBJECT / ACTION_EX_NEXT
+	Added simple unmount command
 
 1.5beta Release  [ Aug 21, 1996 ]  changes over 1.4beta0:
 	Fixed problem where fs allowed deletion of locked file

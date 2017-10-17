@@ -156,7 +156,25 @@ void PFreeLock()
 }
 
 
-void PExamineObject()
+/*
+ * PExamineObject() implements both ACTION_EXAMINE_OBJECT (23) and
+ * ACTION_EX_OBJECT (50).  These packets are used by applications to
+ * acquire file and directory metadata as stored in directories.
+ *
+ * ACTION_EX_OBJECT is used by the AS225 "ls" command to acquire
+ * additional UNIX attributes on each directory object.  The main
+ * difference is that ARG3 is added as a C pointer to an addditional
+ * Sun NFS RPC NFS fattr data structure.
+ *
+ * ARG1 = File lock
+ * ARG2 = BPTR FileInfoBlock
+ * ARG3 = Pointer to File Attr Block (ACTION_EX_OBJECT only)
+ *
+ * RES1 = Success (DOSTRUE) / Failure (DOSFALSE)
+ * RES2 = Failure code when RES1 == DOSFALSE
+ */
+void
+PExamineObject(void)
 {
     ULONG  inum;
     char   *buf;
@@ -205,14 +223,36 @@ void PExamineObject()
 	    dir_ent = dir_next(inode_read(lock->fl_Pinum), lock->fl_Poffset);
 
     FillInfoBlock(fib, lock, inode, dir_ent);
+
+    if ((pack->dp_Type == ACTION_EX_OBJECT) && (ARG3 != 0))
+	FillAttrBlock((fileattr_t *) ARG3, inode);
 }
 
-
-void PExamineNext()
+/*
+ * PExamineNext() implements both ACTION_EXAMINE_NEXT (24) and
+ * ACTION_EX_NEXT (51).  These packets are used by applications to
+ * acquire file and directory metadata as stored in directories,
+ * and are usually iterated on to acquire all directory contents.
+ *
+ * ACTION_EX_NEXT is used by the AS225 "ls" command to acquire
+ * additional UNIX attributes on each directory object.  The main
+ * difference is that ARG3 is added as a C pointer to an addditional
+ * Sun NFS RPC NFS fattr data structure.
+ *
+ * ARG1 = File lock
+ * ARG2 = BPTR FileInfoBlock
+ * ARG3 = Pointer to File Attr Block (ACTION_EX_OBJECT only)
+ *
+ * RES1 = Success (DOSTRUE) / Failure (DOSFALSE)
+ * RES2 = Failure code when RES1 == DOSFALSE
+ */
+void
+PExamineNext(void)
 {
     struct BFFSLock *lock;
     struct FileInfoBlock *fib;
     struct icommon *pinode;
+    struct icommon *inode;
     struct direct *dir_ent;
 
     lock = (struct BFFSLock *) BTOC(ARG1);
@@ -279,7 +319,11 @@ getname:
 	goto getname;
     }
 
-    FillInfoBlock(fib, lock, inode_read(DISK32(dir_ent->d_ino)), dir_ent);
+    inode = inode_read(DISK32(dir_ent->d_ino));
+    FillInfoBlock(fib, lock, inode, dir_ent);
+
+    if ((pack->dp_Type == ACTION_EX_NEXT) && (ARG3 != 0))
+	FillAttrBlock((fileattr_t *) ARG3, inode);
 }
 
 
@@ -1334,40 +1378,31 @@ void PCopyDir()
 }
 
 
-/* Inhibit()
+/* Inhibit() implements ACTION_INHIBIT
  *	This packet tells the filesystem to keep its hands off the
- *	media until another inhibit packet is sent with flag=0
+ *	media until another inhibit packet is sent with flag=0.
  */
-void PInhibit()
+void
+PInhibit(void)
 {
-	int flag;
+    LONG do_inhibit = ARG1;
 
-	flag = ARG1;
-
-	if (flag)
-		PRINT(("INHIBIT\n"));
-	else
-		PRINT(("UNINHIBIT\n"));
-
-	if (inhibited)
-		if (flag) {
-			PRINT(("Already inhibited!\n"));
-			global.Res1 = DOSFALSE;
-			global.Res2 = 0;
-		} else {
-			inhibited = 0;
-			open_filesystem();
-		}
-	else
-		if (flag) {
-			close_files();
-			close_filesystem();
-			inhibited = 1;
-		} else {
-			PRINT(("Already uninhibited!\n"));
-			global.Res1 = DOSFALSE;
-			global.Res2 = 0;
-		}
+    if (do_inhibit) {
+	PRINT(("INHIBIT\n"));
+	if (inhibited++ == 0) {
+	    close_files();
+	    close_filesystem();
+	}
+    } else {
+	PRINT(("UNINHIBIT\n"));
+	if (inhibited == 0) {
+	    PRINT(("Already uninhibited!\n"));
+	    global.Res1 = DOSFALSE;
+	    global.Res2 = 0;
+	} else if (--inhibited == 0) {
+	    open_filesystem();
+	}
+    }
 }
 
 
@@ -1464,6 +1499,7 @@ void PDie()
 	close_files();
 	close_filesystem();
 	RemoveVolNode();
+	inhibited++;
 	receiving_packets = 0;
 }
 
@@ -2198,126 +2234,4 @@ void PGetDiskFSSM()
 void PFreeDiskFSSM()
 {
 	PRINT(("Free the FFSM\n"));
-}
-#ifdef NOT
-void PExObject()
-{
-	struct	BFFSLock *lock;
-	struct	FileInfoBlock *fib;
-	unsigned long *rbuf;
-
-	PExamineObject();
-
-	lock = (struct BFFSLock *) BTOC(ARG1);
-	fib  = (struct FileInfoBlock *) BTOC(ARG2);
-	rbuf = (unsigned long *) BTOC(ARG3);
-
-	PRINT2(("LSGoober "));
-	PRINT2(("ARG1=0x%08x ", ARG1));
-	PRINT2(("ARG2=0x%08x ", ARG2));
-	PRINT2(("ARG3=0x%08x ", ARG3));
-	PRINT2(("ARG4=0x%08x\n", ARG4));
-	PRINT2(("ino=%d pino=%d poff=%d\n", lock->fl_Key, lock->fl_Pinum, lock->fl_Poffset));
-	PRINT2(("key=%d size=%d owner=%d\n", fib->fib_DiskKey, fib->fib_Size, fib->fib_OwnerUID));
-
-/*
-	rbuf[0] = 33;
-	rbuf[1] = 5;
-*/
-
-	global.Res1 = DOSFALSE;
-	global.Res2 = ERROR_ACTION_NOT_KNOWN;
-}
-
-void PExNext()
-{
-	struct	BFFSLock *lock;
-	struct	FileInfoBlock *fib;
-	unsigned long *rbuf;
-	static int buf[32];
-
-	lock = (struct BFFSLock *) BTOC(ARG1);
-	fib  = (struct FileInfoBlock *) BTOC(ARG2);
-	rbuf = (unsigned long *) BTOC(ARG3);
-
-	PRINT2(("GetAttributes "));
-	PRINT2(("ARG1=0x%08x ", ARG1));
-	PRINT2(("ARG2=0x%08x ", ARG2));
-	PRINT2(("ARG3=0x%08x ", ARG3));
-	PRINT2(("ARG4=0x%08x\n", ARG4));
-	PRINT2(("0ino=%d pino=%d poff=%d\n", lock->fl_Key, lock->fl_Pinum, lock->fl_Poffset));
-	PRINT2(("key=%d size=%d owner=%d\n", fib->fib_DiskKey, fib->fib_Size, fib->fib_OwnerUID));
-
-
-/*
-	PRINT2(("nam=%.6s\n", ARG3));
-ARG3 unknown, not string
-
-at most 64 bytes in length; return UID buffer?
-*/
-
-
-	buf[0] = 1640;
-	buf[1] = 10;
-
-
-	global.Res1 = (unsigned long) buf;
-/*
-	global.Res1 = DOSFALSE;
-	global.Res2 = ERROR_ACTION_NOT_KNOWN;
-*/
-}
-#endif
-
-/* XXX: This needs work to implement support for AS225 ls */
-void PExObject()
-{
-    struct FileInfoBlock *fib;
-    int index;
-
-    global.Res1 = DOSFALSE;
-    global.Res2 = ERROR_ACTION_NOT_KNOWN;
-    return;
-
-    fib  = (struct FileInfoBlock *) BTOC(ARG2);
-
-    PExamineObject();
-
-    if (global.Res1 != DOSFALSE) {
-	fib->is_remote = 1;
-	fib->mode = 0;
-	fib->fib_OwnerUID = 0;
-	fib->fib_OwnerGID = 0;
-	fib->fib_Protection = 0;
-	for (index = 0; index < 80; index++)
-		fib->fib_Comment[index] = 0;
-	for (index = 0; index < 24; index++)
-		fib->fib_Reserved[index] = 0;
-    }
-}
-
-void PExNext()
-{
-    struct FileInfoBlock *fib;
-    int index;
-
-    global.Res1 = DOSFALSE;
-    global.Res2 = ERROR_ACTION_NOT_KNOWN;
-    return;
-
-    fib  = (struct FileInfoBlock *) BTOC(ARG2);
-
-    PExamineNext();
-
-    if (global.Res1 != DOSFALSE) {
-	fib->is_remote = 1;
-	fib->mode = 0;
-	fib->fib_OwnerUID = 0;
-	fib->fib_OwnerGID = 0;
-	fib->fib_Protection = 0;
-	for (index = 0; index < 80; index++)
-		fib->fib_Comment[index] = 0;
-	for (index = 0; index < 24; index++)
-		fib->fib_Reserved[index] = 0;
-    }
 }

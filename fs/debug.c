@@ -38,7 +38,7 @@ ULONG a, b, c, d, e, f, g;
 void debug()
 {
 }
-#endif DEBUG
+#endif /* DEBUG */
 
 
 #ifdef DEBUG1
@@ -64,7 +64,7 @@ ULONG a, b, c, d, e, f, g;
 void debug1()
 {
 }
-#endif DEBUG1
+#endif /* DEBUG1 */
 
 
 #ifdef DEBUG2
@@ -90,6 +90,6 @@ ULONG a, b, c, d, e, f, g;
 void debug2()
 {
 }
-#endif DEBUG2
+#endif /* DEBUG2 */
 
-#endif DEBUG
+#endif /* DEBUG */

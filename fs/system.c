@@ -584,18 +584,20 @@ if (og_perm_invert) {
     if (ttime == 0)
 	ttime = DISK32(superblock->fs_time);
 
-    /* 86400 = 24 * 60 * 60           = (seconds in a day ) */
+    /* 86400 = 24 * 60 * 60           = (seconds in a day) */
     /*  2922 = (1978 - 1970) * 365.25 = (clock birth difference in days) */
-    /* 18000 = 5 * 60 * 60            = (clock birth difference remainder seconds) */
+    /* 18000 = 5 * 60 * 60            = (clock birth diff remainder seconds) */
 
     fib->fib_Date.ds_Days   =  ttime / 86400 - 2922;	      /* Date today */
     fib->fib_Date.ds_Minute = (ttime % 86400) / 60;	      /* Minutes today */
     fib->fib_Date.ds_Tick   = (ttime % 60) * TICKS_PER_SECOND;/* Ticks * minute */
 
 #define DIRNAMESIZE 107
-    if ((lock->fl_Key == ROOTINO) && (pack->dp_Type == ACTION_EXAMINE_OBJECT))
+    if ((lock->fl_Key == ROOTINO) &&
+	((pack->dp_Type == ACTION_EXAMINE_OBJECT) ||
+	 (pack->dp_Type == ACTION_EX_OBJECT))) {
 	strcpy(fib->fib_FileName + 1, (char *) (BTOC(VolNode->dl_Name)) + 1);
-    else {
+    } else {
 	strncpy(fib->fib_FileName + 1, dir_ent->d_name, DIRNAMESIZE - 1);
 	fib->fib_FileName[DIRNAMESIZE] = '\0';
 	fib->fib_DiskKey = DISK32(dir_ent->d_ino);
@@ -606,6 +608,33 @@ if (og_perm_invert) {
 	   dir_ent ? DISK32(dir_ent->d_ino) : 0, fib->fib_Size,
 	   fib->fib_NumBlocks, fib->fib_FileName+1));
 */
+    if ((pack->dp_Type == ACTION_EX_OBJECT) ||
+	(pack->dp_Type == ACTION_EX_NEXT)) {
+	/* XXX: needed? */
+	fib->mode = fmode;
+    }
+}
+
+void
+FillAttrBlock(fileattr_t *attr, struct icommon *finode)
+{
+    attr->fa_type      = 0;
+    attr->fa_mode      = DISK16(finode->ic_mode);  /* Same as UNIX disk mode */
+    attr->fa_nlink     = DISK16(finode->ic_nlink);
+    attr->fa_uid       = DISK32(finode->ic_ouid);
+    attr->fa_gid       = DISK32(finode->ic_ogid);
+    attr->fa_size      = IC_SIZE(finode);
+    attr->fa_blocksize = phys_sectorsize;
+    attr->fa_rdev      = 0;
+    attr->fa_blocks    = DISK32(finode->ic_blocks);
+    attr->fa_fsid      = 0;
+    attr->fa_fileid    = DISK32(finode->ic_ouid);
+    attr->fa_atime     = DISK32(finode->ic_atime);
+    attr->fa_atime_us  = DISK32(finode->ic_atime_ns) / 1000;
+    attr->fa_mtime     = DISK32(finode->ic_mtime);
+    attr->fa_mtime_us  = DISK32(finode->ic_mtime_ns) / 1000;
+    attr->fa_ctime     = DISK32(finode->ic_ctime);
+    attr->fa_ctime_us  = DISK32(finode->ic_ctime_ns) / 1000;
 }
 
 
@@ -727,11 +756,14 @@ char *path;
 	return(inum);
 }
 
-
-open_filesystem()
+int
+open_filesystem(void)
 {
-	if (inhibited)
-		return(1);
+	if (inhibited) {
+		global.Res1 = DOSFALSE;
+		global.Res2 = ERROR_DEVICE_NOT_MOUNTED;
+		return (1);
+	}
 
 	PRINT(("open filesystem\n"));
 
@@ -742,8 +774,9 @@ open_filesystem()
 		dev_openfail = find_superblock();
 		if (dev_openfail)
 			strcpy(stat->disk_type, "No fs");
-	} else
+	} else {
 		global.Res2 = ERROR_DEVICE_NOT_MOUNTED;
+	}
 
 	if (dev_openfail) {
 		global.Res1 = DOSFALSE;
@@ -754,6 +787,7 @@ open_filesystem()
 		NewVolNode();
 	}
 	motor_off();
+	return (0);
 }
 
 
@@ -775,7 +809,8 @@ close_filesystem()
 		superblock_destroy();
 		strcpy(stat->disk_type, "Unmounted");
 	}
-	motor_off();
+	if (motor_is_on)
+		motor_off();
 	close_ufs();
 	dev_openfail = 1;
 

@@ -24,8 +24,9 @@ struct BFFSfh  {
 /* Packet routines - specified by table code */
 void PUnimplemented();
 void PLocateObject();
-void PExamineObject();
-void PExamineNext();
+
+void PExamineObject(void);
+void PExamineNext(void);
 void PFindInput();
 void PFindOutput();
 void PRead();
@@ -74,8 +75,6 @@ void PFileSysStats();
 void PFreeLock();
 void PGetDiskFSSM();
 void PFreeDiskFSSM();
-void PExObject();
-void PExNext();
 
 /* key is or'd with MSb on first examine */
 #define MSb 1<<31

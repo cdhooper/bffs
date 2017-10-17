@@ -179,7 +179,7 @@ int	inum;
 	if (lfrag == 0) /* we have a hole */
 		ZeroMem(current, FSIZE);
 	else {
-		PRINT(("part f=%d c=%x ", frag, current));
+		PRINT(("part f=%d c=%x\n", frag, current));
 		if (fragbuf = cache_frag(lfrag))
 			CopyMem(fragbuf, current, FSIZE);
 		else {
@@ -212,7 +212,7 @@ char	*buf;
 {
 	char *fragbuf;
 
-	PRINT(("part f=%d o=%d s=%d b=%x ", frag, offset, size, buf));
+	PRINT(("part f=%d o=%d s=%d b=%x\n", frag, offset, size, buf));
 	if (fragbuf = cache_frag(frag)) {
 		CopyMem(fragbuf + offset, buf, size);
 		return(size);
