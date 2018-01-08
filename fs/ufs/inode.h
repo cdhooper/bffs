@@ -8,8 +8,10 @@
  * Data in icommon is read in from permanent inode on volume.
  */
 
-#ifndef	_ufs_inode_h
-#define	_ufs_inode_h
+#ifndef	_UFS_INODE_H
+#define	_UFS_INODE_H
+
+#include <ufs/fs.h>
 
 #define	NDADDR	12		/* direct addresses in inode */
 #define	NIADDR	3		/* indirect addresses in inode */
@@ -24,11 +26,11 @@ struct	icommon {
 	gid_t	ic_ogid;	/*  6: owner's group id */
 	quad	ic_size;	/*  8: number of bytes in file */
 
-	time_t	ic_atime;	/* 16: time last accessed */
+	utime_t	ic_atime;	/* 16: time last accessed */
 	long	ic_atime_ns;
-	time_t	ic_mtime;	/* 24: time last modified */
+	utime_t	ic_mtime;	/* 24: time last modified */
 	long	ic_mtime_ns;
-	time_t	ic_ctime;	/* 32: last time inode changed */
+	utime_t	ic_ctime;	/* 32: last time inode changed */
 	long	ic_ctime_ns;
 
 	daddr_t	ic_db[NDADDR];	/* 40: disk block addresses */
@@ -100,20 +102,6 @@ struct	dinode {
 #define	di_blocks	di_ic.ic_blocks
 #define	di_gen		di_ic.ic_gen
 
-/* flags */
-#define	ILOCKED		0x0001		/* inode is locked */
-#define	IUPD		0x0002		/* file has been modified */
-#define	IACC		0x0004		/* inode access time to be updated */
-#define	IMOD		0x0008		/* inode has been modified */
-#define	IWANT		0x0010		/* some process waiting on lock */
-#define	ISYNC		0x0020		/* do all allocation synchronously */
-#define	ICHG		0x0040		/* inode has been changed */
-#define	ILWAIT		0x0080		/* someone waiting on file lock */
-#define	IREF		0x0100		/* inode is being referenced */
-#define	INOACC		0x0200		/* no access time update in getpage */
-#define	IMODTIME	0x0400		/* mod time already set */
-#define	IFASTSYMLNK	0x0800		/* fast symbolic link */
-
 /* modes */
 #define	IFMT		0170000		/* type of file */
 #define	IFIFO		0010000		/* named pipe (fifo) */
@@ -132,4 +120,4 @@ struct	dinode {
 #define	IWRITE		0200
 #define	IEXEC		0100
 
-#endif	/* !_ufs_inode_h */
+#endif	/* _UFS_INODE_H */

@@ -1,6 +1,7 @@
 *.o
 *.uaem
 bin/*
+l/*
 .cscope_cmd*
 cscope.out
 bffs

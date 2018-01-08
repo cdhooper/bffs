@@ -1,75 +1,91 @@
-ARCH=ami
+#
+# Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted so long as any redistribution retains the
+# above copyright notice, this condition, and the below disclaimer.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+
 DOTDOT=
-#PROG=$(DOTDOT)/bin/fsck.$(ARCH)
 PROG=$(DOTDOT)/bin/fsck
-OBJ=obj.$(ARCH)/
-#OBJ=$(DOTDOT)/obj.$(ARCH)/
-OBJS=$(OBJ)main.o $(OBJ)fsck_inode.o $(OBJ)pass1.o $(OBJ)pass1b.o $(OBJ)pass2.o $(OBJ)pass3.o $(OBJ)pass4.o $(OBJ)pass5.o $(OBJ)preen.o $(OBJ)setup.o $(OBJ)utilities.o $(OBJ)dir.o $(OBJ)ffs_subr.o $(OBJ)ffs_tables.o $(OBJ)fsck_other.o $(OBJ)getopt.o $(OBJ)amiga_device.o $(OBJ)amiga_label.o
+OBJ=obj
+SRCS=main.c fsck_inode.c pass1.c pass1b.c pass2.c pass3.c pass4.c pass5.c preen.c setup.c utilities.c dir.c ffs_subr.c ffs_tables.c fsck_other.c getopt.c amiga_device.c amiga_label.c
+OBJS=$(SRCS:*.*:"$(OBJ)/%1.o")
 
 CC=dcc
-CFLAGS=-I/ucbinclude -I/fs -Dcdh
+CFLAGS=-O2 -r -I/ucbinclude -I/unix_support -Dcdh
 RM = -delete quiet force >nil:
 
-$(PROG): $(OBJS)
-	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
-
-$(OBJS): $(OBJ)
+$(PROG): $(OBJ) $(OBJS)
+	$(CC) $(CFLAGS) %(right:*.o) -o %(left)
 
 $(OBJ): $(OBJ)
 	makedir %(left)
 
-$(OBJ)main.o: main.c
+$(OBJ)/main.o: main.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)fsck_inode.o: fsck_inode.c
+$(OBJ)/fsck_inode.o: fsck_inode.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)pass1.o: pass1.c
+$(OBJ)/pass1.o: pass1.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)pass1b.o: pass1b.c
+$(OBJ)/pass1b.o: pass1b.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)pass2.o: pass2.c
+$(OBJ)/pass2.o: pass2.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)pass3.o: pass3.c
+$(OBJ)/pass3.o: pass3.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)pass4.o: pass4.c
+$(OBJ)/pass4.o: pass4.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)pass5.o: pass5.c
+$(OBJ)/pass5.o: pass5.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)preen.o: preen.c
+$(OBJ)/preen.o: preen.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)setup.o: setup.c
+$(OBJ)/setup.o: setup.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)utilities.o: utilities.c
+$(OBJ)/utilities.o: utilities.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)dir.o: dir.c
+$(OBJ)/dir.o: dir.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)fsck_other.o: fsck_other.c
+$(OBJ)/fsck_other.o: fsck_other.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)getopt.o: $(DOTDOT)/unix_support/getopt.c
+$(OBJ)/getopt.o: $(DOTDOT)/unix_support/getopt.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)ffs_subr.o: $(DOTDOT)/unix_support/ffs_subr.c
+$(OBJ)/ffs_subr.o: $(DOTDOT)/unix_support/ffs_subr.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)ffs_tables.o: $(DOTDOT)/unix_support/ffs_tables.c
+$(OBJ)/ffs_tables.o: $(DOTDOT)/unix_support/ffs_tables.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)amiga_device.o: $(DOTDOT)/unix_support/amiga_device.c
+$(OBJ)/amiga_device.o: $(DOTDOT)/unix_support/amiga_device.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)amiga_label.o: $(DOTDOT)/unix_support/amiga_label.c
+$(OBJ)/amiga_label.o: $(DOTDOT)/unix_support/amiga_label.c
 	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 clean:

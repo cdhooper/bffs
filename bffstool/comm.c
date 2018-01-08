@@ -1,18 +1,20 @@
-/* comm.c version 1.5  (BFFStool)
- *      This program is copyright (1993 - 1996) Chris Hooper.  All code
+/* comm.c  (BFFStool)
+ *      This program is copyright (1993 - 2017) Chris Hooper.  All code
  *      herein is freeware.  No portion of this code may be sold for profit.
  */
 
 #include <stdio.h>
-#include "dos30/dosextens.h"
+#include <string.h>
+#include <dos/dosextens.h>
 #include <libraries/dosextens.h>
 #include <exec/memory.h>
+#include <clib/exec_protos.h>
 #include <clib/dos_protos.h>
+#include <clib/alib_protos.h>
+#include <time.h>
+#include "bffs_dosextens.h"
 #include "comm.h"
-#include "sys/types.h"
-#include "sys/param.h"
-#include "sys/time.h"
-#include "ufs/fs.h"
+
 
 struct MsgPort		 *fs = NULL;
 struct MsgPort		 *tempfs = NULL;
@@ -24,8 +26,8 @@ extern char		 *filesystems[];
 #define ID_BFFS_DISK    (0x42464653L)  /* 'BFFS' filesystem */
 #define BTOC(x)	((x)<<2)
 
-open_handler(name)
-char *name;
+int
+open_handler(char *name)
 {
 	char buf[64];
 	int len;
@@ -51,7 +53,8 @@ char *name;
 	return(0);
 }
 
-close_handler()
+void
+close_handler(void)
 {
 /* dummy, this is for GetDeviceProc only!!
 	FreeDeviceProc(fs);
@@ -59,7 +62,8 @@ close_handler()
 	fs = NULL;
 }
 
-struct stat *get_stat()
+struct stat *
+get_stat(void)
 {
 	struct MsgPort	      *replyport;
 	struct StandardPacket *packet;
@@ -103,7 +107,8 @@ struct stat *get_stat()
 	return(stat);
 }
 
-sync_filesystem()
+int
+sync_filesystem(void)
 {
 	struct MsgPort	      *replyport;
 	struct StandardPacket *packet;
@@ -136,8 +141,8 @@ sync_filesystem()
 	return(0);
 }
 
-get_filesystems(name)
-char *name;
+int
+get_filesystems(char *name)
 {
 	struct	DosInfo	   *info;
 	struct	DeviceList *temp;

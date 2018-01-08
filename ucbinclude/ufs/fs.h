@@ -34,6 +34,8 @@
  *
  *	@(#)fs.h	8.7 (Berkeley) 4/19/94
  */
+#ifndef _UCB_UFS_FS_H_
+#define	_UCB_UFS_FS_H_
 
 /*
  * Each disk drive contains some number of file systems.
@@ -478,11 +480,6 @@ struct	ocg {
 	    ? (fs)->fs_bsize \
 	    : (fragroundup(fs, blkoff(fs, (ip)->i_size))))
 #define dblksize(fs, dip, lbn) \
-	(((lbn) >= NDADDR || S32((dip)->di_size) >= ((lbn) + 1) << (fs)->fs_bshift) \
-	    ? (fs)->fs_bsize \
-	    : (fragroundup(fs, blkoff(fs, S32((dip)->di_size)))))
-
-#define dblksizeX(fs, dip, lbn) \
 	(((lbn) >= NDADDR || (dip)->di_size >= ((lbn) + 1) << (fs)->fs_bshift) \
 	    ? (fs)->fs_bsize \
 	    : (fragroundup(fs, blkoff(fs, (dip)->di_size))))
@@ -506,3 +503,5 @@ struct	ocg {
 
 extern int inside[], around[];
 extern u_char *fragtbl[];
+
+#endif /* _UCB_UFS_FS_H_ */

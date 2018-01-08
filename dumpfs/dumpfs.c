@@ -31,6 +31,8 @@
  * SUCH DAMAGE.
  */
 
+const char *version = "\0$VER: dumpfs 1.6 (19-Jan-2018) © UCB";
+
 #ifndef lint
 static char copyright[] =
 "@(#) Copyright (c) 1983, 1992, 1993\n\
@@ -64,8 +66,9 @@ static char *rcsid = "$Id: dumpfs.c,v 1.6 1994/06/08 18:58:23 mycroft Exp $";
 #include <string.h>
 
 #ifdef AMIGA
+#include <getopt.h>
 extern int DEV_BSIZE;
-void break_abort();
+int break_abort(void);
 int fsi = -1;
 #endif
 

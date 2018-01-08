@@ -42,6 +42,9 @@ static char sccsid[] = "@(#)disklabel.c	5.17 (Berkeley) 2/23/91";
 #include "sys/disklabel.h"
 #include "paths.h"
 #include <sys/file.h>
+#ifdef cdh
+#include <err.h>
+#endif
 
 static	char *dgetstr();
 static	dgetent();
@@ -60,9 +63,8 @@ extern int  DEV_BSIZE;
 int force_autolabel = 0;
 
 struct disklabel *
-getdiskbyname(name)
+getdiskbyname(char *name)
 /* const removed by cdh */
-	char *name;
 {
 	static struct	disklabel disk;
 	static char	boot[BUFSIZ];
@@ -454,15 +456,6 @@ gettype(t, names)
 	return (0);
 }
 
-/* next routine added by cdh */
-char *strerror(err)
-int err;
-{
-	static char unknown[20];
-	strcpy(unknown, " entry not found");
-	return(unknown);
-}
-
 static
 error(err)
 	int err;
@@ -489,15 +482,17 @@ int readlabel(lpp)
 
 	if (force_autolabel)
 	    goto autosize_partition;
+
+	/* Search for disk label */
 	for (lp = (struct disklabel *)bootarea;
 	    lp <= (struct disklabel *)(bootarea + BBSIZE - sizeof(*lp));
 	    lp = (struct disklabel *)((char *)lp + 16)) {
 		if (lp->d_magic == DISKMAGIC &&
 		    lp->d_magic2 == DISKMAGIC) break;
-		if (lp > (struct disklabel *)(bootarea+BBSIZE-sizeof(*lp)) ||
-	    	    lp->d_magic != DISKMAGIC || lp->d_magic2 != DISKMAGIC)
-			goto autosize_partition;
 	}
+	if (lp > (struct disklabel *)(bootarea + BBSIZE - sizeof(*lp)) ||
+	    lp->d_magic != DISKMAGIC || lp->d_magic2 != DISKMAGIC)
+	    goto autosize_partition;
 
 	bcopy(lp, lpp, sizeof(struct disklabel));
 	return(0);

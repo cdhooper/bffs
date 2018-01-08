@@ -40,6 +40,12 @@
  *	@(#)restore.h	8.3 (Berkeley) 9/13/94
  */
 
+#ifdef cdh
+#include <stdio.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#endif
+
 /*
  * Flags
  */
@@ -143,12 +149,9 @@ typedef struct rstdirdesc RST_DIR;
 #define FAIL 0
 
 #ifdef cdh
-#       define QUAD(x) (x).val[1]
 #	define exit(x) exit_cleanup(x)
 #	ifdef AMIGA
 #		define NAME_MAX 255
 #		define exit exit_cleanup
-#	endif AMIGA
-#else
-#       define QUAD(x) (x)
-#endif cdh
+#	endif /* AMIGA */
+#endif /* cdh */

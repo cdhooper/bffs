@@ -157,7 +157,7 @@ newnode(np)
 		badentry(np, "newnode: not a node");
 	cp = myname(np);
 #ifdef AMIGA
-	if (!Nflag && mkdir(cp + 2, 0777) < 0) {
+	if (!Nflag && mkdir(cp + 2) < 0) {
 #else
 	if (!Nflag && mkdir(cp, 0777) < 0) {
 #endif

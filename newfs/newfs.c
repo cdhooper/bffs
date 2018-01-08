@@ -31,6 +31,8 @@
  * SUCH DAMAGE.
  */
 
+const char *version = "\0$VER: newfs 1.10 (19-Jan-2018) © UCB";
+
 #ifndef lint
 static char copyright[] =
 "@(#) Copyright (c) 1983, 1989, 1993, 1994\n\
@@ -208,7 +210,8 @@ char	*special = NULL;
 
 
 #ifdef AMIGA
-void break_abort()
+int
+break_abort(void)
 {
 	fprintf(stderr, "^C\n");
 	dio_inhibit(0);
@@ -217,8 +220,8 @@ void break_abort()
 }
 #endif
 
-void error_exit(num)
-int num;
+void
+error_exit(int num)
 {
 #ifdef AMIGA
 	dio_inhibit(0);

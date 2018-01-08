@@ -1,25 +1,49 @@
+#
+# Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted so long as any redistribution retains the
+# above copyright notice, this condition, and the below disclaimer.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+
 DOTDOT=
 PROG=$(DOTDOT)/bin/edumpfs
-OBJ=$(DOTDOT)/obj.ami/
-AMI=$(DOTDOT)/unix_support
+OBJ=obj
 OBJS=$(OBJ)amiga_device.o $(OBJ)edumpfs.o $(OBJ)file_blockio.o
-RM=-delete force >nil:
-CFLAGS=-I/fs -Dcdh -I/ucbinclude
 
-$(PROG): $(OBJS)
-	dcc -o $(PROG) $(OBJS)
+CC=dcc
+RM=-delete force >nil:
+CFLAGS=-O2 -r -proto -ms -I/fs -Dcdh -I/ucbinclude -I/unix_support
+
+$(PROG): $(OBJ) $(OBJS)
+	$(CC) $(CFLAGS) %(right:*.o) -o %(left)
+
+$(OBJ): $(OBJ)
+	makedir %(left)
 
 $(OBJ)edumpfs.o: edumpfs.c
-	dcc $(CFLAGS) -c %(right) -o %(left)
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 $(OBJ)edumpfs_other.o: edumpfs_other.c
-	dcc $(CFLAGS) -c %(right) -o %(left)
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)amiga_device.o: $(AMI)/amiga_device.c
-	dcc $(CFLAGS) -c %(right) -o %(left)
+$(OBJ)amiga_device.o: $(DOTDOT)/unix_support/amiga_device.c
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
-$(OBJ)file_blockio.o: $(AMI)/file_blockio.c
-	dcc $(CFLAGS) -c %(right) -o %(left)
+$(OBJ)file_blockio.o: $(DOTDOT)/unix_support/file_blockio.c
+	$(CC) $(CFLAGS) -c %(right) -o %(left)
 
 
 clean:

@@ -1,6 +1,7 @@
 /*
+ * Utility to show and edit Amiga disk RDB fields, copyright Chris Hooper
  *
- * This product is distributed as freeware with no warrantees expressed or
+ * This product is distributed as freeware with no warranties expressed or
  * implied.  There are no restrictions on distribution or application of
  * this program other than it may not be used in contribution with or
  * converted to an application under the terms of the GNU Public License
@@ -10,7 +11,13 @@
  *
  */
 
+const char *version = "\0$VER: rdb 1.2 (19-Jan-2018) © Chris Hooper";
+
 #include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 #include <exec/types.h>
 #include <devices/trackdisk.h>
 #include <libraries/dos.h>
@@ -29,15 +36,38 @@
 #define TD_SECTOR 512
 #endif
 
-char *strchr();
+#define strcasecmp stricmp
+
 struct FileSysStartupMsg *find_startup();
-void break_abort();
-ULONG chars_to_long();
+static long  blk_read(void *buf, ULONG blk);
+static long  blk_write(void *buf, ULONG blk);
+static int   break_abort(void);
+static ULONG chars_to_long(unsigned char *str);
+static LONG  chksum(void *ptr);
+static void  close_device(void);
+static int   create_partition(void);
+static void  do_creations(void);
+static int   dofix(void *buf, ULONG blk, ULONG name);
+static int   extract_seglist(int seglist, const char *name);
+static void  filesystem_operation(int filesystem);
+static int   fixsum(void *ptr, ULONG blk);
+static void  freelist(struct LoadSegBlock *current);
+static int   getans(void);
+static int   open_device(void);
+static int   partition_operation(int partition, int parent);
+static void  perr(const char *fmt, ...);
+static int   print_bad_blocks(void);
+static int   print_filesystem_info(void);
+static void  print_help(void);
+static void  print_id(ULONG name);
+static int   print_partition_info(void);
+static int   print_rdb_info(void);
+static int   print_seglist(int seglist);
+static void  print_usage(void);
+static int   rigid_operation(void);
 
 struct	IOExtTD *trackIO = NULL; /* device packet pointer */
 struct  MsgPort *devport = NULL; /* device communication port */
-
-char	*version = "\0$VER: rdb 1.1 (20.Jan.94) © 1994 Chris Hooper";
 
 char	*progname;		/* name of this program running */
 char	*buffer	= NULL;		/* buffer area for disk read */
@@ -142,6 +172,8 @@ struct PartitionBlock newpart =
 	0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0		/* EReserved[15]*/
 };
 
+#define ARRAY_SIZE(x) ((sizeof (x) / sizeof ((x)[0])))
+
 #define PART	0
 #define RIGID	1
 #define FILESYS	2
@@ -149,64 +181,66 @@ struct PartitionBlock newpart =
 #define	INT	0
 #define STR	1
 
-struct accept_info {
-	char *name;
-	int offset;
-	int type;
-	int changed;
-	int which;	/* 0=partition, 1=rdb, 2=filesystem */
-} accept[] =
-/*	name			offset	 type	change	which	*/
-{	"HostID",		3,	 INT,	0,	RIGID,
-	"BlockBytes",		4,	 INT,	0,	RIGID,
-	"RigidFlags",		5,	 INT,	0,	RIGID,
-	"BadBlockList",		6,	 INT,	0,	RIGID,
-	"PartitionList",	7,	 INT,	0,	RIGID,
-	"FileSysHeaderList",	8,	 INT,	0,	RIGID,
-	"DriveInit",		9,	 INT,	0,	RIGID,
-	"Cylinders",		16,	 INT,	0,	RIGID,
-	"Sectors",		17,	 INT,	0,	RIGID,
-	"Heads",		18,	 INT,	0,	RIGID,
-	"Interleave",		19,	 INT,	0,	RIGID,
-	"Park",			20,	 INT,	0,	RIGID,
-	"WritePreComp",		24,	 INT,	0,	RIGID,
-	"ReducedWrite",		25,	 INT,	0,	RIGID,
-	"StepRate",		26,	 INT,	0,	RIGID,
-	"RDBBlocksLo",		32,	 INT,	0,	RIGID,
-	"RDBBlocksHi",		33,	 INT,	0,	RIGID,
-	"LoCylinder",		34,	 INT,	0,	RIGID,
-	"HiCylinder",		35,	 INT,	0,	RIGID,
-	"CylBlocks",		36,	 INT,	0,	RIGID,
-	"AutoParkSeconds",	37,	 INT,	0,	RIGID,
-	"DiskVendor",		40,	 STR,	0,	RIGID,
-	"DiskProduct",		42,	 STR,	0,	RIGID,
-	"DiskRevision",		46,	 STR,	0,	RIGID,
-	"ControllerVendor",	47,	 STR,	0,	RIGID,
-	"ControllerProduct",	49,	 STR,	0,	RIGID,
-	"ControllerRev",	53,	 STR,	0,	RIGID,
-	"Next",			4,	 INT,	0,	PART,
-	"Flags",		5,	 INT,	0,	PART,
-	"DevFlags",		8,	 INT,	0,	PART,
-	"DriveName",		9,	 STR,	0,	PART,
-	"Surfaces",		32 + 3,  INT,	0,	PART,
-	"BlocksPerTrack",	32 + 5,  INT,	0,	PART,
-	"Reserved",		32 + 6,  INT,	0,	PART,
-	"PreAlloc",		32 + 7,  INT,	0,	PART,
-	"Interleave",		32 + 8,  INT,	0,	PART,
-	"LowCyl",		32 + 9,  INT,	0,	PART,
-	"HighCyl",		32 + 10, INT,	0,	PART,
-	"NumBuffers",		32 + 11, INT,	0,	PART,
-	"BufMemType",		32 + 12, INT,	0,	PART,
-	"MaxTransfer",		32 + 13, INT,	0,	PART,
-	"Mask",			32 + 14, INT,	0,	PART,
-	"BootPri",		32 + 15, INT,	0,	PART,
-	"DosType",		32 + 16, INT,	0,	PART,
-	NULL,			0,	 0,	0,	0
+typedef struct {
+	const char * const name;
+	short offset;           /* Offset into RDB struct */
+	char type;              /* 0=INT, 1=STR */
+	char which;             /* 0=Partition, 1=RDB, 2=Filesystem */
+} accept_info_t;
+
+static const accept_info_t accept[] =
+/*	name			offset	 type	which	*/
+{	"HostID",		3,	 INT,	RIGID,
+	"BlockBytes",		4,	 INT,	RIGID,
+	"RigidFlags",		5,	 INT,	RIGID,
+	"BadBlockList",		6,	 INT,	RIGID,
+	"PartitionList",	7,	 INT,	RIGID,
+	"FileSysHeaderList",	8,	 INT,	RIGID,
+	"DriveInit",		9,	 INT,	RIGID,
+	"Cylinders",		16,	 INT,	RIGID,
+	"Sectors",		17,	 INT,	RIGID,
+	"Heads",		18,	 INT,	RIGID,
+	"Interleave",		19,	 INT,	RIGID,
+	"Park",			20,	 INT,	RIGID,
+	"WritePreComp",		24,	 INT,	RIGID,
+	"ReducedWrite",		25,	 INT,	RIGID,
+	"StepRate",		26,	 INT,	RIGID,
+	"RDBBlocksLo",		32,	 INT,	RIGID,
+	"RDBBlocksHi",		33,	 INT,	RIGID,
+	"LoCylinder",		34,	 INT,	RIGID,
+	"HiCylinder",		35,	 INT,	RIGID,
+	"CylBlocks",		36,	 INT,	RIGID,
+	"AutoParkSeconds",	37,	 INT,	RIGID,
+	"DiskVendor",		40,	 STR,	RIGID,
+	"DiskProduct",		42,	 STR,	RIGID,
+	"DiskRevision",		46,	 STR,	RIGID,
+	"ControllerVendor",	47,	 STR,	RIGID,
+	"ControllerProduct",	49,	 STR,	RIGID,
+	"ControllerRev",	53,	 STR,	RIGID,
+	"Next",			4,	 INT,	PART,
+	"Flags",		5,	 INT,	PART,
+	"DevFlags",		8,	 INT,	PART,
+	"DriveName",		9,	 STR,	PART,
+	"Surfaces",		32 + 3,  INT,	PART,
+	"BlocksPerTrack",	32 + 5,  INT,	PART,
+	"Reserved",		32 + 6,  INT,	PART,
+	"PreAlloc",		32 + 7,  INT,	PART,
+	"Interleave",		32 + 8,  INT,	PART,
+	"LowCyl",		32 + 9,  INT,	PART,
+	"HighCyl",		32 + 10, INT,	PART,
+	"NumBuffers",		32 + 11, INT,	PART,
+	"BufMemType",		32 + 12, INT,	PART,
+	"MaxTransfer",		32 + 13, INT,	PART,
+	"Mask",			32 + 14, INT,	PART,
+	"BootPri",		32 + 15, INT,	PART,
+	"DosType",		32 + 16, INT,	PART,
 };
 
-main(argc, argv)
-int argc;
-char *argv[];
+#define NUM_ACCEPT ARRAY_SIZE(accept)
+static char changed[NUM_ACCEPT];
+
+int
+main(int argc, char *argv[])
 {
 	int	index;
 	int	cur;
@@ -229,11 +263,11 @@ char *argv[];
 	for (index = 1; index < argc; index++) {
 		if (argv[index][0] == '-') {
 		    argv[index]++;
-		    if (unstrcmp(argv[index], "avail") ||
-			     unstrcmp(argv[index], "a")) {
+		    if (strcasecmp(argv[index], "avail") == 0 ||
+			     strcasecmp(argv[index], "a") == 0) {
 			reportmax = 1;
-		    } else if (unstrcmp(argv[index], "extract") ||
-			     unstrcmp(argv[index], "e")) {
+		    } else if (strcasecmp(argv[index], "extract") == 0 ||
+			     strcasecmp(argv[index], "e") == 0) {
 			extractfs = 1;
 			index++;
 			if (index == argc)
@@ -247,11 +281,11 @@ char *argv[];
 			printf("extract id %s = %08X '", argv[index], extractid);
 			print_id(extractid);
 			printf("'\n");
-		    } else if (unstrcmp(argv[index], "help") ||
-			     unstrcmp(argv[index], "h")) {
+		    } else if (strcasecmp(argv[index], "help") == 0 ||
+			     strcasecmp(argv[index], "h") == 0) {
 			print_help();
-		    } else if (unstrcmp(argv[index], "newpart") ||
-			     unstrcmp(argv[index], "n")) {
+		    } else if (strcasecmp(argv[index], "newpart") == 0 ||
+			     strcasecmp(argv[index], "n") == 0) {
 			if (editpart)
 				perr("The part command is implied by newpart");
 			if (createpart)
@@ -263,8 +297,8 @@ char *argv[];
 			if (index == argc)
 				perr("newpart requires the new partition name");
 			strcpy(partname, argv[index]);
-		    } else if (unstrcmp(argv[index], "part") ||
-			     unstrcmp(argv[index], "p")) {
+		    } else if (strcasecmp(argv[index], "part") == 0 ||
+			     strcasecmp(argv[index], "p") == 0) {
 			if (editpart)
 				perr("only one partition may be modified at a time");
 			if (createpart)
@@ -276,8 +310,8 @@ char *argv[];
 			if (index == argc)
 				perr("part requires the partition name");
 			strcpy(partname, argv[index]);
-		    } else if (unstrcmp(argv[index], "promote") ||
-			     unstrcmp(argv[index], "pr")) {
+		    } else if (strcasecmp(argv[index], "promote") == 0 ||
+			     strcasecmp(argv[index], "pr") == 0) {
 			if (editpart || createpart)
 				perr("only one partition may be modified at a time");
 			if (promote)
@@ -287,11 +321,11 @@ char *argv[];
 			if (index == argc)
 				perr("promote requires the bootable partition name");
 			strcpy(partname, argv[index]);
-		    } else if (unstrcmp(argv[index], "rigid") ||
-			     unstrcmp(argv[index], "r")) {
+		    } else if (strcasecmp(argv[index], "rigid") == 0 ||
+			     strcasecmp(argv[index], "r") == 0) {
 			editrigid = 1;
-		    } else if (unstrcmp(argv[index], "seglist") ||
-			     unstrcmp(argv[index], "s")) {
+		    } else if (strcasecmp(argv[index], "seglist") == 0 ||
+			     strcasecmp(argv[index], "s") == 0) {
 			showseglist = 1;
 		    } else
 			perr("Unknown parameter -%s", argv[index]);
@@ -299,26 +333,26 @@ char *argv[];
 		    if (equalspos = strchr(argv[index], '='))
 			*equalspos = '\0';
 
-		    for (cur = 0; accept[cur].name; cur++) {
-			if (unstrcmp(accept[cur].name, argv[index])) {
+		    for (cur = 0; cur < NUM_ACCEPT; cur++) {
+			if (strcasecmp(accept[cur].name, argv[index]) == 0) {
 			    if (equalspos)
 				argv[index] = equalspos + 1;
 			    else
 				index++;
 			    printf("%s = %s\n", accept[cur].name, argv[index]);
 			    if (accept[cur].type == STR) /* it's a string */
-				switch(accept[cur].which) {
+				switch (accept[cur].which) {
 				    case PART:
-					strcpy(((ULONG *) &newpart) +
-						accept[cur].offset, argv[index]);
+					strcpy((char *) (((ULONG *) &newpart) +
+						accept[cur].offset), argv[index]);
 					break;
 				    case RIGID:
-					strcpy(((ULONG *) &newrigid) +
-						accept[cur].offset, argv[index]);
+					strcpy((char *) (((ULONG *) &newrigid) +
+						accept[cur].offset), argv[index]);
 					break;
 				}
 			    else if (*argv[index] == '\'')  /* check for 'XXXX' */
-				switch(accept[cur].which) {
+				switch (accept[cur].which) {
 				    case PART:
 					((ULONG *) &newpart)[accept[cur].offset] =
 						   chars_to_long(argv[index] + 1);
@@ -329,7 +363,7 @@ char *argv[];
 					break;
 				}
 			    else /* scan number */
-				switch(accept[cur].which) {
+				switch (accept[cur].which) {
 				    case PART:
 					sscanf(argv[index], "%i", ((ULONG *)
 					       &newpart) + accept[cur].offset);
@@ -339,15 +373,15 @@ char *argv[];
 					       &newrigid) + accept[cur].offset);
 					break;
 				}
-			    accept[cur].changed = 1;
+			    changed[cur] = 1;
 			    break;
 			}
 		    }
 
-		    if (accept[cur].name)
+		    if (cur < NUM_ACCEPT)
 			continue;
 
-		    switch(argnum) {
+		    switch (argnum) {
 			case 0:
 			    disk_device = argv[index];
 			    if (!strchr(disk_device, '.'))
@@ -414,13 +448,14 @@ char *argv[];
 	close_device();
 }
 
-open_device()
+static int
+open_device(void)
 {
 	/* create port to use when talking with handler */
 	devport = CreatePort(NULL, 0);
 	if (devport)
 		trackIO = (struct IOExtTD *)
-			CreateExtIO(devport, sizeof(struct IOExtTD));
+			CreateExtIO(devport, sizeof (struct IOExtTD));
 	else {
 		trackIO = NULL;
 		DeletePort(devport);
@@ -428,7 +463,7 @@ open_device()
 
 	if (trackIO == NULL) {
 		fprintf(stderr, "Failed to create trackIO structure\n");
-		return(1);
+		return (1);
 	}
 
 	if (OpenDevice(disk_device, disk_unit, (struct IORequest *)trackIO,
@@ -437,14 +472,14 @@ open_device()
 			disk_device, disk_unit);
 		DeletePort(devport);
 		DeleteExtIO((struct IORequest *)trackIO);
-		return(1);
+		return (1);
 	}
 
-	return(0);
+	return (0);
 }
 
-
-close_device()
+static void
+close_device(void)
 {
 	if (trackIO)
 		CloseDevice((struct IORequest *)trackIO);
@@ -454,7 +489,7 @@ close_device()
 		DeleteExtIO((struct IORequest *)trackIO);
 }
 
-long
+static long
 blk_read(void *buf, ULONG blk)
 {
 	if (blk > maxaccess)
@@ -467,7 +502,7 @@ blk_read(void *buf, ULONG blk)
 	return (DoIO((struct IORequest *)trackIO));
 }
 
-long
+static long
 blk_write(void *buf, ULONG blk)
 {
 	if (blk > maxaccess)
@@ -480,104 +515,72 @@ blk_write(void *buf, ULONG blk)
 	return (DoIO((struct IORequest *)trackIO));
 }
 
-
-/* unsigned string compare */
-int unstrcmp(str1, str2)
-char *str1;
-char *str2;
-{
-	while (*str1 != '\0') {
-		if (*str2 == '\0')
-			break;
-		else if (*str1 != *str2)
-			if ((*str1 >= 'A') && (*str1 <= 'Z')) {
-				if ((*str2 >= 'A') && (*str2 <= 'Z'))
-					break;
-				else if (*str1 != *str2 + 'A' - 'a')
-					break;
-			} else {
-				if ((*str2 >= 'a') && (*str2 <= 'a'))
-					break;
-				else if (*str1 != *str2 - 'A' + 'a')
-					break;
-			}
-		str1++;
-		str2++;
-	}
-	if (*str1 == *str2)
-		return(1);
-	else
-		return(0);
-}
-
-
-print_usage()
+static void
+print_usage(void)
 {
 	int index;
-	int len;
 	int cpos;
-	int which = RIGID;
+	int which = -1;
 
-	len = strlen(progname) + 8;
-	fprintf(stderr, "%s\n", version + 7);
-	fprintf(stderr, "Usage: %s [options] {disk.device} [unit] [flags]\n", progname);
-	fprintf(stderr, "%*s-rigid = edit fields in the Rigid Disk Block\n", len, "");
-	fprintf(stderr, "%*s-part NAME = modify partition table parameters of NAME\n", len, "");
-	fprintf(stderr, "%*s-newpart NAME = add new partition NAME to the RDB\n", len, "");
-	fprintf(stderr, "%*s-promote NAME = make partition NAME first to be mounted\n", len, "");
-	fprintf(stderr, "%*s-extract DOSTYPE = extract filesystem to a file \n", len, "");
-	fprintf(stderr, "%*s-avail = report next available block in RDB\n", len, "");
-	fprintf(stderr, "%*s-seglist = show seglist addresses for filesystems\n", len, "");
-/*
-	fprintf(stderr, "%*s-v = turn on verbose mode\n", len, "");
-*/
-	fprintf(stderr, "%*s-help = give more help\n", len, "");
-	fprintf(stderr, "%*sOther keywords:\n", len, "");
-	cpos = len + 1;
-	fprintf(stderr, "%*s", cpos, "");
-	for (index = 0; accept[index].name; index++) {
-		cpos += strlen(accept[index].name) + 1;
-		if ((cpos > 79) || (which != accept[index].which)) {
-			fprintf(stderr, "\n%*s", len + 1, "");
-			cpos = len + strlen(accept[index].name) + 2;
+	fprintf(stderr, "%s\n"
+	    "Usage: %s [options] {disk.device} [unit] [flags]\n"
+	    "    -rigid            Edit fields in the Rigid Disk Block\n"
+	    "    -part NAME        Modify partition table parameters of NAME\n"
+	    "    -newpart NAME     Add new partition NAME to the RDB\n"
+	    "    -promote NAME     Make partition NAME first to be mounted\n"
+	    "    -extract DOSTYPE  Extract filesystem to a file \n"
+	    "    -avail            Report next available block in RDB\n"
+	    "    -seglist          Show seglist addresses for filesystems\n"
+/*	    "    -v                Verbose mode\n" */
+	    "    -help             Give more help\n"
+	    "    Other keywords:", version + 7, progname);
+	cpos = 8;
+	for (index = 0; index < NUM_ACCEPT; index++) {
+		int len = strlen(accept[index].name) + 1;
+		if ((cpos + len > 79) || (which != accept[index].which)) {
+			cpos = 8;
+			fprintf(stderr, "\n%*s", cpos, "");
 			which = accept[index].which;
 		}
 		fprintf(stderr, " %s", accept[index].name);
+		cpos += len;
 	}
 	fprintf(stderr, "\n");
 	exit(1);
 }
 
-print_help()
+static void
+print_help(void)
 {
-	fprintf(stderr, "%s is a program which will display and allow you to modify\n", progname);
-	fprintf(stderr, "select parameters present in a disk device's Rigid Disk Block\n");
-	fprintf(stderr, "\n");
-	fprintf(stderr, "MAJOR WARNING: This program can be quite hazardous if used improperly\n");
-	fprintf(stderr, "               There are no idiot safeguards when modifying partition\n");
-	fprintf(stderr, "               information.  Know what you are doing.\n");
-	fprintf(stderr, "\n");
-	fprintf(stderr, "For the RDB, the values of Flags are as follows:\n");
-	fprintf(stderr, "	1 = no disks after this on this controller\n");
-	fprintf(stderr, "	2 = no LUNs after this at this SCSI target\n");
-	fprintf(stderr, "	4 = no Target IDs after this on this SCSI bus\n");
-	fprintf(stderr, "	8 = don't bother trying reselection on this device\n");
-	fprintf(stderr, "       16 = rdb_Disk identification is valid\n");
-	fprintf(stderr, "       32 = rdb_Controller identification is valid\n");
-	fprintf(stderr, "\n");
-	fprintf(stderr, "For partitions, the values of Flags are as follows:\n");
-	fprintf(stderr, "	1 = Device is Bootable\n");
-	fprintf(stderr, "	2 = Do not Mount device on startup\n");
-	fprintf(stderr, "\n");
-	fprintf(stderr, "Examples of usage:\n");
-	fprintf(stderr, "\n");
-	fprintf(stderr, "I use this program only for insane uses; no example will help you.\n");
-	fprintf(stderr, "\n");
-	fprintf(stderr, "More help will be available in the future.\n");
+	fprintf(stderr,
+	    "%s is a program which will display and allow you to modify\n"
+	    "select parameters present in a disk device's Rigid Disk Block\n"
+	    "\n"
+	    "MAJOR WARNING: This program is hazardous if used improperly.\n"
+	    "               There are no safeguards when modifying partition\n"
+	    "               information.  Know what you are doing.\n"
+	    "\n"
+	    "For the RDB, the values of Flags are as follows:\n"
+	    "     1 = no disks after this on this controller\n"
+	    "     2 = no LUNs after this at this SCSI target\n"
+	    "     4 = no Target IDs after this on this SCSI bus\n"
+	    "     8 = don't bother trying reselection on this device\n"
+	    "    16 = rdb_Disk identification is valid\n"
+	    "    32 = rdb_Controller identification is valid\n"
+	    "\n"
+	    "For partitions, the values of Flags are as follows:\n"
+	    "     1 = Device is Bootable\n"
+	    "     2 = Do not Mount device on startup\n"
+	    "\n"
+	    "Example: Copy FastFileSystem from RDB of SCSI Lun 2 to a file\n"
+	    "     rdb -extract 0x444f5301 scsi.device 2\n"
+	    "\n"
+	    "I use this program only for insane uses; good luck!\n", progname);
 	exit(1);
 }
 
-void break_abort()
+static int
+break_abort(void)
 {
 	static int entered = 0;
 
@@ -593,12 +596,13 @@ void break_abort()
 	exit(1);
 }
 
-print_rdb_info()
+static int
+print_rdb_info(void)
 {
 	autofix = globalfix;
 
-	if (chksum(rdb) && dofix(rdb_blk, rdb, IDNAME_RIGIDDISK))
-		return(1);
+	if (chksum(rdb) && dofix(rdb, rdb_blk, IDNAME_RIGIDDISK))
+		return (1);
 	printf("%s unit %d : ", disk_device, disk_unit);
 	printf(" Blk=%d HostID=%d BlockBytes=%d Flags=0x%04x\n",
 		rdb_blk, rdb->rdb_HostID, rdb->rdb_BlockBytes, rdb->rdb_Flags);
@@ -640,7 +644,8 @@ print_rdb_info()
 	rigid_operation();
 }
 
-print_partition_info()
+static int
+print_partition_info(void)
 {
 	int parent = -1;
 	int partition;
@@ -649,23 +654,23 @@ print_partition_info()
 	autofix = globalfix;
 	if ((partition = rdb->rdb_PartitionList) == -1) {
 		printf("No partitions\n");
-		return(1);
+		return (1);
 	}
 
 	while (partition != -1) {
 		if (blk_read(part, partition)) {
 			fprintf(stderr, "partition block %d could not be read\n",
 				partition);
-			return(1);
+			return (1);
 		}
 
 		if (part->pb_ID != IDNAME_PARTITION) {
 			fprintf(stderr, "block %d does not contain a valid partition!\n", partition);
-			return(1);
+			return (1);
 		}
 
 		if (chksum(part) && dofix(part, partition, IDNAME_PARTITION))
-			return(1);
+			return (1);
 
 		print_id(part->pb_ID);
 		printf("  Blk=%-3d ", partition);
@@ -709,33 +714,34 @@ print_partition_info()
 		partition = part->pb_Next;
 	}
 	printf("\n");
-	return(0);
+	return (0);
 }
 
-print_filesystem_info()
+static int
+print_filesystem_info(void)
 {
 	int filesystem;
 
 	autofix = globalfix;
 	if ((filesystem = rdb->rdb_FileSysHeaderList) == -1) {
 		printf("No filesystems\n");
-		return(1);
+		return (1);
 	}
 
 	while (filesystem != -1) {
 		if (blk_read(fs, filesystem)) {
 			fprintf(stderr, "filesystem block %d could not be read\n",
 				filesystem);
-			return(1);
+			return (1);
 		}
 
 		if (fs->fhb_ID != IDNAME_FILESYSHEADER) {
 			fprintf(stderr, "block %d does not contain a valid filesystem!\n", filesystem);
-			return(1);
+			return (1);
 		}
 
 		if (chksum(fs) && dofix(fs, filesystem, IDNAME_FILESYSHEADER))
-			return(1);
+			return (1);
 
 		print_id(fs->fhb_ID);
 		printf("  Blk=%-3d HostID=%d Next=%-3d Version=%-7d DosType=%08X '",
@@ -766,11 +772,11 @@ print_filesystem_info()
 		filesystem = fs->fhb_Next;
 	}
 	printf("\n");
-	return(0);
+	return (0);
 }
 
-ULONG chars_to_long(str)
-unsigned char *str;
+static ULONG
+chars_to_long(unsigned char *str)
 {
 	int pos;
 	ULONG value = 0;
@@ -791,7 +797,7 @@ unsigned char *str;
 			}
 		} else if ((*str == '\0') || (*str == '\'')) {
 			fprintf(stderr, "DosType should be four characters\n");
-			return(0);
+			return (0);
 		} else {
 			ch = *str;
 			str++;
@@ -800,11 +806,11 @@ unsigned char *str;
 		value += ch;
 	}
 
-	return(value);
+	return (value);
 }
 
-print_id(name)
-ULONG name;
+static void
+print_id(ULONG name)
 {
 	unsigned char ch;
 	int index;
@@ -818,15 +824,15 @@ ULONG name;
 	}
 }
 
-print_seglist(seglist)
-int seglist;
+static int
+print_seglist(int seglist)
 {
 	int index = 0;
 
 	autofix = globalfix;
 	if (seglist == -1) {
 		printf("      No seglist\n");
-		return(1);
+		return (1);
 	}
 	while (seglist != -1) {
 		if ((index % 11) == 0) {
@@ -838,22 +844,24 @@ int seglist;
 		if (blk_read(seg, seglist)) {
 			fprintf(stderr, "\nloadseg block %d could not be read\n",
 				seglist);
-			return(1);
+			return (1);
 		}
 		if (seg->lsb_ID != IDNAME_LOADSEG) {
 			fprintf(stderr, "block %d does not contain a valid loadseg block!\n", seglist);
-			return(1);
+			return (1);
 		}
 		if (chksum(seg) && dofix(seg, seglist, IDNAME_LOADSEG))
-			return(1);
+			return (1);
 		else
 			printf("%5d ", seglist);
 		seglist = seg->lsb_Next;
 	}
 	printf("\n");
+	return (0);
 }
 
-print_bad_blocks()
+static int
+print_bad_blocks(void)
 {
 	int badblock;
 	int index;
@@ -861,23 +869,23 @@ print_bad_blocks()
 	autofix = globalfix;
 	if ((badblock = rdb->rdb_BadBlockList) == -1) {
 		printf("No bad blocks\n\n");
-		return(1);
+		return (1);
 	}
 
 	while (badblock != -1) {
 		if (blk_read(bad, badblock)) {
 			fprintf(stderr, "badblock block %d could not be read\n",
 				badblock);
-			return(1);
+			return (1);
 		}
 
 		if (bad->bbb_ID != IDNAME_BADBLOCK) {
 			fprintf(stderr, "block %d does not contain a valid badblock!\n", badblock);
-			return(1);
+			return (1);
 		}
 
 		if (chksum(bad) && dofix(bad, badblock, IDNAME_BADBLOCK))
-			return(1);
+			return (1);
 
 		print_id(bad->bbb_ID);
 		printf("  Blk=%-3d HostID=%d Next=%d Reserved=%d",
@@ -894,9 +902,10 @@ print_bad_blocks()
 		badblock = bad->bbb_Next;
 	}
 	printf("\n");
+	return (0);
 }
 
-LONG
+static LONG
 chksum(void *ptr)
 {
 	LONG size;
@@ -906,16 +915,16 @@ chksum(void *ptr)
 	size = buf[1];
 	if (size > (TD_SECTOR >> 2)) {
 		fprintf(stderr, "Invalid size of csum structure\n");
-		return(1);
+		return (1);
 	}
 	for (; size > 0; size--) {
 		csum += *buf;
 		buf++;
 	}
-	return(csum);
+	return (csum);
 }
 
-int
+static int
 fixsum(void *ptr, ULONG blk)
 {
 	LONG *temp;
@@ -928,7 +937,7 @@ fixsum(void *ptr, ULONG blk)
 	buf[2] = 0;
 
 	if (size > (TD_SECTOR >> 2))
-		return(1);
+		return (1);
 
 	for (; size > 0; size--) {
 		csum += *temp;
@@ -939,12 +948,13 @@ fixsum(void *ptr, ULONG blk)
 
 	if (blk_write(buf, blk)) {
 		fprintf(stderr, "fixed checksum could not be written!\n");
-		return(1);
+		return (1);
 	}
 	return (0);
 }
 
-getans()
+static int
+getans(void)
 {
 	char ch;
 	int ret = 0;
@@ -964,41 +974,42 @@ getans()
 		}
 
 	if (ch == EOF)
-		return(0);
+		return (0);
 
 	while ((ch = getchar()) != '\n')
 		if (ch == EOF)
-			return(0);
-	return(ret);
+			return (0);
+	return (ret);
 }
 
-int
+static int
 dofix(void *buf, ULONG blk, ULONG name)
 {
 	if (autofix) {
 		printf("fixing block %d\n", blk);
 		if (fixsum(buf, blk))
-			return(1);
+			return (1);
 	} else {
 		printf("\n");
 		print_id(name);
 		printf(": Block %d invalid, fix? (Yes/No/All/Quit)\n", blk);
-		switch(getans()) {
+		switch (getans()) {
 		    case NO:
 			break;
 		    case QUIT:
-			return(1);
+			return (1);
 		    case ALL:
 			autofix = 1;
 		    case YES:
 			if (fixsum(buf, blk))
-				return(1);
+				return (1);
 		}
 	}
-	return(0);
+	return (0);
 }
 
-rigid_operation()
+static int
+rigid_operation(void)
 {
 	char	*name;
 	char	*newname;
@@ -1006,21 +1017,21 @@ rigid_operation()
 	int	changeall = 0;
 	int	count = 0;
 
-	for (index = 0; accept[index].name; index++)
-	    if (accept[index].changed && accept[index].which == RIGID)
+	for (index = 0; index < NUM_ACCEPT; index++)
+	    if (changed[index] && accept[index].which == RIGID)
 		count++;
 
 	if (count == 0)
-		return;
+		return (0);
 
 	if (!editrigid) {
 		fprintf(stderr, "You must specify -rigid to edit RDB fields\n\n");
-		return;
+		return (1);
 	}
 
 	count = 0;
-	for (index = 0; accept[index].name; index++)
-	    if (accept[index].changed && accept[index].which == RIGID) {
+	for (index = 0; index < NUM_ACCEPT; index++)
+	    if (changed[index] && accept[index].which == RIGID) {
 		printf("change %s from", accept[index].name);
 
 		if (accept[index].type == STR) { /* it's a string */
@@ -1038,11 +1049,11 @@ rigid_operation()
 		if (changeall)
 		    goto dochange;
 
-		switch(getans()) {
+		switch (getans()) {
 		    case NO:
 			continue;
 		    case QUIT:
-			return;
+			return (1);
 		    case ALL:
 			changeall = 1;
 		    case YES:
@@ -1063,14 +1074,14 @@ rigid_operation()
 
 	if (count)
 	    if (fixsum(rdb, rdb_blk))
-		return(1);
+		return (1);
 
 	printf("\n");
+	return (0);
 }
 
-partition_operation(partition, parent)
-int partition;
-int parent;
+static int
+partition_operation(int partition, int parent)
 {
 	int	index;
 	char	*name;
@@ -1079,22 +1090,22 @@ int parent;
 	int	count = 0;
 
 	if (!editpart && !promote)
-		return;
+		return (0);
 
 	name = part->pb_DriveName;
 	if (*name < 32) {		/* It's a BSTR */
 		if (strncmp(name + 1, partname, name[0]))
-			return;
+			return (0);
 		if (strlen(partname) > name[0])
-			return;
+			return (0);
 		bstr = 1;
 	} else				/* It's an IVS screwup  */
 		if (strcmp(name, partname))
-			return;
+			return (0);
 	printf("found partition %s\n", partname);
 
-	for (index = 0; accept[index].name; index++)
-	    if (accept[index].changed && accept[index].which == PART) {
+	for (index = 0; index < NUM_ACCEPT; index++)
+	    if (changed[index] && accept[index].which == PART) {
 		printf("change %s from", accept[index].name);
 
 		if (accept[index].type == STR) {	/* it's a string */
@@ -1113,11 +1124,11 @@ int parent;
 		if (changeall)
 		    goto dochange;
 
-		switch(getans()) {
+		switch (getans()) {
 		    case NO:
 			continue;
 		    case QUIT:
-			return;
+			return (1);
 		    case ALL:
 			changeall = 1;
 		    case YES:
@@ -1148,37 +1159,37 @@ int parent;
 			3. Point rdb at this partition
 		*/
 		printf("promote partition?\n");
-		switch(getans()) {
+		switch (getans()) {
 		    case NO:
-			return(0);
+			return (0);
 		    case QUIT:
-			return(1);
+			return (1);
 		}
 
 		/* 1. Point parent of this partition's Next to oldchild */
 		if (parent == -1) {
 		    fprintf(stderr, "%s internal error, aborting changes\n");
-		    return(1);
+		    return (1);
 		} else {
 		    if (blk_read(ppart, parent)) {
 			fprintf(stderr, "partition block %d could not be read\n",
 				parent);
-			return(1);
+			return (1);
 		    }
 		    ppart->pb_Next = part->pb_Next;
 		    if (fixsum(ppart, parent))
-			return(1);
+			return (1);
 		}
 
 		/* 2. Point this partition's Next to newchild */
 		part->pb_Next = rdb->rdb_PartitionList;
 		if (fixsum(part, partition))
-		    return(1);
+		    return (1);
 
 		/* 3. Point rdb at this partition */
 		rdb->rdb_PartitionList = partition;
 		if (fixsum(rdb, rdb_blk))
-		    return(1);
+		    return (1);
 
 		count = 0;
 	    }
@@ -1186,11 +1197,12 @@ int parent;
 
 	if (count)
 	    if (fixsum(part, partition))
-		return(1);
+		return (1);
+	return (0);
 }
 
-filesystem_operation(filesystem)
-int filesystem;
+static void
+filesystem_operation(int filesystem)
 {
 	char name[32];
 
@@ -1203,7 +1215,7 @@ int filesystem;
 	printf("\nExtract this filesystem (%08x '", fs->fhb_DosType);
 	print_id(fs->fhb_DosType);
 	printf("') ?  (Yes/No)\n");
-	switch(getans()) {
+	switch (getans()) {
 	    case NO:
 	    case QUIT:
 		return;
@@ -1213,9 +1225,8 @@ int filesystem;
 	extract_seglist(fs->fhb_SegListBlocks, name);
 }
 
-extract_seglist(seglist, name)
-int seglist;
-char *name;
+static int
+extract_seglist(int seglist, const char *name)
 {
 	FILE *fp;
 	struct LoadSegBlock *start = NULL;
@@ -1225,7 +1236,7 @@ char *name;
 
 	if (seglist == -1) {
 		fprintf(stderr, "No seglist to extract for %s\n", name);
-		return;
+		return (1);
 	}
 
 	while (seglist != -1) {
@@ -1233,12 +1244,12 @@ char *name;
 			fprintf(stderr, "\nloadseg block %d could not be read\n",
 				seglist);
 			freelist(start);
-			return(1);
+			return (1);
 		}
 		if (checkbad && (seg->lsb_ID != IDNAME_LOADSEG)) {
 			fprintf(stderr, "block %d does not contain a valid loadseg block!\n", seglist);
 			printf("attempt to continue? (Yes/No/All)\n");
-			switch(getans()) {
+			switch (getans()) {
 			    case NO:
 				goto write_data;
 			    case QUIT:
@@ -1252,7 +1263,7 @@ char *name;
 		if (current == NULL) {
 			fprintf(stderr, "Unable to allocate memory buffer\n");
 			freelist(start);
-			return(1);
+			return (1);
 		}
 		memcpy(current, seg, TD_SECTOR);
 		current->lsb_Next = (ULONG) NULL;
@@ -1286,8 +1297,8 @@ char *name;
 	freelist(start);
 }
 
-freelist(current)
-struct LoadSegBlock *current;
+static void
+freelist(struct LoadSegBlock *current)
 {
 	struct LoadSegBlock *temp;
 	while (current != NULL) {
@@ -1297,7 +1308,8 @@ struct LoadSegBlock *current;
 	}
 }
 
-create_partition()
+static int
+create_partition(void)
 {
 	int newblk;
 	int previous = -1;
@@ -1305,10 +1317,10 @@ create_partition()
 
 	printf("Create a New partition with the device name %s? (Yes/No)\n",
 		partname);
-	switch(getans()) {
+	switch (getans()) {
 	    case QUIT:
 	    case NO:
-		return;
+		return (1);
 	}
 
 /*	Add partition to the end of list of partitions so that
@@ -1331,16 +1343,16 @@ create_partition()
 		if (blk_read(part, current)) {
 			fprintf(stderr, "partition block %d could not be read\n",
 				current);
-			return(1);
+			return (1);
 		}
 
 		if (part->pb_ID != IDNAME_PARTITION) {
 			fprintf(stderr, "block %d does not contain a valid partition!\n", current);
-			return(1);
+			return (1);
 		}
 
 		if (chksum(part) && dofix(part, current, IDNAME_PARTITION))
-			return(1);
+			return (1);
 
 		previous = current;
 		current = part->pb_Next;
@@ -1353,9 +1365,11 @@ create_partition()
 		part->pb_Next = newblk;
 		fixsum(part, previous);
 	}
+	return (0);
 }
 
-do_creations()
+static void
+do_creations(void)
 {
 	if (rdb->rdb_ID != IDNAME_RIGIDDISK)
 		return;
@@ -1364,11 +1378,13 @@ do_creations()
 		create_partition();
 }
 
-perr(s1, s2)
-char *s1;
-ULONG s2;
+static void
+perr(const char *fmt, ...)
 {
-	fprintf(stderr, s1, s2);
+	va_list va;
+	va_start(va, fmt);
+	vfprintf(stderr, fmt, va);
+	va_end(va);
 	fprintf(stderr, "\n");
 	exit(1);
 }

@@ -6,13 +6,26 @@
 #define BBSIZE 8192
 #define SBSIZE 8192
 
+#define ulong unsigned long
+
+struct node {
+	ulong value;
+	struct node *next;
+} *factorlist;
+
+static void pick_sec(ulong size, ulong *rtrk, ulong *rsec, ulong *rcyl);
+static ulong getvalue(ulong rangelow, ulong rangehigh);
+static ulong getrest(void);
+static int isqrt(ulong value);
+static void insert(ulong value);
+
 extern int DEV_BSIZE;
 
 extern char *special;
 extern char *progname;
 
-file_label(label)
-struct disklabel *label;
+int
+file_label(struct disklabel *label)
 {
 	int index;
 	unsigned long sectors;
@@ -74,21 +87,8 @@ struct disklabel *label;
 }
 
 
-#define ulong unsigned long
-
-struct node {
-	ulong value;
-	struct node *next;
-} *factorlist;
-
-ulong getvalue();
-ulong getrest();
-
-pick_sec(size, rtrk, rsec, rcyl)
-ulong size;
-ulong *rtrk;
-ulong *rsec;
-ulong *rcyl;
+static void
+pick_sec(ulong size, ulong *rtrk, ulong *rsec, ulong *rcyl)
 {
 	ulong index;
 	ulong stop;
@@ -153,8 +153,8 @@ ulong *rcyl;
 	*rcyl = cyl;
 }
 
-isqrt(value)
-ulong value;
+static int
+isqrt(ulong value)
 {
 	ulong index;
 	int cur;
@@ -178,8 +178,8 @@ ulong value;
 	return(index);
 }
 
-insert(value)
-ulong value;
+static void
+insert(ulong value)
 {
 	struct node *ptr;
 	ptr = (struct node *) malloc(sizeof(struct node));
@@ -194,9 +194,8 @@ ulong value;
 	factorlist = ptr;
 }
 
-ulong getvalue(rangelow, rangehigh)
-ulong rangelow;
-ulong rangehigh;
+static ulong
+getvalue(ulong rangelow, ulong rangehigh)
 {
 	ulong value = 1;
 	struct node *parent;
@@ -223,7 +222,8 @@ ulong rangehigh;
 	return(value);
 }
 
-ulong getrest()
+static ulong
+getrest(void)
 {
 	ulong value = 1;
 	struct node *temp;

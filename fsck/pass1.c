@@ -109,7 +109,7 @@ checkinode(inumber, idesc)
 			NDADDR * sizeof(daddr_t)) ||
 		    bcmp((char *)dp->di_ib, (char *)zino.di_ib,
 			NIADDR * sizeof(daddr_t)) ||
-		    dp->di_mode || S32(dp->di_size)) {
+		    dp->di_mode || dp->di_size) {
 			pfatal("PARTIALLY ALLOCATED INODE I=%lu", inumber);
 			if (reply("CLEAR") == 1) {
 				dp = ginode(inumber);
@@ -122,18 +122,18 @@ checkinode(inumber, idesc)
 	}
 	lastino = inumber;
 	if (/* dp->di_size < 0 || */
-	    S32(dp->di_size) + sblock.fs_bsize - 1 < S32(dp->di_size)) {
+	    dp->di_size + sblock.fs_bsize - 1 < dp->di_size) {
 		if (debug)
 			printf("bad size %qu:", dp->di_size);
 		goto unknown;
 	}
 	if (!preen && mode == IFMT && reply("HOLD BAD BLOCK") == 1) {
 		dp = ginode(inumber);
-		S32(dp->di_size) = sblock.fs_fsize;
+		dp->di_size = sblock.fs_fsize;
 		dp->di_mode = IFREG|0600;
 		inodirty();
 	}
-	ndb = howmany(S32(dp->di_size), sblock.fs_bsize);
+	ndb = howmany(dp->di_size, sblock.fs_bsize);
 	if (ndb < 0) {
 		if (debug)
 			printf("bad size %qu ndb %d:",
@@ -151,7 +151,7 @@ checkinode(inumber, idesc)
 		 * conversion altogether.  - mycroft, 19MAY1994
 		 */
 		if (doinglevel2 &&
-		    S32(dp->di_size) > 0 && S32(dp->di_size) < MAXSYMLINKLEN &&
+		    dp->di_size > 0 && dp->di_size < MAXSYMLINKLEN &&
 		    dp->di_blocks != 0) {
 			symbuf = alloca(secsize);
 			if (bread(symbuf,
@@ -159,13 +159,13 @@ checkinode(inumber, idesc)
 			    (long)secsize) != 0)
 				errexit("cannot read symlink");
 			if (debug) {
-				symbuf[S32(dp->di_size)] = 0;
+				symbuf[dp->di_size] = 0;
 				printf("convert symlink %d(%s) of size %d\n",
-					inumber, symbuf, (long)S32(dp->di_size));
+					inumber, symbuf, (long)dp->di_size);
 			}
 			dp = ginode(inumber);
 			bcopy(symbuf, (caddr_t)dp->di_shortlink,
-			    (long)S32(dp->di_size));
+			    (long)dp->di_size);
 			dp->di_blocks = 0;
 			inodirty();
 		}
@@ -173,9 +173,9 @@ checkinode(inumber, idesc)
 		 * Fake ndb value so direct/indirect block checks below
 		 * will detect any garbage after symlink string.
 		 */
-		if (S32(dp->di_size) < sblock.fs_maxsymlinklen ||
+		if (dp->di_size < sblock.fs_maxsymlinklen ||
 		    (sblock.fs_maxsymlinklen == 0 && dp->di_blocks == 0)) {
-			ndb = howmany(S32(dp->di_size), sizeof(daddr_t));
+			ndb = howmany(dp->di_size, sizeof(daddr_t));
 			if (ndb > NDADDR) {
 				j = ndb - NDADDR;
 				for (ndb = 1; j > 1; j--)
@@ -216,7 +216,7 @@ checkinode(inumber, idesc)
 		}
 	}
 	if (mode == IFDIR) {
-		if (S32(dp->di_size) == 0)
+		if (dp->di_size == 0)
 			statemap[inumber] = DCLEAR;
 		else
 			statemap[inumber] = DSTATE;

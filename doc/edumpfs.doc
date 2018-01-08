@@ -1,0 +1,43 @@
+------------------------------------------------------------------------
+Version 1.5 of edumpfs
+------------------------------------------------------------------------
+
+edumpfs - a program to display metadata pertaining to one or more
+ 	  Berkeley Fast File Systems in the specified AmigaDOS device.
+
+
+The edumpfs utility enables the user to discover file system low level
+information for the specified AmigaDOS device.  Specifically, edumpfs
+will tell if a disk partition label can be found.  If one can be found,
+edumpfs will display the partitioning layout for either Sun or BSD disk
+label formats.  edumpfs knows how to properly decode x86 BSD FFS
+filesystem information as well.
+
+Next, edumpfs will display the first superblock in the partition.
+Following the superblock will be the filesystem cylinder group summary
+information.  This process will be repeated for every partition found in
+the disk label.  If you specify (on the command line) the exact partition
+you want edumpfs to show, only that partition will be displayed.  This is
+done by providing the partition letter (or number) following the AmigaDOS
+device name.  Example:
+    edumpfs bf0:c
+
+edumpfs will display summary help text by running edumpfs with no parameters.
+For more help, you can type "edumpfs -h"
+
+Briefly, the command line options edumpfs supports are:
+    -b      do not show boot label information
+    -c      do not show cylinder group summary information
+    -f      show bit detail of frags available
+    -h      gives more help
+    -i      show bit detail of inodes available
+    -I      inverts the display of the free / used bits
+    -l      do not read boot label information
+    -s      specifies a non-standard starting sector for the superblock
+    -S      do not show superblock information
+
+-----------------------------------------------------------------------
+
+
+This package was written by Chris Hooper (amiga@cdh.eebugs.com).
+-----------------------------------------------------------------------

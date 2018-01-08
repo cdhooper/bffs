@@ -39,6 +39,8 @@
  *
  *	@(#)dinode.h	8.3 (Berkeley) 1/21/94
  */
+#ifndef __UCB_UFS_DINODE_H_
+#define __UCB_UFS_DINODE_H_
 
 /*
  * The root inode is the root of the file system.  Inode 0 can't be used for
@@ -65,6 +67,8 @@
 #define	NDADDR	12			/* Direct addresses in inode. */
 #define	NIADDR	3			/* Indirect addresses in inode. */
 
+#define	MAXFASTLINK	(((NDADDR+NIADDR) * sizeof(daddr_t)) - 1)
+
 #define di_atimensec di_atspare
 #define di_mtimensec di_mtspare
 #define di_ctimensec di_ctspare
@@ -76,21 +80,31 @@ struct dinode {
 		u_short	oldids[2];	/*   4: Ffs: old user and group ids. */
 		ino_t	inumber;	/*   4: Lfs: inode number. */
 	} di_u;
-	u_quad_t	di_size;	/*   8: File byte count. */
 #ifdef cdh
+	u_quad_t	di_qsize;	/*   8: File byte count. */
 	struct timespec	di_atime;	/*  16: Last access time. */
 	struct timespec	di_mtime;	/*  24: Last modified time. */
 	struct timespec	di_ctime;	/*  32: Last inode change time. */
+	union {
+		struct {
+			daddr_t	di_udb[NDADDR];	/* 40: disk block addresses */
+			daddr_t	di_uib[NIADDR];	/* 88: indirect blocks */
+		} di_addr;
+		/* XXX should be a dev_t */
+		u_long di_urdev;		/* 40: device number */
+		char di_usymlink[MAXFASTLINK+1];/* 40: data for fast symlink */
+	} di_un;
 #else
+	u_quad_t	di_size;	/*   8: File byte count. */
 	time_t  di_atime;		/* 16: time last accessed */
 	long    di_atspare;
 	time_t  di_mtime;		/* 24: time last modified */
 	long    di_mtspare;
 	time_t  di_ctime;		/* 32: last time inode changed */
 	long    di_ctspare;
-#endif
 	daddr_t		di_db[NDADDR];	/*  40: Direct disk blocks. */
 	daddr_t		di_ib[NIADDR];	/*  88: Indirect disk blocks. */
+#endif
 	u_long		di_flags;	/* 100: Status flags (chflags). */
 	long		di_blocks;	/* 104: Blocks actually held. */
 	long		di_gen;		/* 108: Generation number. */
@@ -109,9 +123,23 @@ struct dinode {
 #define	di_inumber	di_u.inumber
 #define	di_ogid		di_u.oldids[1]
 #define	di_ouid		di_u.oldids[0]
-#define	di_rdev		di_db[0]
 #define	di_shortlink	di_db
 #define	MAXSYMLINKLEN	((NDADDR + NIADDR) * sizeof(daddr_t))
+
+#ifdef cdh
+#define	di_db		di_un.di_addr.di_udb
+#define di_ib		di_un.di_addr.di_uib
+#define	di_symlink	di_un.di_usymlink
+#define	di_rdev		di_un.di_urdev
+#else
+#define	di_rdev		di_db[0]
+#endif
+
+#if BYTE_ORDER == LITTLE_ENDIAN
+#define	di_size		di_qsize.val[0]
+#else /* BYTE_ORDER == BIG_ENDIAN */
+#define	di_size		di_qsize.val[1]
+#endif
 
 /* File modes. */
 #define	IEXEC		0000100		/* Executable. */
@@ -131,3 +159,5 @@ struct dinode {
 #define	IFLNK		0120000		/* Symbolic link. */
 #define	IFSOCK		0140000		/* UNIX domain socket. */
 #define IFWHT		0160000		/* Whiteout. */
+
+#endif /* __UCB_UFS_DINODE_H_ */

@@ -33,6 +33,8 @@
  * SUCH DAMAGE.
  */
 
+const char *version = "\0$VER: tunefs 1.10 (19-Jan-2018) © UCB";
+
 #ifndef lint
 static char copyright[] =
 "@(#) Copyright (c) 1983, 1993\n\
@@ -64,8 +66,9 @@ static char rcsid[] = "$NetBSD: tunefs.c,v 1.10 1995/03/18 15:01:31 cgd Exp $";
 #include <fcntl.h>
 #ifdef AMIGA
 #include "ami_stat.h"
-void break_abort();
-void error_exit();
+#include <amiga_device.h>
+int break_abort(void);
+void error_exit(int err);
 #else
 #include <fstab.h>
 #endif
@@ -87,8 +90,13 @@ union {
 int fi;
 long dev_bsize = 1;
 
+#ifdef AMIGA
+void fbwrite(char *, daddr_t, int);
+int fbread(char *, daddr_t, int);
+#else
 void bwrite(char *, daddr_t, int);
 int bread(char *, daddr_t, int);
+#endif
 void getsb(struct fs *, char *);
 void usage __P((void));
 

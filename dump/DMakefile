@@ -1,0 +1,74 @@
+#
+# Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted so long as any redistribution retains the
+# above copyright notice, this condition, and the below disclaimer.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+
+DOTDOT=
+PROG=$(DOTDOT)/bin/dump
+OBJ=obj
+SRCS=main.c itime.c optr.c traverse.c tape.c unctime.c dump_other.c getopt.c amiga_device.c err.c
+#SRCS+=dumprmt.c
+OBJS=$(SRCS:*.*:"$(OBJ)/%1.o")
+#CFLAGS+=-DRDUMP
+#CFLAGS+=-g -DDEBUG -DTDEBUG -DFDEBUG -DWRITEDEBUG
+
+RM=-delete quiet force >nil:
+CC=dcc
+CFLAGS=-O2 -r -I/ucbinclude -I/unix_support -I/restore -Dcdh
+
+$(PROG): $(OBJ) $(OBJS)
+	$(CC) $(CFLAGS) %(right:*.o) -o %(left)
+
+$(OBJ): $(OBJ)
+	makedir %(left)
+
+$(OBJ)/main.o: main.c dump.h pathnames.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/dumprmt.o: dumprmt.c dump.h pathnames.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/itime.o: itime.c dump.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/optr.o: optr.c dump.h pathnames.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/traverse.o: traverse.c dump.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/tape.o: tape.c dump.h pathnames.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/unctime.o: unctime.c
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/dump_other.o: dump_other.c dump_fstab.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/getopt.o: $(DOTDOT)/unix_support/getopt.c
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/amiga_device.o: $(DOTDOT)/unix_support/amiga_device.c
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/err.o: $(DOTDOT)/unix_support/err.c
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+clean:
+	$(RM) $(OBJS) $(PROG)

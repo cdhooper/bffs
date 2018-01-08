@@ -1,47 +1,52 @@
 #include <stdio.h>
+#include <string.h>
 #include <dos/dosextens.h>
+#include <fcntl.h>
+#include <stdlib.h>
 
 #define _SYS_TIME_H_
 #include <exec/types.h>
-#include "sys/systypes.h"
 #include <exec/io.h>
 #include <devices/trackdisk.h>
 #include <dos/filehandler.h>
 #include <exec/memory.h>
+#include <clib/alib_protos.h>
+#include <clib/exec_protos.h>
+#include <clib/dos_protos.h>
 
-#include <fcntl.h>
+typedef long daddr_t;
+
+#include <file_blockio.h>
 
 #undef DEBUG
 
-char	*strchr();
 #define BTOC(x) ((x)<<2)
 #define CTOB(x) ((x)>>2)
 
-char	*dos_dev_name = NULL;
+char         *dos_dev_name     = NULL;
+char          disk_device[100] = "scsi.device";
+int           disk_unit        = 0;
+static int    disk_flags       = 0;
+static int    device_direct    = 0;
+int           DEV_BSIZE        = 512;
+int           DEV_BSHIFT       = 9;
+static int    inhibited        = 0;
+static ULONG  poffset          = 0;
+static ULONG  pmax             = 0;
+static struct IOExtTD *trackIO = NULL;
 
-char	*disk_device	= "scsi.device";
-int	disk_unit	= 0;
-static int	disk_flags	= 0;
+static int dio_init(void);
+int dio_inhibit(int inhibit);
 
-int	DEV_BSIZE = 512;
-int	DEV_BSHIFT = 9;
-static int	inhibited = 0;
-static ULONG	poffset	= 0;
-static ULONG	pmax	= 0;
-static struct	IOExtTD	*trackIO = NULL;
-
-
-int bread(buf, blk, size)
-char	*buf;
-daddr_t	blk;
-long	size;
+int
+bread(char *buf, daddr_t blk, long size)
 {
 #ifdef DEBUG
 	printf("bread: blk=%d size=%d BSIZE=%d buf=%08x poffset=%d ploc=%d\n",
 		blk, size, DEV_BSIZE, buf, poffset, blk * DEV_BSIZE + poffset);
 #endif
 	if (dos_dev_name == NULL)
-		return(fbread(buf, blk, size));
+		return (fbread(buf, blk, size));
 
 	trackIO->iotd_Req.io_Command = CMD_READ;	/* set IO Command */
 	trackIO->iotd_Req.io_Length  = size;		/* #bytes to read */
@@ -51,23 +56,21 @@ long	size;
 
 	if (trackIO->iotd_Req.io_Offset + size > pmax) {
 		printf("Attempted to read past the end of the partition, block=%d size=%d\n", blk, size);
-		return(1);
+		return (1);
 	}
 
-	return(DoIO(trackIO));
+	return (DoIO((struct IORequest *)trackIO));
 }
 
-int bwrite(buf, blk, size)
-char	*buf;
-daddr_t	blk;
-long	size;
+int
+bwrite(char *buf, daddr_t blk, long size)
 {
 #ifdef DEBUG
 	printf("bwrite: blk=%d size=%d BSIZE=%d buf=%08x poffset=%d\n",
 		blk, size, DEV_BSIZE, buf, poffset);
 #endif
 	if (dos_dev_name == NULL)
-		return(fbwrite(buf, blk, size));
+		return (fbwrite(buf, blk, size));
 
 	trackIO->iotd_Req.io_Command = CMD_WRITE;	/* set IO Command */
 	trackIO->iotd_Req.io_Length  = size;		/* #bytes to read */
@@ -77,13 +80,14 @@ long	size;
 
 	if (trackIO->iotd_Req.io_Offset + size > pmax) {
 		printf("Attempted to write past the end of the partition, block=%d size=%d\n", blk, size);
-		return(1);
+		return (1);
 	}
 
-	return(DoIO(trackIO));
+	return (DoIO((struct IORequest *)trackIO));
 }
 
-static void dio_set_bsize(int bsize)
+static void
+dio_set_bsize(int bsize)
 {
 	int	tempshift = 9;
 	switch (bsize) {
@@ -102,94 +106,132 @@ static void dio_set_bsize(int bsize)
 	}
 }
 
-void dio_assign_bsize(int bsize)
+void
+dio_assign_bsize(int bsize)
 {
 	if (dos_dev_name == NULL)
 		dio_set_bsize(bsize);
 }
 
-int dio_open(name)
-char *name;
+int
+dio_open(char *name)
 {
 	if (dos_dev_name != NULL)
-		return(1);
+		return (1);
 
 	dos_dev_name = name;
 
 	if (dio_init()) {
 		dos_dev_name = NULL;
-		return(1);
+		return (1);
 	}
 
 	if (!(trackIO = (struct IOExtTD *) CreateExtIO(CreatePort(0, 0),
-					       sizeof(struct IOExtTD)) )) {
+					       sizeof (struct IOExtTD)) )) {
 		fprintf(stderr, "fatal: Failed to create trackIO structure.\n");
 		exit(1);
 	}
 
-	if (OpenDevice(disk_device, disk_unit, trackIO, disk_flags)) {
-		fprintf(stderr, "Fatal: Unable to open %s unit %d.\n",
+	if (OpenDevice(disk_device, disk_unit, (struct IORequest *)trackIO,
+			disk_flags)) {
+		fprintf(stderr, "Fatal: Unable to open %s unit %d\n",
 			disk_device, disk_unit);
 		DeletePort(trackIO->iotd_Req.io_Message.mn_ReplyPort);
-		DeleteExtIO(trackIO);
+		DeleteExtIO((struct IORequest *)trackIO);
 		exit(1);
 	}
-	return(0);
+	return (0);
 }
 
-int dio_close(void)
+int
+dio_close(void)
 {
 	if (dos_dev_name == NULL)
-		return(0);
+		return (0);
 
-	if (inhibited)
+	while (inhibited)
 		dio_inhibit(0);
 
 	if (trackIO) {
 		trackIO->iotd_Req.io_Command    = TD_MOTOR;
 		trackIO->iotd_Req.io_Flags      = 0x0;  /* Motor status */
 		trackIO->iotd_Req.io_Length     = 0;    /* 0=off, 1=on */
-		DoIO(trackIO);
+		DoIO((struct IORequest *)trackIO);
 
-		CloseDevice(trackIO);
+		CloseDevice((struct IORequest *)trackIO);
 		DeletePort(trackIO->iotd_Req.io_Message.mn_ReplyPort);
-		DeleteExtIO(trackIO);
+		DeleteExtIO((struct IORequest *)trackIO);
 		trackIO = NULL;
 	}
 	dos_dev_name = NULL;
-	return(0);
+	return (0);
 
 }
 
 
-int dio_init()
+static int
+dio_init(void)
 {
-	struct	DosLibrary *DosBase;
-	struct	RootNode *rootnode;
-	struct	DosInfo *dosinfo;
-	struct	DevInfo *devinfo;
-	struct	FileSysStartupMsg *startup;
-	struct	DosEnvec *envec;
-	char	*devname;
-	char	*lookfor;
-	char	*pos;
-	int	notfound = 1;
-	int	tempsize;
+    char              *devname;
+    char              *lookfor;
+    char              *pos;
+    int                notfound = 1;
+    int                tempsize;
 
-	lookfor = dos_dev_name;
-	if ((pos = strchr(lookfor, ':')) == NULL)
-		return (1);
+    lookfor = dos_dev_name;
+    if (((pos = strchr(lookfor, ':')) == NULL) || (pos[1] != '\0')) {
+	int e = 0;
+	/* Check for device driver and LUN */
+	if (strstr(lookfor, ".device,") == NULL)
+	    return (1);
+	strcpy(disk_device, "scsi.device");
+	disk_unit = 0;
+	disk_flags = 0;
+	DEV_BSIZE = 512;
+	poffset = 0;
+	pmax = -1;
+	if (sscanf(lookfor, "%[^,],%n%i%n,%n%i%n,%n%i%n,%n%i%n,%n%i%n",
+		   disk_device, &e, &disk_unit, &e, &e, &disk_flags, &e, &e,
+		   &DEV_BSIZE, &e, &e, &poffset, &e, &e, pmax) < 1) {
+	    fprintf(stderr, "Bad device name or unit number\n");
+bad_device_name:
+	    fprintf(stderr, "Specify <diskdriver.device>,<lun>"
+			"[,<flags>,<s-size>,<s-start>,<s-end>]\n"
+		    "Example: scsi.device,2 - "
+			"use C= SCSI driver, LUN 2, entire disk\n"
+		    "Example: scsi.device,2,0,512,20480,65536 - "
+			"use 32MB partition starting at 10MB\n");
+	    return (1);
+	}
+	if (lookfor[e] != '\0') {
+	    printf("Failed to scan %s\n"
+		   "%*s^\n", lookfor, e + 15, "");
+	    goto bad_device_name;
+	}
+	dio_set_bsize(DEV_BSIZE);
+	poffset *= DEV_BSIZE;
+	if (pmax != -1)
+	    pmax *= DEV_BSIZE;
+	device_direct = 1;
+    } else {
+	/* Device name terminated with a colon */
+	struct FileSysStartupMsg *startup;
+	struct DosLibrary *dosbase;
+	struct RootNode   *rootnode;
+	struct DosInfo    *dosinfo;
+	struct DevInfo    *devinfo;
+	struct DosEnvec   *envec;
 	*pos = '\0';
 
-	DosBase = (struct DosLibrary *) OpenLibrary("dos.library", 0L);
+	dosbase  = (struct DosLibrary *) OpenLibrary("dos.library", 0L);
 
-	rootnode= DosBase->dl_Root;
-	dosinfo = (struct DosInfo *) BTOC(rootnode->rn_Info);
-	devinfo = (struct DevInfo *) BTOC(dosinfo->di_DevInfo);
+	rootnode = dosbase->dl_Root;
+	dosinfo  = (struct DosInfo *) BTOC(rootnode->rn_Info);
+	devinfo  = (struct DevInfo *) BTOC(dosinfo->di_DevInfo);
 
 	while (devinfo != NULL) {
 		devname	= (char *) BTOC(devinfo->dvi_Name);
-		if (unstrcmp(devname+1, lookfor) &&
+		if ((stricmp(devname + 1, lookfor) == 0) &&
 		    (devinfo->dvi_Type == DLT_DEVICE)) {
 			notfound = 0;
 			break;
@@ -199,18 +241,18 @@ int dio_init()
 
 	if (notfound) {
 		fprintf(stderr, "%s: is not mounted.\n", lookfor);
-		CloseLibrary(DosBase);
+		CloseLibrary((struct Library *)dosbase);
 		exit(1);
 	}
 
 	startup	= (struct FileSysStartupMsg *) BTOC(devinfo->dvi_Startup);
-	disk_device	= ((char *) BTOC(startup->fssm_Device)) + 1;
+	strcpy(disk_device, ((char *) BTOC(startup->fssm_Device)) + 1);
 	disk_unit	= startup->fssm_Unit;
 	disk_flags	= startup->fssm_Flags;
 
 	envec		= (struct DosEnvec *) BTOC(startup->fssm_Environ);
 
-	tempsize	= envec->de_SizeBlock * sizeof(long);
+	tempsize	= envec->de_SizeBlock * sizeof (long);
 
 	dio_set_bsize(tempsize);
 
@@ -219,56 +261,29 @@ int dio_init()
 	pmax		= (envec->de_HighCyl + 1) * envec->de_Surfaces *
 			  envec->de_BlocksPerTrack * DEV_BSIZE;
 
+	CloseLibrary((struct Library *)dosbase);
 #ifdef DEBUG
-	printf("pmax=%d DEV_BSIZE=%d\n", pmax, DEV_BSIZE);
-	printf("unit=%d\n", disk_unit);
-	printf("device=%s\n", disk_device);
-	printf("flags=%d\n", disk_flags);
-	printf("poffset=%d\n", poffset);
-
 	printf("low=%d\n", envec->de_LowCyl);
 	printf("high=%d\n", envec->de_HighCyl);
 	printf("blks/track=%d\n", envec->de_BlocksPerTrack);
 	printf("heads=%d\n", envec->de_Surfaces);
 	printf("DosType=%08x\n", envec->de_DosType);
 #endif
+    }
+#ifdef DEBUG
+    printf("device=%s\n", disk_device);
+    printf("unit=%d\n", disk_unit);
+    printf("flags=%d\n", disk_flags);
+    printf("poffset=%u (blk %u)\n", poffset, poffset / DEV_BSIZE);
+    printf("pmax=%u DEV_BSIZE=%d\n", pmax, DEV_BSIZE);
+#endif
 
-	CloseLibrary(DosBase);
-	return (0);
-}
-
-int unstrcmp(str1, str2)
-char *str1;
-char *str2;
-{
-	while (*str1 != '\0') {
-		if (*str2 == '\0')
-			break;
-		else if (*str1 != *str2)
-			if ((*str1 >= 'A') && (*str1 <= 'Z')) {
-				if ((*str2 >= 'A') && (*str2 <= 'Z'))
-					break;
-				else if (*str1 != *str2 + 'A' - 'a')
-					break;
-			} else {
-				if ((*str2 >= 'a') && (*str2 <= 'a'))
-					break;
-				else if (*str1 != *str2 - 'A' + 'a')
-					break;
-			}
-		str1++;
-		str2++;
-	}
-	if (*str1 == *str2)
-		return(1);
-	else
-		return(0);
+    return (0);
 }
 
 
-
-dio_checkstack(minimum)
-int minimum;
+int
+dio_checkstack(int minimum)
 {
 	int ssize;
 
@@ -281,14 +296,14 @@ int minimum;
 		fprintf(stderr, "fatal: this program requires %d bytes of stack;\n",
 			minimum);
 		fprintf(stderr, "       it was given only %d bytes.\n", ssize);
-		return(1);
+		return (1);
 	} else
-		return(0);
+		return (0);
 }
 
 
-dio_inhibit(inhibit)
-int inhibit;
+int
+dio_inhibit(int inhibit)
 {
 	struct MsgPort	      *handler;
 	struct MsgPort        *replyport;
@@ -298,10 +313,13 @@ int inhibit;
 	int    len;
 
 	if (dos_dev_name == NULL)
-		return(0);
+		return (0);
+
+	if (device_direct)
+		return (0);  /* Going direct to device (no filesystem) */
 
 	if (trackIO == NULL)
-		return(0);
+		return (0);
 
 	len = strlen(name);
         if (name[len - 1] != ':') {
@@ -314,19 +332,19 @@ int inhibit;
 	if (handler == NULL) {
 	    if (inhibit)
 		fprintf(stderr, "** Unable to inhibit handler for %s\n", name);
-	    return(1);
+	    return (1);
 	}
 
 	replyport = (struct MsgPort *) CreatePort(NULL, 0);
 	if (!replyport)
-		return(1);
+		return (1);
 
 	packet = (struct StandardPacket *)
-		 AllocMem(sizeof(struct StandardPacket), MEMF_CLEAR | MEMF_PUBLIC);
+		 AllocMem(sizeof (struct StandardPacket), MEMF_CLEAR | MEMF_PUBLIC);
 
 	if (!packet) {
 		DeletePort(replyport);
-		return(1);
+		return (1);
 	}
 
 	packet->sp_Msg.mn_Node.ln_Name = (char *)&(packet->sp_Pkt);
@@ -340,9 +358,12 @@ int inhibit;
 	WaitPort(replyport);
 	GetMsg(replyport);
 
-	FreeMem(packet, sizeof(struct StandardPacket));
+	FreeMem(packet, sizeof (struct StandardPacket));
 	DeletePort(replyport);
 
-	inhibited = inhibit;
-	return(0);
+	if (inhibit)
+	    inhibited++;
+	else
+	    inhibited--;
+	return (0);
 }

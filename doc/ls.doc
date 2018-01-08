@@ -1,0 +1,50 @@
+------------------------------------------------------------------------
+Version 1.2 of ls
+------------------------------------------------------------------------
+
+ls - A simple directory list utility
+
+
+This program acts similar to the UNIX ls command, taking many of the
+same command line arguments.
+
+
+Usage:
+        ls [<options>] <filename> [<filename>...]
+
+Where 
+        device is the optional device where the file exists
+
+        filename is the name of the file to show
+
+
+        You may specify as many filenames as you want to list.
+
+
+Briefly, the command line options this program supports are:
+
+        -a is show files which begin with a '.'
+        -A is show AmigaDOS (not UNIX) permissions
+        -c is sort by last inode change time
+        -d is do not examine directory contents
+        -f is do not sort, show all entries
+        -F is add indicator for file type
+        -g is show file groups
+        -h is show this help
+        -i is show file inode number
+        -l is show long listing
+        -n is show numerical userid and group
+        -p is put slash after directory names
+        -r is reverse sort order
+        -R is show recursive listing of directory
+        -s is show file sizes in blocks
+        -t is sort by last modify time
+        -T is show full time (yyyy-mm-dd hh:mm:ss)
+        -u is sort by last access time
+        -1 is list one file per line
+ 
+------------------------------------------------------------------------
+
+
+This program was created by Chris Hooper (amiga@cdh.eebugs.com)
+------------------------------------------------------------------------

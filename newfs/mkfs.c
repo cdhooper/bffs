@@ -924,12 +924,12 @@ fsinit(utime)
 	}
 	node.di_mode = IFDIR | UMASK;
 	node.di_nlink = 2;
-	node.di_size.val[0] = 0x0;
-	node.di_size.val[1] = 0x0;
-	S32(node.di_size) = sblock.fs_bsize;
-	node.di_db[0] = alloc(S32(node.di_size), node.di_mode);
-	node.di_blocks = btodb(fragroundup(&sblock, S32(node.di_size)));
-	bwrite(buf, fsbtodb(&sblock, node.di_db[0]), S32(node.di_size));
+	node.di_qsize.val[0] = 0x0;
+	node.di_qsize.val[1] = 0x0;
+	node.di_size = sblock.fs_bsize;
+	node.di_db[0] = alloc(node.di_size, node.di_mode);
+	node.di_blocks = btodb(fragroundup(&sblock, node.di_size));
+	bwrite(buf, fsbtodb(&sblock, node.di_db[0]), node.di_size);
 	iput(&node, LOSTFOUNDINO);
 #endif
 	/*
@@ -944,21 +944,14 @@ fsinit(utime)
 	node.di_nlink = PREDEFDIR;
 
 #ifdef cdh
-	node.di_size.val[0] = 0;
-	node.di_size.val[1] = 0;
-	if (Oflag)
-		S32(node.di_size) = makedir((struct direct *)oroot_dir, PREDEFDIR);
-	else
-		S32(node.di_size) = makedir(root_dir, PREDEFDIR);
-	node.di_blocks = btodb(fragroundup(&sblock, S32(node.di_size)));
-#else
+	node.di_qsize.val[0] = 0;
+	node.di_qsize.val[1] = 0;
+#endif
 	if (Oflag)
 		node.di_size = makedir((struct direct *)oroot_dir, PREDEFDIR);
 	else
 		node.di_size = makedir(root_dir, PREDEFDIR);
 	node.di_blocks = btodb(fragroundup(&sblock, node.di_size));
-#endif
-
 	node.di_db[0] = alloc(sblock.fs_fsize, node.di_mode);
 
 	bwrite(buf, fsbtodb(&sblock, node.di_db[0]), sblock.fs_fsize);

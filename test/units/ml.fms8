@@ -1,5 +1,5 @@
 testdev:
-    FileSystem = FastFileSystem
+    FileSystem = BFFSFileSystem
     Device = fmsdisk.device
     Unit = 8
     Flags = 0

@@ -1,0 +1,24 @@
+DOTDOT=..
+PROG=$(DOTDOT)/bin/chown
+CC=gcc
+RM=rm -rf
+CFLAGS=-Dcdh -O2
+OBJ=obj.unix
+OBJS=$(OBJ)/chown.o
+
+all: $(PROG)
+	@true
+
+$(PROG): $(OBJS)
+	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
+
+$(OBJS): | $(OBJ)
+
+$(OBJ):
+	mkdir $@
+
+$(OBJ)/chown.o: chown.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	$(RM) $(OBJ) $(PROG)

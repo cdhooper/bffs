@@ -4,7 +4,7 @@ Unit2 - 720k Sun floppy
 Unit3 - 80k Sun 4.1.2 filesystem with special files, etc
 Unit4 - R/W copy of Unit2
 Unit5 - A1000 Maxtor boot area
-Unit6 = msh.lzh
+Unit6 = AmigaOS FastFileSystem
 Unit8 = AMIX FS
 Unit9 = R/O copy of D2: 1.2M bootable
 Unit10 = 386i HW diag fs
@@ -15,4 +15,7 @@ Unit15 = Sun 386i boot sector
 Unit16 = R/W copy of D2: 1.2M bootable
 Unit17 = R/O 2K sector size filesystem
 Unit18 = R/W 2K sector size filesystem
+Unit19 = NetBSD 7.1 installation miniroot
 Unit20 = Device read/written by FS testing scripts (TDEV:)
+Unit21 = NetBSD 7.1 2MB test filesystem
+Unit22 = Test filesystem

@@ -534,6 +534,7 @@ panic(s)
 
 #endif
 /* VARARGS1 */
+void
 errexit(s1, s2, s3, s4)
 	char *s1;
 {
@@ -550,6 +551,7 @@ errexit(s1, s2, s3, s4)
  * Die if preening, otherwise just print message and continue.
  */
 /* VARARGS1 */
+void
 pfatal(s, a1, a2, a3)
 	char *s;
 {
@@ -570,6 +572,7 @@ pfatal(s, a1, a2, a3)
  * or a warning (preceded by filename) when preening.
  */
 /* VARARGS1 */
+void
 pwarn(s, a1, a2, a3, a4, a5, a6)
 	char *s;
 {

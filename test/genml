@@ -17,6 +17,7 @@ endif
 . .DEF blksize 512
 .     echo "Default blksize=<blksize>"
 . endif
+echo "blksize=<blksize>"
 
 if x<buffers> EQ x
 .DEF buffers 64
@@ -55,7 +56,7 @@ assign fms: bffssrc:test/units
 set ml fms:ml.<fmsdisk>
 echo "Creating ml $ml"
 echo "tdev:" > $ml
-echo "    FileSystem = bffssrc:fs/bffs" >> $ml
+echo "    FileSystem = bffssrc:l/BFFSFileSystem.debug" >> $ml
 echo "    Device = fmsdisk.device" >> $ml
 echo "    Sectorsize = <blksize>" >> $ml
 echo "    Unit = 20" >> $ml
@@ -69,7 +70,7 @@ echo "    HighCyl = <cylinders>" >> $ml
 echo "    Surfaces = <trackspercyl>" >> $ml
 echo "    BlocksPerTrack = <blkspertrack>" >> $ml
 echo "    Buffers = <buffers>" >> $ml
-echo "    Reserved = 0;" >> $ml
-echo "    PreAlloc = 1285;" >> $ml
+echo "    Reserved = 0" >> $ml
+echo "    PreAlloc = 0xf801" >> $ml
 echo "    DosType = 0x42464653  "/* BFFS */ >> $ml
 echo "#" >> $ml

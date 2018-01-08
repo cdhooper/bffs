@@ -1,5 +1,5 @@
 testdev:
-    FileSystem = fs:bffs
+    FileSystem = fs:BFFSFileSystem
     Device = fmsdisk.device
     Sectorsize = 
     Unit = 20

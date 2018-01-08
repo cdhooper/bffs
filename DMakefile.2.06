@@ -1,8 +1,28 @@
+#
+# Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted so long as any redistribution retains the
+# above copyright notice, this condition, and the below disclaimer.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+
 DOTDOT=
 BIN=bin/
-BINS=$(BIN)echown $(BIN)edumpfs $(BIN)etouch $(BIN)newfs $(BIN)bffstool $(BIN)dcp $(BIN)eln $(BIN)fsck $(BIN)rdb $(BIN)tunefs $(BIN)echmod $(BIN)els $(BIN)mknod $(BIN)restore $(BIN)dumpfs $(BIN)diskpart $(BIN)dbprint fs/bffs $(BIN)fst_thrash
+BINS=$(BIN)chown $(BIN)edumpfs $(BIN)touch $(BIN)newfs $(BIN)bffstool $(BIN)dcp $(BIN)ln $(BIN)fsck $(BIN)rdb $(BIN)tunefs $(BIN)chmod $(BIN)ls $(BIN)mknod $(BIN)restore $(BIN)dumpfs $(BIN)diskpart $(BIN)dbprint fs/bffs $(BIN)fst_thrash
 DIR=
-DIRS=$(DIR)echown $(DIR)edumpfs $(DIR)etouch $(DIR)newfs $(DIR)bffstool $(DIR)dcp $(DIR)eln $(DIR)fsck $(DIR)rdb $(DIR)tunefs $(DIR)echmod $(DIR)els $(DIR)mknod $(DIR)restore $(DIR)dumpfs $(DIR)diskpart $(DIR)fs $(DIR)fs $(DIR)test
+DIRS=$(DIR)chown $(DIR)edumpfs $(DIR)touch $(DIR)newfs $(DIR)bffstool $(DIR)dcp $(DIR)ln $(DIR)fsck $(DIR)rdb $(DIR)tunefs $(DIR)chmod $(DIR)ls $(DIR)mknod $(DIR)restore $(DIR)dumpfs $(DIR)diskpart $(DIR)fs $(DIR)fs $(DIR)test
 CLEANDIRS=$(DIRS:"*":"clean.*")
 
 all: $(BINS)

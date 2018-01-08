@@ -1,11 +1,20 @@
-/* mknod.c version 1.1
- *	This program is copyright (1994, 1996) Chris Hooper.  All code
+/* mknod
+ *	This program is copyright (1994-2018) Chris Hooper.  All code
  *	herein is freeware.  No portion of this code may be sold for profit.
  */
+
+const char *version = "\0$VER: mknod 1.2 (19-Jan-2018) © Chris Hooper";
+
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 #include <dos/dos.h>
 #include </dos30/dosextens.h>
 #include <exec/memory.h>
+#include <clib/dos_protos.h>
+#include <clib/alib_protos.h>
+#include <clib/exec_protos.h>
 
 #define TYPE_BLOCK	0
 #define TYPE_CHARACTER	1
@@ -13,83 +22,35 @@
 #define ulong unsigned long
 #define CTOB(x) ((x)>>2)
 
-char *version = "\0$VER: mknod 1.1 (17.Aug.96) © 1996 Chris Hooper";
-char *progname;
-
-main(argc, argv)
-int  argc;
-char *argv[];
+static void
+print_usage(const char *progname)
 {
-	int	index;
-	ulong	type;
-	ulong	major;
-	ulong	minor;
-
-	progname = argv[0];
-
-	if (argc < 5)
-		print_usage();
-
-	index = 1;
-	if (!strcmp(argv[index], "c"))
-		type = TYPE_CHARACTER;
-	else if (!strcmp(argv[index], "b"))
-		type = TYPE_BLOCK;
-	else {
-		fprintf(stderr, "Invalid device %s\n", argv[index]);
-		print_usage();
-	}
-
-	index++;
-	major = atoi(argv[index]);
-	if (!isdigit(*argv[index]) || (major < 0) || (major > 16777215)) {
-		fprintf(stderr, "Invalid major number %s\n", argv[index]);
-		print_usage();
-	}
-
-	index++;
-	minor = atoi(argv[index]);
-	if (!isdigit(*argv[index]) || (minor < 0) || (minor > 255)) {
-		fprintf(stderr, "Invalid minor number %s\n", argv[index]);
-		print_usage();
-	}
-
-	for (index++;  index < argc; index++)
-	    if (MakeNode(argv[index], type, (major << 8) | minor))
-		fprintf(stderr, "Unable to create node %s\n", argv[index]);
-
-	exit(0);
-}
-
-print_usage()
-{
-	fprintf(stderr, "%s\n", version + 7);
-	fprintf(stderr, "usage:  %s type major minor devname [devname devname ...]\n",
-		progname);
-	fprintf(stderr, "        type is b (block) or c (character)\n");
-	fprintf(stderr, "        major is device number (0-16777215)\n");
-	fprintf(stderr, "        minor is minor device number (0-255)\n");
-	fprintf(stderr, "        devname is name to call device node\n");
+	fprintf(stderr,
+	    "%s\n"
+	    "usage:  %s type major minor devname [devname devname ...]\n"
+	    "        type is b (block) or c (character)\n"
+	    "        major is device number (0-16777215)\n"
+	    "        minor is minor device number (0-255)\n"
+	    "        devname is name to call device node\n",
+	    version + 7, progname);
 	exit(1);
 }
 
-int MakeNode(name, type, device)
-char	*name;
-ulong	type;
-ulong	device;
+static int
+MakeNode(const char *name, ulong type, ulong device)
 {
 	int			err = 0;
 	struct MsgPort		*msgport;
 	struct MsgPort		*replyport;
 	struct StandardPacket	*packet;
-	struct Lock		*lock;
+	BPTR			lock;
 	char			buf[512];
 
-	msgport = (struct MsgPort *) DeviceProc(name, NULL);
+	msgport = (struct MsgPort *) DeviceProc(name);
 	if (msgport == NULL)
 		return(1);
 
-	lock = (struct Lock *) CurrentDir(NULL);
+	lock = CurrentDir(0);
 	CurrentDir(lock);
 
 	replyport = (struct MsgPort *) CreatePort(NULL, 0);
@@ -114,9 +75,9 @@ ulong	device;
 	packet->sp_Pkt.dp_Link         = &(packet->sp_Msg);
 	packet->sp_Pkt.dp_Port         = replyport;
 	packet->sp_Pkt.dp_Type         = ACTION_CREATE_OBJECT;
-	packet->sp_Pkt.dp_Arg1         = (ULONG) lock;
+	packet->sp_Pkt.dp_Arg1         = lock;
 	packet->sp_Pkt.dp_Arg2         = CTOB(buf);
-	packet->sp_Pkt.dp_Arg3         = (type ? ST_CDEVICE : ST_BDEVICE);
+	packet->sp_Pkt.dp_Arg3         = type;
 	packet->sp_Pkt.dp_Arg4         = device;
 
 	PutMsg(msgport, (struct Message *) packet);
@@ -133,4 +94,46 @@ ulong	device;
         DeletePort(replyport);
 
 	return(err);
+}
+
+int
+main(int argc, char *argv[])
+{
+	int	index;
+	ulong	type;
+	ulong	major;
+	ulong	minor;
+
+	if (argc < 5)
+		print_usage(argv[0]);
+
+	index = 1;
+	if (!strcmp(argv[index], "c"))
+		type = ST_CDEVICE;
+	else if (!strcmp(argv[index], "b"))
+		type = ST_BDEVICE;
+	else {
+		fprintf(stderr, "Invalid device %s\n", argv[index]);
+		print_usage(argv[0]);
+	}
+
+	index++;
+	major = atoi(argv[index]);
+	if (!isdigit(*argv[index]) || (major < 0) || (major > 16777215)) {
+		fprintf(stderr, "Invalid major number %s\n", argv[index]);
+		print_usage(argv[0]);
+	}
+
+	index++;
+	minor = atoi(argv[index]);
+	if (!isdigit(*argv[index]) || (minor < 0) || (minor > 255)) {
+		fprintf(stderr, "Invalid minor number %s\n", argv[index]);
+		print_usage(argv[0]);
+	}
+
+	for (index++;  index < argc; index++)
+	    if (MakeNode(argv[index], type, (major << 8) | minor))
+		fprintf(stderr, "Unable to create node %s\n", argv[index]);
+
+	exit(0);
 }

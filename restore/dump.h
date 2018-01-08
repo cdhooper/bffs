@@ -213,12 +213,9 @@ extern const char *strerror();
 #endif
 
 #ifdef cdh
-#	define QUAD(x) (x).val[1]
 #	ifdef AMIGA
 #		define _PATH_RMT "TAPE:"
 #	else
 #		define _PATH_RMT "dumphost:/dev/nrst0"
 #	endif
-#else
-#	define QUAD(x) (x)
 #endif

@@ -11,37 +11,11 @@ add two parameters for writes - be able to customize how
 	instead of scheduling a disk write for that data (in file_write)
 
 From Bernardo Innocenti
- - Please release full sources of BFFS, someone might
-   want to improve it or even make another FS out of it.
-
- - Please support Sun's UFS.  I have a SparcStation 4
-   at home and I'd like to be able to read its hard disk
-   on my Amiga.
-
  - Improve BFFSTool to support big screen fonts and
    non standard window border sizes.  On my system
    the GUI looks awful!  What about using MUI or
    some other GUI system?
 
- - Compile it with SAS/C: code isn't as optimized as
-   the one produced by GCC, but SAS/C is much more clever
-   with Amiga register calls to libraries.
-
- - Please try to reduce memory usage: 48K for a fs seems
-   to be a lot.  Perhaps you could make a small version
-   which only recognizes BSD 4.4 partitions.
-
- - What about a 020 version?  Would it help?
-
- - Please support the shutdown.library.  It would come
-   useful for syncing the filesystem when user hits
-   Control-Amiga-Amiga.
-
  - Please support multiuser.library.  It shouldn't be
    hard to do.  I think the author has discontinued
    developement, but full source code is available.
-
- - I'd like to be able to keep Amiga specific protection
-   bits, such as S, P and A.  Is it possible without
-   compromising the inode format?
-

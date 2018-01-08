@@ -143,7 +143,7 @@ pass2()
 			inp->i_isize = roundup(MINDIRSIZE, DIRBLKSIZ);
 			if (reply("FIX") == 1) {
 				dp = ginode(inp->i_number);
-				S32(dp->di_size) = inp->i_isize;
+				dp->di_size = inp->i_isize;
 				inodirty();
 				dp = dino;
 			}
@@ -156,14 +156,14 @@ pass2()
 			inp->i_isize = roundup(inp->i_isize, DIRBLKSIZ);
 			if (preen || reply("ADJUST") == 1) {
 				dp = ginode(inp->i_number);
-				S32(dp->di_size) = roundup(inp->i_isize, DIRBLKSIZ);
+				dp->di_size = roundup(inp->i_isize, DIRBLKSIZ);
 				inodirty();
 				dp = dino;
 			}
 		}
 		bzero((char *)dino, sizeof(struct dinode));
 		dino->di_mode = IFDIR;
-		S32(dp->di_size) = inp->i_isize;
+		dp->di_size = inp->i_isize;
 		bcopy((char *)&inp->i_blks[0], (char *)&dp->di_db[0],
 			(size_t)inp->i_numblks);
 		curino.id_number = inp->i_number;

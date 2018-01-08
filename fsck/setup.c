@@ -64,7 +64,8 @@ struct bufarea asblk;
 struct	disklabel *getdisklabel();
 
 #ifdef AMIGA
-void break_abort()
+int
+break_abort(void)
 {
 	dio_inhibit(0);
 	dio_close();
@@ -449,9 +450,48 @@ readsb(listerr)
 		badsb(listerr,
 		"VALUES IN SUPER BLOCK DISAGREE WITH THOSE IN FIRST ALTERNATE");
 #ifdef cdh
-		printf("   bsize=0x%x primary sb=0x%x [0x%x], alt=0x%x\n",
+	    if (debug) {
+		printf("   BSize=0x%x Primary_SB=0x%x [0x%x], Alt_SB=0x%x\n",
 			dev_bsize, super / dev_bsize, sblk.b_bno,
                         cgsblock(&sblock, sblock.fs_ncg - 1));
+		printf("   fsize:bsize  %05x:%05x %05x:%05x\n"
+		       "   npsect          %08x    %08x\n"
+		       "   nspf            %8u    %8u\n",
+		       sblock.fs_fsize, sblock.fs_bsize,
+		       altsblock.fs_fsize, altsblock.fs_bsize,
+		       sblock.fs_npsect, altsblock.fs_npsect,
+		       sblock.fs_nspf, altsblock.fs_nspf);
+		printf("   diffs:");
+		{
+		    unsigned char *ptr1 = (unsigned char *) &sblock;
+		    unsigned char *ptr2 = (unsigned char *) &altsblock;
+		    int   pos;
+		    int   diffs = 0;
+		    for (pos = 0; pos < sizeof (sblock); pos++) {
+			if (*ptr1 != *ptr2) {
+			    if (diffs++ > 10)
+				break;
+			    printf(" %x:%02x!=%02x", pos,  *ptr1,  *ptr2);
+			}
+			ptr1++;
+			ptr2++;
+		    }
+		}
+#define offsetof(T,memb) ((size_t)&(((T *)0)->memb)-(size_t)((T *)0))
+
+		printf("\nsuperblock offsets (for debug):\n"
+		       "   fs_optim=%x fs_fsmnt=%x fs_csp=%x fs_cgrotor=%x"
+		       "   fs_opostbl=%x\n"
+		       "   fs_sparecon=%x fs_contigsumsize=%x fs_inodefmt=%x\n",
+		       offsetof(struct fs, fs_optim),
+		       offsetof(struct fs, fs_fsmnt),
+		       offsetof(struct fs, fs_csp),
+		       offsetof(struct fs, fs_cgrotor),
+		       offsetof(struct fs, fs_opostbl),
+		       offsetof(struct fs, fs_sparecon),
+		       offsetof(struct fs, fs_contigsumsize),
+		       offsetof(struct fs, fs_inodefmt));
+		}
 #endif
 		return (0);
 	}

@@ -1,12 +1,32 @@
+#
+# Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted so long as any redistribution retains the
+# above copyright notice, this condition, and the below disclaimer.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+
 PROG=/bin/dbprint
-FS=/fs/bffs
+FS=/l/BFFSFileSystem
 CC=dcc
 CFLAGS=-ms -r
 ASM=das
 RM = -delete force >NIL:
 
 OD=obj/
-OBJS=$(OD)stack.o $(OD)handler.o $(OD)debug.o $(OD)packets.o $(OD)ufs.o $(OD)system.o $(OD)fread.o $(OD)fwrite.o $(OD)file.o $(OD)inode.o $(OD)cache.o $(OD)dir.o $(OD)table.o $(OD)alloc.o $(OD)config.o $(OD)request.o $(OD)inthand.o
+OBJS=$(OD)stack.o $(OD)handler.o $(OD)debug.o $(OD)packets.o $(OD)ufs.o $(OD)system.o $(OD)fread.o $(OD)fwrite.o $(OD)file.o $(OD)inode.o $(OD)cache.o $(OD)dir.o $(OD)table.o $(OD)alloc.o $(OD)config.o $(OD)request.o $(OD)inthand.o $(OD)unixtime.o
 
 all:  $(FS) $(PROG)
 
@@ -56,6 +76,9 @@ $(OD)request.o: request.c config.h request.h config.h
 	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)alloc.o: alloc.c config.h superblock.h alloc.h fsmacros.h cache.h
+	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
+
+$(OD)unixtime.o: unixtime.c unixtime.h
 	$(CC) $(CFLAGS) -c %(*.c) -o %(left)
 
 $(OD)config.o: config.c alloc.h

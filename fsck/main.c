@@ -31,6 +31,8 @@
  * SUCH DAMAGE.
  */
 
+const char *version = "\0$VER: fsck 1.13 (19-Jan-2018) © UCB";
+
 #ifndef lint
 static char copyright[] =
 "@(#) Copyright (c) 1980, 1986, 1993\n\
@@ -47,23 +49,29 @@ static char *rcsid = "$Id: main.c,v 1.13 1994/06/08 19:00:24 mycroft Exp $";
 #include <sys/mount.h>
 #include <ufs/dinode.h>
 #include <ufs/fs.h>
-#ifndef cdh
+#ifdef cdh
+#define EXTERN
+#else
 #include <fstab.h>
 #endif
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>
-#ifdef cdh
-#include "fsck2.h"
-#else
 #include "fsck.h"
+#ifdef __linux
+#include <unistd.h>
+#include <getopt.h>
 #endif
 
+#ifdef cdh
+static int argtoi(int flag, char *req, char *str, int base);
+#endif
 void	catch(), catchquit(), voidquit();
 int	returntosingle;
 int	verbose = 0;
 
+int
 main(argc, argv)
 	int	argc;
 	char	*argv[];
@@ -74,8 +82,9 @@ main(argc, argv)
 	extern char *optarg, *blockcheck();
 	extern int optind;
 
-#ifdef cdh
-	dio_checkstack(4000);
+#ifdef AMIGA
+	if (dio_checkstack(20000))
+	    exit(1);
 #else
 	sync();
 #endif
@@ -125,7 +134,12 @@ main(argc, argv)
 			break;
 
 		default:
+usage:
+#ifdef cdh
+			fprintf(stderr, "BSD 4.4 fsck usage: %s [-vpbcdlmny] <device>\n", argv[0]);
+#else
 			fprintf(stderr, "BSD 4.4 fsck usage: %s -[vpbcdlmny]\n", argv[0]);
+#endif
 			fprintf(stderr, "   b=sblock #   p=preen     y=always yes    n=always no         c=convert format\n");
 			fprintf(stderr, "   l=maxrun     v=verbose   d=debug         m=lost+found mode\n");
 			errexit("-%c is not an option\n", ch);
@@ -153,12 +167,19 @@ main(argc, argv)
 		}
 		exit(0);
 	}
+#ifdef AMIGA
+	ch = ' ';
+	argv -= optind;
+	goto usage;
+#else
 	ret = checkfstab(preen, maxrun, docheck, checkfilesys);
+#endif
 	if (returntosingle)
 		exit(2);
 	exit(ret);
 }
 
+int
 argtoi(flag, req, str, base)
 	int flag;
 	char *req, *str;
@@ -176,6 +197,7 @@ argtoi(flag, req, str, base)
 /*
  * Determine whether a filesystem should be checked.
  */
+int
 docheck(fsp)
 	register struct fstab *fsp;
 {
@@ -195,6 +217,7 @@ docheck(fsp)
  * Check the specified filesystem.
  */
 /* ARGSUSED */
+int
 checkfilesys(filesys, mntpt, auxdata, child)
 	char *filesys, *mntpt;
 	long auxdata;

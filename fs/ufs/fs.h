@@ -42,8 +42,22 @@
  * The byte-offset forms are preferred, as they don't imply a sector size.
  */
 
-#ifndef _ufs_fs_h
-#define	_ufs_fs_h
+#ifndef _UFS_FS_H
+#define	_UFS_FS_H
+
+#define howmany(x, y)   (((x)+((y)-1))/(y))
+#define quad            quad_t
+typedef struct          _quad_t { long val[2]; } quad_t;
+typedef short           dev_t;
+typedef long            off_t;
+typedef long            daddr_t;
+typedef unsigned long   utime_t;
+typedef unsigned char   u_char;
+typedef unsigned long   ino_t;
+typedef unsigned long   u_long;
+typedef unsigned short  u_short;
+typedef unsigned short  uid_t;
+typedef unsigned short  gid_t;
 
 #define	BBSIZE		8192
 #define	SBSIZE		8192
@@ -120,7 +134,9 @@ struct csum {
 /*
  * Super block for a file system.
  */
-#define	FS_MAGIC	0x011954
+#define FS_UFS1_MAGIC   0x011954        /* UFS1 fast filesystem magic number */
+#define FS_UFS2_MAGIC   0x19540119      /* UFS2 fast filesystem magic number */
+
 struct	fs {
 	struct	fs *fs_link;		/* linked list of file systems */
 	struct	fs *fs_rlink;		/* used for incore super blocks */
@@ -130,7 +146,7 @@ struct	fs {
 	daddr_t	fs_dblkno;		/* offset of first data after cg */
 	long	fs_cgoffset;		/* cylinder group offset in cylinder */
 	long	fs_cgmask;		/* used to calc mod fs_ntrak */
-	time_t 	fs_time;    		/* last time written */
+	utime_t	fs_time;		/* last time written */
 	long	fs_size;		/* number of blocks in fs */
 	long	fs_dsize;		/* number of data blocks in fs */
 	long	fs_ncg;			/* number of cylinder groups */
@@ -176,9 +192,9 @@ struct	fs {
 /* these fields are derived from the hardware */
 	long	fs_ntrak;		/* tracks per cylinder */
 	long	fs_nsect;		/* sectors per track */
-	long  	fs_spc;   		/* sectors per cylinder */
+	long	fs_spc;			/* sectors per cylinder */
 /* this comes from the disk driver partitioning */
-	long	fs_ncyl;   		/* cylinders in file system */
+	long	fs_ncyl;		/* cylinders in file system */
 /* these fields can be computed from the others */
 	long	fs_cpg;			/* cylinders per group */
 	long	fs_ipg;			/* inodes per group */
@@ -186,10 +202,10 @@ struct	fs {
 /* this data must be re-computed after crashes */
 	struct	csum fs_cstotal;	/* cylinder summary information */
 /* these fields are cleared at mount time */
-	char   	fs_fmod;    		/* super block modified flag */
-	char   	fs_clean;    		/* file system is clean flag */
-	char   	fs_ronly;   		/* mounted read-only flag */
-	char   	fs_flags;   		/* currently unused flag */
+	char	fs_fmod;		/* super block modified flag */
+	char	fs_clean;		/* file system is clean flag */
+	char	fs_ronly;		/* mounted read-only flag */
+	char	fs_flags;		/* currently unused flag */
 	char	fs_fsmnt[MAXMNTLEN];	/* name mounted on */
 /* these fields retain the current block allocation info */
 	long	fs_cgrotor;		/* last cg searched */
@@ -219,6 +235,16 @@ struct	fs {
 #define	FS_OPTSPACE	1	/* minimize disk fragmentation */
 
 /*
+ * Filesystem flags (used in versions newer then BSD 4.4)
+ */
+#define FS_FLAGS_DOSOFTDEP  0x02  /* filesystem using soft dependencies */
+#define FS_FLAGS_SUJ        0x08  /* filesystem using journaled softupdates */
+#define FS_FLAGS_ACLS       0x10  /* filesystem has ACLs enabled */
+#define FS_FLAGS_MULTILEVEL 0x20  /* filesystem is MAC multi-level */
+#define FS_FLAGS_GJOURNAL   0x40  /* filesystem is gjournaled */
+#define FS_FLAGS_UPDATED    0x80  /* flags have moved to new location */
+
+/*
  * Rotational layout table format types
  */
 #define	FS_42POSTBLFMT		-1	/* 4.2BSD rotational table format */
@@ -232,7 +258,7 @@ struct	fs {
 struct	cg {
 	struct	cg *cg_link;		/* linked list of cyl groups */
 	long	cg_magic;		/* magic number */
-	time_t	cg_time;		/* time last written */
+	utime_t	cg_time;		/* time last written */
 	long	cg_cgx;			/* we are the cgx'th cylinder group */
 	short	cg_ncyl;		/* number of cyl's this cg */
 	short	cg_niblk;		/* number of inode blocks this cg */
@@ -248,7 +274,7 @@ struct	cg {
 	long	cg_freeoff;		/* (u_char) free block map */
 	long	cg_nextfreeoff;		/* (u_char) next available space */
 	long    cg_clustersumoff;	/* (long) counts of avail clusters */
-	long    cg_clusteroff;  	/* (char) free cluster map */
+	long    cg_clusteroff;		/* (char) free cluster map */
 	long    cg_nclusterblks;	/* number of clusters this cg */
 	long	cg_sparecon[13];	/* reserved for future use */
 	u_char	cg_space[1];		/* space for cylinder group maps */
@@ -262,7 +288,7 @@ struct	cg {
 struct	ocg {
 	struct	ocg *cg_link;		/* linked list of cyl groups */
 	struct	ocg *cg_rlink;		/* used for incore cyl groups */
-	time_t	cg_time;		/* time last written */
+	utime_t	cg_time;		/* time last written */
 	long	cg_cgx;			/* we are the cgx'th cylinder group */
 	short	cg_ncyl;		/* number of cyl's this cg */
 	short	cg_niblk;		/* number of inode blocks this cg */
@@ -280,4 +306,4 @@ struct	ocg {
 /* actually longer */
 };
 
-#endif /*!_ufs_fs_h*/
+#endif /* _UFS_FS_H */

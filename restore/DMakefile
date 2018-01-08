@@ -1,55 +1,81 @@
-ARCH=ami
+#
+# Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted so long as any redistribution retains the
+# above copyright notice, this condition, and the below disclaimer.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+
 DOTDOT=
 PROG=$(DOTDOT)/bin/restore
-OBJ=$(DOTDOT)/obj.$(ARCH)/
-OBJS=$(OBJ)restore_main.o $(OBJ)interactive.o $(OBJ)restore.o $(OBJ)dirs.o $(OBJ)symtab.o $(OBJ)tape.o $(OBJ)restore_utilities.o $(OBJ)strsep.o $(OBJ)glob.o $(OBJ)restore_other.o $(OBJ)getopt.o $(OBJ)amiga_unix.o
+OBJ=obj
+SRCS=restore_main.c interactive.c restore.c dirs.c symtab.c tape.c restore_utilities.c strsep.c glob.c restore_other.c getopt.c amiga_unix.c err.c
+OBJS=$(SRCS:*.*:"$(OBJ)/%1.o")
 
-#CFLAGS=-I../ucbinclude -DRRESTORE
+#CFLAGS=-I../ucbinclude -I/unix_support -DRRESTORE
 #CFLAGS=-O2 -I./ucbinclude
 #CC=cc
 
 CC=dcc
-CFLAGS=-Dcdh -I/ucbinclude
+CFLAGS=-O2 -r -Dcdh -I/ucbinclude -I/unix_support -I.
 RM = -delete force >NIL:
 
-$(PROG): $(OBJS)
-	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
+$(PROG): $(OBJ) $(OBJS)
+	$(CC) $(CFLAGS) %(right:*.o) -o %(left)
 
-$(OBJ)restore_main.o: restore_main.c restore.h
-	$(CC) $(CFLAGS) -c restore_main.c -o $(OBJ)restore_main.o
+$(OBJ): $(OBJ)
+	makedir %(left)
 
-$(OBJ)interactive.o: interactive.c restore.h
-	$(CC) $(CFLAGS) -c interactive.c -o $(OBJ)interactive.o
+$(OBJ)/restore_main.o: restore_main.c restore.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)restore.o: restore.c restore.h
-	$(CC) $(CFLAGS) -c restore.c -o $(OBJ)restore.o
+$(OBJ)/interactive.o: interactive.c restore.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)dirs.o: dirs.c restore.h
-	$(CC) $(CFLAGS) -c dirs.c -o $(OBJ)dirs.o
+$(OBJ)/restore.o: restore.c restore.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)symtab.o: symtab.c restore.h
-	$(CC) $(CFLAGS) -c symtab.c -o $(OBJ)symtab.o
+$(OBJ)/dirs.o: dirs.c restore.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)tape.o: tape.c restore.h
-	$(CC) $(CFLAGS) -c tape.c -o $(OBJ)tape.o
+$(OBJ)/symtab.o: symtab.c restore.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)restore_utilities.o: restore_utilities.c restore.h
-	$(CC) $(CFLAGS) -c restore_utilities.c -o $(OBJ)restore_utilities.o
+$(OBJ)/tape.o: tape.c restore.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)glob.o: glob.c
-	$(CC) $(CFLAGS) -c glob.c -o $(OBJ)glob.o
+$(OBJ)/restore_utilities.o: restore_utilities.c restore.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)strsep.o: strsep.c
-	$(CC) $(CFLAGS) -c strsep.c -o $(OBJ)strsep.o
+$(OBJ)/glob.o: glob.c
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)restore_other.o: restore_other.c
-	$(CC) $(CFLAGS) -c restore_other.c -o $(OBJ)restore_other.o
+$(OBJ)/strsep.o: strsep.c
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)getopt.o: $(DOTDOT)/unix_support/getopt.c
-	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/getopt.c -o $(OBJ)getopt.o
+$(OBJ)/restore_other.o: restore_other.c
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)amiga_unix.o: $(DOTDOT)/unix_support/amiga_unix.c
-	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/amiga_unix.c -o $(OBJ)amiga_unix.o
+$(OBJ)/getopt.o: $(DOTDOT)/unix_support/getopt.c
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/amiga_unix.o: $(DOTDOT)/unix_support/amiga_unix.c
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/err.o: $(DOTDOT)/unix_support/err.c
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
 clean:
 	$(RM) $(OBJS) $(PROG)

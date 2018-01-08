@@ -336,9 +336,9 @@ retry:
 	return (0);
 }
 
-#define rindex strchr
+#define rindex strrchr
 #ifdef unix
-char *strchr();
+char *strrchr();
 #endif
 
 char *

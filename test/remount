@@ -18,5 +18,9 @@ endif
 run bffssrc:bin/dbprint kcon:0/0/600/140//INACTIVE/FASTUPDATE/JUMP/NOMENUS
 
 assign fms: bffssrc:test/units
-assign tdev: dismount
+assign tdev: exists >nil:
+if not warn
+    bffssrc:bin/umount tdev:
+;    assign tdev: dismount
+endif
 mount tdev: from fms:ml.<fmsdisk>

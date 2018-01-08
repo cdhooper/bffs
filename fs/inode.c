@@ -1,13 +1,37 @@
+/*
+ * Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted so long as any redistribution retains the
+ * above copyright notice, this condition, and the below disclaimer.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#include <time.h>
+#include <string.h>
 #include <exec/memory.h>
 
 #include "config.h"
 #include "superblock.h"
+#include "unixtime.h"
 #include "ufs/inode.h"
 #include "fsmacros.h"
 #include "file.h"
 #include "cache.h"
 #include "alloc.h"
 #include "ufs.h"
+#include "inode.h"
 
 
 /* Special file block address handling
@@ -31,33 +55,37 @@
  * 8k blk, 8k   frag: fblkshift=0; fblkmask=0; pfragshift=11; pfragmask=2047;
  */
 
-extern int GMT;
 int   minfree = 0;
 ULONG pfragshift = 8;
 ULONG pfragmask  = 255;
 ULONG fblkshift  = 2;
 ULONG fblkmask   = 3;
 
-ULONG fragno[NIADDR];
-ULONG ptrnum[NIADDR];
-
-ULONG prev_frag_addr();
+static ULONG prev_frag_addr(ULONG file_frag_num, ULONG inum);
 
 /* ridisk_frag()
  *	This routine will return the frag address of a block in a fs given
  *	the file block number (frag address) and inode pointer.  It will not
  *	allocate blocks for holes in a file; rather, it will return 0.
  */
-ULONG ridisk_frag(file_frag_num, inode)
-ULONG	file_frag_num;
-struct	icommon *inode;
+ULONG
+ridisk_frag(ULONG file_frag_num, ULONG inum)
 {
 	int	ind;
 	int	level = 0;
 	ULONG	curblk;
 	ULONG	file_blk_num;
 	ULONG	*temp;
-	int	frac;
+	ULONG	frac;
+	ULONG   fragno[NIADDR];
+	ULONG   ptrnum[NIADDR];
+	struct	icommon *inode = inode_read(inum);
+#ifndef FAST
+	if (inode == NULL) {
+	    PRINT2(("ridisk_frag: inode_read gave NULL\n"));
+	    return (0);
+	}
+#endif
 
 	file_blk_num = file_frag_num / FRAGS_PER_BLK;
 	frac = file_frag_num - file_blk_num * FRAGS_PER_BLK;
@@ -75,15 +103,11 @@ struct	icommon *inode;
 		ind	    >>= pfragshift;
 		fragno[level] = ind & fblkmask;
 		ind	    >>= fblkshift;
-
-
 /*
 		PRINT(("level=%d ptrnum=%-3d fragno=%d blk=%d frag=%d ind=%d\n",
 			level, ptrnum[level], fragno[level], file_blk_num,
 			file_frag_num, ind));
 */
-
-
 		level++;
 	} while (ind > 0);
 
@@ -98,15 +122,13 @@ struct	icommon *inode;
 		temp = (ULONG *) cache_frag(curblk + fragno[level]);
 #ifndef FAST
 		if (temp == NULL) {
-			PRINT(("no memory from cache_frag!\n"));
+			PRINT2(("ridisk: cache gave NULL\n"));
 			return(0);
 		}
 #endif
 		curblk = DISK32(temp[ptrnum[level]]);
 		if (curblk == 0) {
-/*
-			PRINT(("empty block at level %d\n", level));
-*/
+			/* Empty block at current level */
 			return(0);
 		}
 	} while (level > 0);
@@ -114,12 +136,35 @@ struct	icommon *inode;
 	endreturn:
 	if (curblk == 0)
 		return(0);
-	else
-		return(curblk + frac);
+	return(curblk + frac);
 }
 
 
 #ifndef RONLY
+/* block_erase()
+ *	This routine will erase the passed filesystem block, using the
+ *	cache routines to bring each frag into memory.  Only when
+ *	initializing a new index block is this routine called.
+ */
+static void
+block_erase(ULONG fsblock)
+{
+	int	index;
+
+	PRINT(("block erase, frags 0-%d of fsblock %d\n",
+		index, FRAGS_PER_BLK));
+	for (index = 0; index < FRAGS_PER_BLK ; index++) {
+		char *ptr = cache_frag_write(fsblock + index, 0);
+#ifndef FAST
+		if (ptr == NULL) {
+		    PRINT2(("block_erase: cache_write gave NULL\n"));
+		    return;
+		}
+#endif
+		memset(ptr, 0, FSIZE);
+	}
+}
+
 /* cidisk_frag()
  *	This routine will allow the change of a frag address of a block in
  *	the fs given the file block number and the inode pointer.  If an
@@ -128,31 +173,38 @@ struct	icommon *inode;
  *	routine will not allocate new blocks, except where as needed for
  *	index blocks.
  */
-ULONG cidisk_frag(file_frag_num, inum, newblk)
-ULONG	file_frag_num;
-ULONG	inum;
-ULONG	newblk;
+ULONG
+cidisk_frag(ULONG file_frag_num, ULONG inum, ULONG newblk)
 {
 	int	ind;
 	int	level = 0;
 	ULONG	curblk;
 	ULONG	ocurblk;
 	ULONG	file_blk_num;
-	struct	icommon *inode;
+	ULONG	frac;
+	ULONG   fragno[NIADDR];
+	ULONG   ptrnum[NIADDR];
 	ULONG	*temp;
-	int	frac;
-	ULONG	prev_frag;
-
-	inode = inode_read(inum);
+	struct	icommon *inode = inode_read(inum);
+#ifndef FAST
+	if (inode == NULL) {
+	    PRINT2(("cidisk_frag: inode_read gave NULL\n"));
+	    return (0);
+	}
+#endif
 
 	file_blk_num = file_frag_num / FRAGS_PER_BLK;
 	frac = file_frag_num - file_blk_num * FRAGS_PER_BLK;
 
-	prev_frag = prev_frag_addr(file_frag_num, inode, inum);
-
 	ind = file_blk_num - NDADDR;
 	if (ind < 0) {
 	    inode = inode_modify(inum);
+#ifndef FAST
+	    if (inode == NULL) {
+		PRINT2(("cidisk_frag(): inode_modify %u gave NULL\n", inum));
+		return (1);
+	    }
+#endif
 
 	    PRINT(("cidisk: d=%d from %d to %d\n",
 		    file_blk_num, DISK32(inode->ic_db[file_blk_num]), newblk));
@@ -176,13 +228,20 @@ ULONG	newblk;
 /*
 	    PRINT(("cidisk: alloc main index at level l=%d\n", level));
 */
+	    ULONG prev_frag = prev_frag_addr(file_frag_num, inum);
 	    curblk = block_allocate(prev_frag);
 	    if (curblk == 0) {
-		PRINT(("cidisk: failed to alloc index block\n"));
+		PRINT2(("cidisk: failed to alloc index block\n"));
 		return(1);
 	    }
 	    block_erase(curblk);
 	    inode = inode_modify(inum); /* modify inode on disk */
+#ifndef FAST
+	    if (inode == NULL) {
+		PRINT2(("cidisk_frag(): inode_modify %u gave NULL\n", inum));
+		return (1);
+	    }
+#endif
 	    inode->ic_ib[level - 1] = DISK32(curblk);
 	    inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NDSPB);
 	}
@@ -193,8 +252,10 @@ ULONG	newblk;
 		ocurblk = curblk;
 		temp = (ULONG *) cache_frag(curblk + fragno[level]);
 #ifndef FAST
-		if (temp == NULL)
-			return(0);
+		if (temp == NULL) {
+		    PRINT2(("cidisk: cache gave NULL\n"));
+		    return(1);
+		}
 #endif
 		curblk = temp[ptrnum[level]];
 		if (curblk == 0) {
@@ -205,21 +266,28 @@ ULONG	newblk;
 		    /* allocate index block and zero it */
 		    curblk = block_allocate(ocurblk);
 		    if (curblk == 0) {		  /* no free space */
-			PRINT(("cidisk: No free space to alloc iblock\n"));
+			PRINT2(("cidisk: No free space to alloc iblock\n"));
 			return(1);
 		    }
 		    block_erase(curblk);
 
 		    inode = inode_modify(inum);   /* modify inode on disk */
+#ifndef FAST
+		    if (inode == NULL) {
+			PRINT2(("cidisk_frag(): inode_modify %u gave NULL\n",
+				inum));
+			return (1);
+		    }
+#endif
 		    inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NDSPB);
 
 		    /* update parent index block pointer */
 		    temp = (ULONG *) cache_frag_write(ocurblk + fragno[level], 1);
 #ifndef FAST
 		    if (temp == NULL) {
-			PRINT(("** cif cannot cache frag %d previously cached!\n",
-				ocurblk + fragno[level]));
-			return(0);
+			PRINT2(("cidisk_frag: cache_write gave NULL for l%d frag %d\n",
+				ocurblk + fragno[level], level));
+			return(1);
 		    }
 #endif
 		    temp[ptrnum[level]] = DISK32(curblk);
@@ -228,9 +296,9 @@ ULONG	newblk;
 		temp = (ULONG *) cache_frag_write(curblk + fragno[0], 1);
 #ifndef FAST
 		if (temp == NULL) {
-		    PRINT(("** cif cannot cache frag %d for write!\n",
+		    PRINT2(("cidisk_frag: cache_write gave NULL for l0 frag %d\n",
 			   curblk + fragno[0]));
-		    return(0);
+		    return(1);
 		}
 #endif
 
@@ -255,10 +323,8 @@ ULONG	newblk;
 	whole blocks in the filesystem exist, 0 is returned; indicating
 	filesystem full.
 */
-ULONG widisk_frag(file_frag_num, inode, inum)
-ULONG	file_frag_num;
-struct	icommon *inode;
-ULONG	inum;
+ULONG
+widisk_frag(ULONG file_frag_num, ULONG inum)
 {
 	int	ind;
 	int	level = 0;
@@ -266,23 +332,38 @@ ULONG	inum;
 	ULONG	ocurblk;
 	ULONG	file_blk_num;
 	ULONG	*temp;
-	ULONG	prev_frag = 0;
-	int	frac;
+	ULONG	frac;
+	ULONG   prev_frag = 0;
+	ULONG   fragno[NIADDR];
+	ULONG   ptrnum[NIADDR];
+	struct icommon *inode = inode_read(inum);
+#ifndef FAST
+	if (inode == NULL) {
+	    PRINT2(("widisk_frag: inode_read gave NULL\n"));
+	    return (0);
+	}
+#endif
 
 	file_blk_num = file_frag_num / FRAGS_PER_BLK;
 	frac = file_frag_num - file_blk_num * FRAGS_PER_BLK;
 
-	prev_frag = prev_frag_addr(file_frag_num, inode, inum);
-
 	if ((ind = file_blk_num - NDADDR) < 0) {
 	    curblk = DISK32(inode->ic_db[file_blk_num]);
 	    if (curblk == 0) {
+		prev_frag = prev_frag_addr(file_frag_num, inum);
 	        curblk = block_allocate(prev_frag);
 		if (curblk == 0) {
-		    PRINT(("widisk: failed to alloc block\n"));
+		    PRINT2(("widisk: failed to alloc block\n"));
 		    return(0);
 		}
 		inode = inode_modify(inum);
+#ifndef FAST
+		if (inode == NULL) {
+		    PRINT2(("widisk_frag(): inode_modify %u gave NULL\n",
+			    inum));
+		    return (1);
+		}
+#endif
 		inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NDSPB);
 		inode->ic_db[file_blk_num] = DISK32(curblk);
 	    }
@@ -301,40 +382,77 @@ ULONG	inum;
 
 	curblk = DISK32(inode->ic_ib[level - 1]);
 	if (curblk == 0) {
+	    prev_frag = prev_frag_addr(file_frag_num, inum);
 	    curblk = block_allocate(prev_frag);
 	    if (curblk == 0) {
-		PRINT(("widisk: failed to alloc block\n"));
+		PRINT2(("widisk: failed to alloc block\n"));
 		return(0);
 	    }
 	    inode = inode_modify(inum);
+#ifndef FAST
+	    if (inode == NULL) {
+		PRINT2(("widisk_frag(): inode_modify %u gave NULL\n", inum));
+		return (1);
+	    }
+#endif
 	    inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NDSPB);
 	    inode->ic_ib[level - 1] = DISK32(curblk);
 	    block_erase(curblk);
 	}
+
+	/*
+	 * XXX: If I move the next block down where it should go, then
+	 * I see corruption on large file copies.  Not sure why.
+	 * It's likely pushing out entries from the cache, but which
+	 * ones?
+	 */
+#if 1
+	if (prev_frag == 0)
+	    prev_frag = prev_frag_addr(file_frag_num, inum);
+#endif
 
 	do {
 	    level--;
 	    ocurblk = curblk;
 	    temp = (ULONG *) cache_frag(curblk + fragno[level]);
 #ifndef FAST
-	    if (temp == NULL)
+	    if (temp == NULL) {
+		PRINT2(("widisk: cache gave NULL\n"));
 		return(0);
+	    }
 #endif
 	    curblk = DISK32(temp[ptrnum[level]]);
 	    if (curblk == 0) {
-		temp = (ULONG *) cache_frag_write(ocurblk + fragno[level], 1);
-#ifndef FAST
-		if (temp == NULL)
-		    return(0);
+#if 0
+		if (prev_frag == 0)
+		    prev_frag = prev_frag_addr(file_frag_num, inum);
+		/* XXX: This is where I would locate the code above */
 #endif
 		curblk = block_allocate(prev_frag);
 		if (curblk == 0) {
-		    PRINT(("widisk: failed to alloc block\n"));
+		    PRINT2(("widisk: failed to alloc block\n"));
 		    return(0);
 		}
-		inode = inode_modify(inum);
-		inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NDSPB);
+
+		temp = (ULONG *) cache_frag_write(ocurblk + fragno[level], 1);
+#ifndef FAST
+		if (temp == NULL) {
+		    PRINT2(("widisk: cache_write gave NULL\n"));
+		    return(0);
+		}
+#endif
 		temp[ptrnum[level]] = DISK32(curblk);
+
+		inode = inode_modify(inum);
+#ifndef FAST
+		if (inode == NULL) {
+		    PRINT2(("widisk_frag(): inode_modify %u gave NULL\n",
+			    inum));
+		    return (1);
+		}
+#endif
+		inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NDSPB);
+
 		if (level)
 		    block_erase(curblk);
 	    }
@@ -345,24 +463,6 @@ ULONG	inum;
 	else
 		return(curblk + frac);
 }
-
-
-/* block_erase()
- *	This routine will erase the passed filesystem block, using the
- *	cache routines to bring each frag into memory.  Only when
- *	initializing a new index block is this routine called.
- */
-block_erase(fsblock)
-ULONG fsblock;
-{
-	int	index;
-
-	PRINT(("block erase, frags 0-%d of fsblock %d\n",
-		index, FRAGS_PER_BLK));
-	for (index = 0; index < FRAGS_PER_BLK ; index++)
-		ZeroMem(cache_frag_write(fsblock + index, 0), FSIZE);
-
-}
 #endif
 
 
@@ -372,8 +472,8 @@ ULONG fsblock;
  *	WARNING:  The pointer returned is only guaranteed valid until
  *		  the next cache operation.
  */
-struct icommon *inode_read(inum)
-int inum;
+struct icommon *
+inode_read(int inum)
 {
 	struct icommon *buf;
 
@@ -383,12 +483,14 @@ int inum;
 	buf = (struct icommon *)
 		cache_frag(itod(superblock, inum) + itodo(superblock,inum));
 
-	if (buf)
-		return(buf + itofo(superblock, inum));
-	else {
-		PRINT(("inode_read: buffer from cache_frag is NULL!\n"));
-		return(NULL);
+#ifndef FAST
+	if (buf == NULL) {
+		PRINT2(("inode_read: cache gave NULL for inum %d\n",
+			inum));
+		return (NULL);
 	}
+#endif
+	return(buf + itofo(superblock, inum));
 }
 
 
@@ -401,8 +503,8 @@ int inum;
  *		  the next cache operation.  Also, this data may be
  *		  flushed out to disk with the next cache operation.
  */
-struct icommon *inode_modify(inum)
-int inum;
+struct icommon *
+inode_modify(int inum)
 {
 	struct icommon *buf;
 
@@ -411,11 +513,14 @@ int inum;
 
 	buf = (struct icommon *)
 		cache_frag_write(itod(superblock, inum) + itodo(superblock,inum), 1);
-
-	if (buf)
-		return(buf + itofo(superblock, inum));
-	else
-		return(0);
+#ifndef FAST
+	if (buf == NULL) {
+		PRINT2(("inode_modify: cache_write gave NULL for inum %d\n",
+			inum));
+		return (NULL);
+	}
+#endif
+	return(buf + itofo(superblock, inum));
 }
 
 
@@ -430,9 +535,8 @@ int inum;
  *	  type = I_DIR or I_FILE
  *	parent = parent inum
  */
-int inum_new(parent, type)
-int	parent;
-int	type;
+int
+inum_new(int parent, int type)
 {
 	struct	cg *mycg;
 	int	cgx;
@@ -448,7 +552,7 @@ int	type;
 
 #ifndef FAST
 	if (parent > DISK32(superblock->fs_ipg) * DISK32(superblock->fs_ncg)) {
-		PRINT(("bad parent inode number!\n"));
+		PRINT2(("bad parent inode number\n"));
 		return(0);
 	}
 #endif
@@ -460,7 +564,7 @@ int	type;
 
 #ifndef FAST
 	if (!cg_chkmagic(mycg)) {
-		PRINT(("Read a block which was NOT a cg block!\n"));
+		PRINT2(("Read a block which was NOT a cg block\n"));
 		return(0);
 	}
 #endif
@@ -518,12 +622,18 @@ int	type;
 		if (bit_chk(cg_inosused(mycg), inum) == 0)
 			goto found_clear;
 
-	PRINT2(("INCON: Unable to find free inode - SUMMARY LIED!\n"));
+	PRINT2(("INCON: Unable to find free inode - SUMMARY LIED\n"));
 	return(0);
 
 	found_clear:
 
 	mycg = cache_cg_write(cgx);
+#ifndef FAST
+	if (mycg == NULL) {
+	    PRINT2(("inum_new: pinum %d cache_cg_write gave NULL", parent));
+	    return (0);
+	}
+#endif
 	mycg->cg_irotor = DISK32(inum);
 	bit_set(cg_inosused(mycg), inum);
 
@@ -567,22 +677,23 @@ int	type;
  *	The file will be given regular permissions and a creation
  *	timestamp.
  */
-inum_sane(inum, type)
-ULONG	inum;
-int	type;
+void
+inum_sane(ULONG inum, int type)
 {
 	time_t	timeval;
 	struct	icommon *inode;
-	int	index;
+	long    gen;
 
 	inode = inode_modify(inum);
 
 #ifndef FAST
 	if (inode == NULL) {
-		PRINT(("inum_sane(): bad buffer given from inode_modify\n"));
+		PRINT2(("inum_sane(): inode_modify gave NULL\n"));
 		return;
 	}
 #endif
+	gen = DISK32(inode->ic_gen);
+	memset(inode, 0, sizeof (*inode));
 
 	/* regular file, 0755 permissions */
 	if (type == I_DIR) {
@@ -592,36 +703,15 @@ int	type;
 		inode->ic_mode		= DISK16(IFREG | 0755);
 		inode->ic_nlink		= DISK16(1);
 	}
-	inode->ic_ouid		= 0;
-	inode->ic_ouid		= 0;
-	inode->ic_ngid		= 0;
-	inode->ic_ngid		= 0;
-	inode->ic_blocks	= 0;
-	inode->ic_size.val[0]	= 0;
-	inode->ic_size.val[1]	= 0;
 
-#ifdef INTEL
-	inode->ic_gen = DISK32(DISK32(inode->ic_gen) + 1);
-#else
-	inode->ic_gen++;
-#endif
+	inode->ic_gen = DISK32(gen + 1);
 
 	/* get local time */
-	time(&timeval);
-
-	/* 2922 = clock birth difference in days, 86400 = seconds in a day */
-	/* 18000 = clock birth difference remainder  5 * 60 * 60 */
-	timeval += 2922 * 86400 - GMT * 3600;
+	timeval = unix_time();
 
 	inode->ic_mtime = DISK32(timeval);
 	inode->ic_atime = DISK32(timeval);
 	inode->ic_ctime = DISK32(timeval);
-
-	for (index = 0; index < NDADDR; index++)
-		inode->ic_db[index] = 0;
-
-	for (index = 0; index < NIADDR; index++)
-		inode->ic_ib[index] = 0;
 }
 
 
@@ -630,8 +720,8 @@ int	type;
  *	It will return the specified inode to the pool of available
  *	inodes for its associated cylinder group.
  */
-inum_free(inum)
-ULONG inum;
+void
+inum_free(ULONG inum)
 {
 	struct	icommon *inode;
 	int	index;
@@ -642,16 +732,21 @@ ULONG inum;
 #endif
 
 	inode = inode_modify(inum);
-
 #ifndef FAST
 	if (inode == NULL) {
-		PRINT(("inum_free(): bad buffer given from inode_modify\n"));
+		PRINT2(("inum_free(): inode_modify gave NULL\n"));
 		return;
 	}
 #endif
 
 	cgx  = itog(superblock, inum);
 	mycg = cache_cg_write(cgx);
+#ifndef FAST
+	if (mycg == NULL) {
+	    PRINT2(("inum_free: inum %d cache_cg_write gave NULL", inum));
+	    return;
+	}
+#endif
 
 	mycg->cg_irotor = DISK32(inum % DISK32(superblock->fs_ipg));
 
@@ -714,36 +809,45 @@ ULONG inum;
 		inode->ic_ib[index] = 0;
 }
 
-
-int is_writable(inum)
-ULONG inum;
+int
+is_writable(ULONG inum)
 {
 	struct icommon *inode;
 
 	inode = inode_read(inum);
+#ifndef FAST
+	if (inode == NULL) {
+	    PRINT2(("is_writable: inode_read gave NULL\n"));
+	    return (0);
+	}
+#endif
 	return(DISK16(inode->ic_mode) & IWRITE);
 }
-#endif !RONLY
+#endif /* !RONLY */
 
-int is_readable(inum)
-ULONG inum;
+int
+is_readable(ULONG inum)
 {
 	struct icommon *inode;
 
 	inode = inode_read(inum);
+#ifndef FAST
+	if (inode == NULL) {
+	    PRINT2(("is_readable: inode_read gave NULL\n"));
+	    return (0);
+	}
+#endif
 	return(DISK16(inode->ic_mode) & IREAD);
 }
 
-ULONG prev_frag_addr(file_frag_num, inode, inum)
-ULONG	file_frag_num;
-struct	icommon *inode;
-ULONG	inum;
+static ULONG
+prev_frag_addr(ULONG file_frag_num, ULONG inum)
 {
 	ULONG	prev_frag;
 	int	index;
 
 	for (index = file_frag_num - 1; index >= 0; index--)
-	    if (prev_frag = ridisk_frag(index, inode))
+	    if (prev_frag = ridisk_frag(index, inum))
 		break;
 
 	if (prev_frag == 0) {

@@ -21,7 +21,7 @@ extern	int	disk_flags;
 #define BBSIZE 8192
 #define SBSIZE 8192
 
-
+int
 dio_label(label)
 struct disklabel *label;
 {
@@ -55,7 +55,7 @@ struct disklabel *label;
 
 	while (devinfo != NULL) {
 		devname	= (char *) BTOC(devinfo->dvi_Name);
-		if (unstrcmp(devname+1, lookfor)) {
+		if (stricmp(devname + 1, lookfor) == 0) {
 			notfound = 0;
 			break;
 		}

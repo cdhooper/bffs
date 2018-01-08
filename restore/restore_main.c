@@ -33,6 +33,8 @@
  * SUCH DAMAGE.
  */
 
+const char *version = "\0$VER: restore 1.9 (19-Jan-2018) © UCB";
+
 #ifndef lint
 static char copyright[] =
 "@(#) Copyright (c) 1983, 1993\n\
@@ -58,6 +60,10 @@ static char rcsid[] = "$NetBSD: main.c,v 1.9 1995/03/18 14:59:46 cgd Exp $";
 #include <ufs/ufs/dinode.h>
 #endif
 #include <protocols/dumprestore.h>
+
+#ifdef AMIGA
+#include <getopt.h>
+#endif
 
 #include <err.h>
 #include <errno.h>

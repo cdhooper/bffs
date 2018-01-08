@@ -42,12 +42,8 @@
 
 #include <paths.h>
 
-#ifndef cdh
-#	define	_PATH_DEFTAPE	"/dev/rmt8"
-#else
 #ifdef AMIGA
-#	define	_PATH_DEFTAPE	"TAPE:"
+#define	_PATH_DEFTAPE	"TAPE:"
 #else
-#	define	_PATH_DEFTAPE	"/dev/nrst0"
-#endif AMIGA
-#endif cdh
+#define	_PATH_DEFTAPE	"/dev/nrst0"
+#endif /* AMIGA */

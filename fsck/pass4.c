@@ -85,7 +85,7 @@ pass4()
 
 		case DCLEAR:
 			dp = ginode(inumber);
-			if (S32(dp->di_size) == 0) {
+			if (dp->di_size == 0) {
 				clri(&idesc, "ZERO LENGTH", 1);
 				break;
 			}

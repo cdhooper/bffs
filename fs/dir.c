@@ -1,5 +1,26 @@
+/*
+ * Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted so long as any redistribution retains the
+ * above copyright notice, this condition, and the below disclaimer.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#include <string.h>
 #include <exec/memory.h>
-#include <dos30/dos.h>
+#include <dos/dos.h>
 
 #include "config.h"
 #include "superblock.h"
@@ -9,19 +30,64 @@
 #include "file.h"
 #include "handler.h"
 #include "cache.h"
+#include "inode.h"
+#include "dir.h"
 
-char *strchr();
-struct direct *dir_next();
-ULONG dir_name_search();
-extern int case_independent;	/* 1=case independent dir name searches */
+#define DIRNAMELEN 107
 
+/* streqv()
+ *	Perform a case-insensitive compare of filenames, stopping at AmigaOS
+ *	maximum file name length.
+ */
+int
+streqv(const char *str1, const char *str2)
+{
+	int count = 0;
 
-/* This set of routines will only modify directory files.  They do not
-   handle allocation, except when more directory space is required. */
+	while (*str1 != '\0') {
+		if ((*str1 != *str2) && ((*str1 | 32) != (*str2 | 32)))
+			return(0);
+		str1++;
+		str2++;
+		if (++count == DIRNAMELEN)
+			return(0);
+	}
 
+	if (*str2 == '\0')
+		return(1);
+	else
+		return(0);
+}
+
+/*
+ * This set of routines will only modify directory files.  They do not
+ * handle allocation, except when more directory space is required.
+ */
 
 #ifndef RONLY
-/* dir_create()
+/*
+ * dir_fragfill()
+ *	WARNING: This routine will modify the last frag in a dir block
+ *	to have blank directory entries starting at the spill position.
+ */
+static void
+dir_fragfill(int spill, char *buf)
+{
+	int index;
+
+	for (index = spill; index < FSIZE; index += DIRBLKSIZ) {
+		struct direct *ptr = (struct direct *) (buf + index);
+		ptr->d_ino     = 0;
+		ptr->d_namlen  = 0;
+		ptr->d_type    = 0;
+		ptr->d_reclen  = DISK16(DIRBLKSIZ);
+		ptr->d_name[0] = '\0';
+	}
+}
+
+
+/*
+ * dir_create()
  *	This routine will add a name to the inode specified by the inode
  *	number passed to this routine.  If the directory needs to be
  *	expanded to accommodate the filename, this is handled automatically.
@@ -34,13 +100,10 @@ extern int case_independent;	/* 1=case independent dir name searches */
  *		If entire dir full, call allocate routine for another block
  *			near last dir block allocated.
  *	On success, this routine returns the directory offset where the
- *	new directory entry is to be found.
+ *	new directory entry is to be found.  It will return 0 on error.
  */
-dir_create(pinum, name, inum, type)
-ULONG	pinum;
-char	*name;
-ULONG	inum;
-int	type;
+int
+dir_create(ULONG pinum, char *name, ULONG inum, int type)
 {
 	char	*buf;
 	int	blk;
@@ -53,20 +116,20 @@ int	type;
 	struct	direct	*bend;
 	struct	direct	*current;
 
-	PRINT(("dir_create pinum=%d name=%s inum=%d\n", pinum, name, inum));
+	PRINT(("dirc: pinum=%d name=%s inum=%d\n", pinum, name, inum));
 
 	if (pinum < 2) {
-		PRINT2(("dc: ** bad parent directory inode number %d\n", pinum));
+		PRINT2(("dc: bad parent inum %d\n", pinum));
 		return(0);
 	}
 
-	pinode	= inode_read(pinum);
+	pinode = inode_read(pinum);
 	if ((DISK16(pinode->ic_mode) & IFMT) != IFDIR)
 		return(0);
 
-	needed	= (strlen(name) + sizeof(struct direct) - MAXNAMLEN - 1 + 3) & ~3;
+	needed = (strlen(name) + sizeof(struct direct) - MAXNAMLEN - 1 + 3) & ~3;
 	if (needed < 0) {
-		PRINT2(("dc: ** bad filename size %d\n", needed));
+		PRINT2(("dirc: bad filename size %d\n", needed));
 		return(0);
 	}
 
@@ -87,9 +150,13 @@ int	type;
 #ifdef DIR_DEBUG
 	    PRINT(("_"));
 #endif
-	    buf     = cache_frag(ridisk_frag(blk, pinode = inode_read(pinum)));
-	    if (buf == NULL)
-		break;
+	    buf = cache_frag(ridisk_frag(blk, pinum));
+#ifndef FAST
+	    if (buf == NULL) {
+		PRINT2(("dir_create: cache gave NULL\n"));
+		return(0);
+	    }
+#endif
 	    current = (struct direct *) buf;
 	    bend   = (struct direct *) (buf + ((blk < fblks - 1) ? FSIZE :
 			(spill ? spill : FSIZE)));
@@ -101,9 +168,13 @@ int	type;
 		PRINT((":%s", current->d_name));
 #endif
 		if ((DISK16(current->d_reclen) - DIRSIZ(current)) > needed) {
-		    buf = cache_frag_write(ridisk_frag(blk, pinode), 1);
-		    if (buf == NULL)
-			break;
+		    buf = cache_frag_write(ridisk_frag(blk, pinum), 1);
+#ifndef FAST
+		    if (buf == NULL) {
+			PRINT2(("dir_create: cache_write gave NULL\n"));
+			return(0);
+		    }
+#endif
 		    /* otherwise, we found a place to put new name */
 		    oldsize = DISK16(current->d_reclen);
 		    current->d_reclen = DISK16(DIRSIZ(current));
@@ -141,7 +212,7 @@ int	type;
 	    PRINT((" -> size=%d blocks=%d\n",
 		   IC_SIZE(pinode), DISK32(pinode->ic_blocks)));
 	    blk = fblks - 1;
-	    newfrag = ridisk_frag(blk, pinode);
+	    newfrag = ridisk_frag(blk, pinum);
 	    buf = cache_frag_write(newfrag, 1);
 	} else {
 	    /*
@@ -150,34 +221,20 @@ int	type;
 	     */
 	    newfrag = frag_expand(pinum);
 	    if (newfrag == 0) {
-		PRINT(("No space left in dir!\n"));
+		PRINT(("No space left in dir\n"));
 		return(0);
 	    }
 	    buf = cache_frag_write(newfrag, 0);
 	}
-
 #ifndef FAST
 	if (buf == NULL) {
-		PRINT2(("** ERROR, cache routine returned NULL pointer\n"));
+		PRINT2(("dir_create: cache write gave NULL\n"));
 		return(0);
 	}
 #endif
 	dir_fragfill(spill, buf);
 	current = (struct direct *) (buf + spill);
 	oldsize = DIRBLKSIZ;
-	goto finish_success;
-
-#if 0
-	strcpy(current->d_name, name);
-	current->d_ino    = DISK32(inum);
-	current->d_reclen = DISK16(oldsize);
-	current->d_namlen = strlen(name);
-	if (bsd44fs)
-		current->d_type  = type;
-	else
-		current->d_type  = 0;		/* dir type unknown now */
-	return(FSIZE * blk + spill);
-#endif
 
 finish_success:
 	strcpy(current->d_name, name);
@@ -191,9 +248,77 @@ finish_success:
 	return(FSIZE * blk + (char *) current - buf);	/* dir offset */
 }
 
+/* dir_is_not_empty()
+ *	This routine will return true if the passed dir (referenced by inode
+ *	number) is not empty.  (not counting the . and .. entries)
+ */
+static int
+dir_is_not_empty(int pinum)
+{
+	int	blk;
+	int	fblks;
+	int	count = 0;
+	int	spill;
+	struct	icommon *pinode;
+	char	*buf;
+	struct	direct *bend;
+	struct	direct *current;
 
+	pinode	= inode_read(pinum);
+#ifndef FAST
+	if (pinode == NULL) {
+	    PRINT2(("dine: inode_read gave NULL\n"));
+	    return (1);
+	}
+#endif
 
-/* dir_offset_delete()
+	if ((DISK16(pinode->ic_mode) & IFMT) != IFDIR)
+		return(0);
+
+	fblks	= (IC_SIZE(pinode) + FSIZE - 1) / FSIZE;
+	spill	=  IC_SIZE(pinode)              % FSIZE;
+
+	PRINT(("dir contents=\n"));
+	for (blk = 0; blk < fblks; blk++) {
+	    buf = cache_frag(ridisk_frag(blk, pinum));
+#ifndef FAST
+	    if (buf == NULL) {
+		PRINT2(("dir_is_not_empty: cache gave NULL\n"));
+		return(1);
+	    }
+#endif
+	    current = (struct direct *) buf;
+	    bend   = (struct direct *) (buf + ((blk < fblks - 1) ? FSIZE :
+			(spill ? spill : FSIZE)));
+
+	    while (current < bend) {
+		if (current->d_ino) {
+		    PRINT(("%s%d:\n", current->d_name,
+				DISK16(current->d_reclen)));
+		    count++;
+		    if (count > 2) {
+			PRINT(("\n"));
+			return(1);
+		    }
+		}
+#ifndef FAST
+		if ((DISK16(current->d_reclen) > DIRBLKSIZ) ||
+		    (DISK16(current->d_reclen) == 0)) {
+			PRINT2(("INCON: directory corrupt - remove directory?  run fsck\n"));
+			/* return 0 to remove dir, 1 to leave it alone */
+			return(0);
+		}
+#endif
+		current = (struct direct *) ((char *) current + DISK16(current->d_reclen));
+	    }
+	}
+	PRINT(("\n"));
+
+	return(0);
+}
+
+/*
+ * dir_offset_delete()
  *	This routine will delete the name of a file from the passed
  *	directory given that name's offset into the directory.  Pass
  *	the inode number of the parent and that file's offset in the
@@ -210,10 +335,8 @@ finish_success:
  *		If there is no successor, zero the inode and set its
  *			record length to a directory block size.
  */
-dir_offset_delete(pinum, offset, check)
-ULONG	pinum;
-ULONG	offset;
-int	check;
+int
+dir_offset_delete(ULONG pinum, ULONG offset, int check)
 {
 	ULONG	inum;
 	ULONG	blk;
@@ -233,6 +356,12 @@ int	check;
 		pinum, offset, check));
 
 	pinode	= inode_read(pinum);
+#ifndef FAST
+	if (pinode == NULL) {
+	    PRINT2(("dirod: inode_read gave NULL\n"));
+	    return (0);
+	}
+#endif
 
 	if ((offset == 0) || (offset > IC_SIZE(pinode))) {
 		PRINT2(("INCON: dir_offset_delete: impossible offset %d\n", offset));
@@ -245,10 +374,14 @@ int	check;
 	roffset = (offset / FSIZE) * FSIZE;
 
 	for (blk = offset / FSIZE; blk < fblks; blk++) {
-	    dirblk = ridisk_frag(blk, inode_read(pinum));
+	    dirblk = ridisk_frag(blk, pinum);
 	    buf    = cache_frag(dirblk);
-	    if (buf == NULL)
-		break;
+#ifndef FAST
+	    if (buf == NULL) {
+		PRINT2(("dir_od: cache gave NULL\n"));
+		return(0);
+	    }
+#endif
 	    current = (struct direct *) buf;
 /*
 	    bend   = (struct direct *) (buf + ((blk < fblks - 1) ? FSIZE :
@@ -264,7 +397,6 @@ int	check;
 		    pos = 0;
 		    last = NULL;
 		}
-/*		PRINT((":%s%d", current->d_name, DISK16(current->d_reclen))); */
 		if (offset == roffset) {
 		    inum = DISK32(current->d_ino);
 		    goto breakloop;
@@ -286,17 +418,15 @@ int	check;
 
 	/* if we got here, file was not found - this is an error */
 	global.Res2 = ERROR_OBJECT_NOT_FOUND;
-/*	PRINT(("\n")); */
 	return(0);
 
 	breakloop:
-/*	PRINT(("\n")); */
 
 	/* if we are deleting a directory, we must first check to make
 		sure there are only two entries left in it; '.' and '..' */
 	if (check && dir_is_not_empty(inum)) {
 		global.Res2 = ERROR_DIRECTORY_NOT_EMPTY;
-		PRINT2(("directory %d is not empty\n", inum));
+		PRINT(("directory %d is not empty\n", inum));
 		return(0);
 	}
 	obuf = buf;
@@ -304,58 +434,45 @@ int	check;
 
 #ifndef FAST
 	if (buf != obuf) {
-		PRINT2(("INCON: dod %08x != %08x\n", buf, obuf));
+		if (buf == NULL) {
+			PRINT2(("INCON: Can't ro->rw inode %d cached blk %d\n",
+				inum, dirblk));
+			return(0);
+		}
+		PRINT(("dir re-cache dirblk %u: dod %08x != %08x\n", buf, obuf, dirblk));
 		current = (struct direct *)
 				((char *) current + (ULONG) buf - (ULONG) obuf);
 		if (last != NULL)
 			last = (struct direct *)
 				((char *) last + (ULONG) buf - (ULONG) obuf);
 	}
-	if (buf == NULL) {
-		PRINT2(("INCON: Can't ro->rw inode %d's cached blk %d\n",
-			inum, dirblk));
-		return(0);
-	}
 #endif
 	if (last == NULL) { /* at beginning */
-/*
-		PRINT(("%d is at beginning %s\n", inum, current->d_name));
-*/
 		current->d_ino = 0;
 	} else {
-/*
-		PRINT(("%d is in middle: last=%d(%d)%s current=%d(%d)%s\n",
-			inum, DISK16(last->d_reclen), DISK32(last->d_ino),
-			last->d_name, DISK16(current->d_reclen),
-			DISK32(current->d_ino), current->d_name));
-*/
-
 #ifndef FAST
 		if (DISK16(current->d_reclen) > DIRBLKSIZ)
 			return(0);
 #endif
 		last->d_reclen = DISK16(DISK16(last->d_reclen) +
-				 	DISK16(current->d_reclen));
+					DISK16(current->d_reclen));
 	}
 
 	return(inum);
 }
 
 
-/* dir_rename()
+/*
+ * dir_rename()
  *	This routine will rename a file in the passed directory to
  *	the passed new name (possibly) in another directory.  Pass
  *	it from parent, from name, to parent, to name.  This routine
- * 	will check for loops or disconnections before allowing the
+ *	will check for loops or disconnections before allowing the
  *	rename to occur.
  */
-dir_rename(frominum, fromname, toinum, toname, isdir, type)
-ULONG	frominum;
-char	*fromname;
-ULONG	toinum;
-char	*toname;
-int	isdir;
-int	type;
+int
+dir_rename(ULONG frominum, char *fromname, ULONG toinum, char *toname,
+	   int isdir, int type)
 {
 	ULONG	inum;
 	ULONG	inumfrom;
@@ -416,14 +533,13 @@ int	type;
 }
 
 
-/* dir_inum_change()
+/*
+ * dir_inum_change()
  *	This routine will  change an inode number in a directory structure.
  *	The parent is first checked to assure it is a directory.
  */
-dir_inum_change(pinum, finum, tinum)
-ULONG pinum;
-ULONG finum;
-ULONG tinum;
+int
+dir_inum_change(ULONG pinum, ULONG finum, ULONG tinum)
 {
 	int	blk;
 	int	fblks;
@@ -440,23 +556,31 @@ ULONG tinum;
 		return(0);
 	}
 
-	pinode	= inode_read(pinum);
+	pinode = inode_read(pinum);
 	fblks	= (IC_SIZE(pinode) + FSIZE - 1) / FSIZE;
 	spill	=  IC_SIZE(pinode)              % FSIZE;
 
 	for (blk = 0; blk < fblks; blk++) {
-	    buf     = cache_frag(ridisk_frag(blk, pinode = inode_read(pinum)));
-	    if (buf == NULL)
-		break;
+	    buf     = cache_frag(ridisk_frag(blk, pinum));
+#ifndef FAST
+	    if (buf == NULL) {
+		PRINT2(("dir_ic: cache gave NULL\n"));
+		return(0);
+	    }
+#endif
 	    current = (struct direct *) buf;
 	    bend   = (struct direct *) (buf + ((blk < fblks - 1) ? FSIZE :
 			(spill ? spill : FSIZE)));
 
 	    while (current < bend) {
 		if (DISK32(current->d_ino) == finum) {
-		    buf = cache_frag_write(ridisk_frag(blk, pinode), 1);
-		    if (buf == NULL)
-			break;
+		    buf = cache_frag_write(ridisk_frag(blk, pinum), 1);
+#ifndef FAST
+		    if (buf == NULL) {
+			PRINT2(("dir_ic: cache_write gave NULL\n"));
+			return(0);
+		    }
+#endif
 		    goto breakloop;
 		}
 #ifndef FAST
@@ -467,7 +591,7 @@ ULONG tinum;
 	    }
 	}
 
-	PRINT2(("** Unable to find inode %d in %d to change to %d!\n",
+	PRINT2(("** Unable to find inode %d in %d to change to %d\n",
 		pinum, finum, tinum));
 	return(0);
 
@@ -477,92 +601,13 @@ ULONG tinum;
 }
 
 
-/* dir_fragfill()
- * 	warning - this routine will modify the last frag in a dir block
- *	to have blank directory entries starting at the spill position.
- */
-dir_fragfill(int spill, char *buf)
-{
-	int index;
-
-	for (index = spill; index < FSIZE; index += DIRBLKSIZ) {
-		struct direct *ptr = (struct direct *) (buf + index);
-		ptr->d_ino     = 0;
-		ptr->d_namlen  = 0;
-		ptr->d_type    = 0;
-		ptr->d_reclen  = DISK16(DIRBLKSIZ);
-		ptr->d_name[0] = '\0';
-	}
-}
-#endif
-
-
-/* dir_is_not_empty()
- *	This routine will return true if the passed dir (referenced by inode
- *	number) is not empty.  (not counting the . and .. entries)
- */
-dir_is_not_empty(pinum)
-int pinum;
-{
-	int	blk;
-	int	fblks;
-	int	count = 0;
-	int	spill;
-	struct	icommon *pinode;
-	char	*buf;
-	struct	direct *bend;
-	struct	direct *current;
-
-	pinode	= inode_read(pinum);
-
-	if ((DISK16(pinode->ic_mode) & IFMT) != IFDIR)
-		return(0);
-
-	fblks	= (IC_SIZE(pinode) + FSIZE - 1) / FSIZE;
-	spill	=  IC_SIZE(pinode)              % FSIZE;
-
-	PRINT(("dir contents=\n"));
-	for (blk = 0; blk < fblks; blk++) {
-	    buf     = cache_frag(ridisk_frag(blk, pinode = inode_read(pinum)));
-	    if (buf == NULL)
-		break;
-	    current = (struct direct *) buf;
-	    bend   = (struct direct *) (buf + ((blk < fblks - 1) ? FSIZE :
-			(spill ? spill : FSIZE)));
-
-	    while (current < bend) {
-		if (current->d_ino) {
-		    PRINT(("%s%d:\n", current->d_name,
-				DISK16(current->d_reclen)));
-		    count++;
-		    if (count > 2) {
-			PRINT(("\n"));
-			return(1);
-		    }
-		}
-#ifndef FAST
-		if ((DISK16(current->d_reclen) > DIRBLKSIZ) ||
-		    (DISK16(current->d_reclen) == 0)) {
-			PRINT2(("INCON: directory corrupt - remove directory?  run fsck\n"));
-			/* return 0 to remove dir, 1 to leave it alone */
-			return(0);
-		}
-#endif
-		current = (struct direct *) ((char *) current + DISK16(current->d_reclen));
-	    }
-	}
-	PRINT(("\n"));
-
-	return(0);
-}
-
-
-/* dir_name_is_illegal()
+/*
+ * dir_name_is_illegal()
  *	This routine will return true if the specified file name
  *	is not a legal file name to be written in a directory.
  */
-dir_name_is_illegal(name)
-char *name;
+int
+dir_name_is_illegal(const char *name)
 {
 	/* check for no name */
 	if (*name == '\0')
@@ -582,18 +627,19 @@ char *name;
 
 	return(0);
 }
+#endif  /* !RONLY */
 
 
-/* dir_name_search()
+/*
+ * dir_name_search()
  *	This routine is called to locate a given filename in the
  *	filesystem.  The inode number for that name is returned
  *	to the calling routine.  The name must be located directly
  *	in the specified parent inode number.  If a path lookup
  *	is required, call the file_find routine in file.c
  */
-ULONG dir_name_search(pinum, name)
-ULONG	pinum;
-char	*name;
+ULONG
+dir_name_search(ULONG pinum, const char *name)
 {
 	int	fblks;
 	int	spill;
@@ -606,7 +652,7 @@ char	*name;
 
 	pinode = inode_read(pinum);
 	if ((DISK16(pinode->ic_mode) & IFMT) != IFDIR) {
-		PRINT2(("INCON: Not a directory! i=%d n=%s\n", pinum, name));
+		PRINT2(("INCON: Not a directory i=%d n=%s\n", pinum, name));
 		return(0);
 	}
 
@@ -615,11 +661,13 @@ char	*name;
 
 	for (blk = 0; blk < fblks; blk++) {
 /*	    PRINT(("_")); */
-	    buf    = cache_frag(ridisk_frag(blk, pinode = inode_read(pinum)));
+	    buf    = cache_frag(ridisk_frag(blk, pinum));
+#ifndef FAST
 	    if (buf == NULL) {
-		PRINT2(("** INCON: cache gave null buffer\n"));
-		break;
+		PRINT2(("dir_ns: cache gave NULL\n"));
+		return(0);
 	    }
+#endif
 	    dirent = (struct direct *) buf;
 	    bend   = (struct direct *) (buf + ((blk < fblks - 1) ? FSIZE :
 			(spill ? spill : FSIZE)));
@@ -648,19 +696,14 @@ char	*name;
 	}
 
 	if ((inum == 0) && case_independent) {
+	    /* Search again, this time ignoring case */
 	    for (blk = fblks - 1; blk >= 0; blk--) {
-/*		PRINT(("_")); */
-		buf    = cache_frag(ridisk_frag(blk, pinode = inode_read(pinum)));
-		if (buf == NULL) {
-		    PRINT2(("** cache gave null buffer\n"));
-		    break;
-		}
+		buf = cache_frag(ridisk_frag(blk, pinum));
 	        dirent = (struct direct *) buf;
 		bend   = (struct direct *) (buf + ((blk < fblks - 1) ? FSIZE :
 			(spill ? spill : FSIZE)));
 
 		while (dirent < bend) {
-/*		    PRINT(("|%s", dirent->d_name)); */
 		    if (streqv(dirent->d_name, name)) {
 			inum = DISK32(dirent->d_ino);
 			goto breakloop;
@@ -683,14 +726,14 @@ char	*name;
 }
 
 
-/* dir_inum_search()
+/*
+ * dir_inum_search()
  *	This routine is called to locate a specific inode number
  *	in a parent inode number.  If found, the offset for that
  *	inode number will be returned to the calling routine.
  */
-ULONG dir_inum_search(pinum, inum)
-ULONG	pinum;
-int	inum;
+ULONG
+dir_inum_search(ULONG pinum, int inum)
 {
 	int	fblks;
 	int	spill;
@@ -708,17 +751,17 @@ int	inum;
 	spill =  IC_SIZE(pinode)              % FSIZE;
 
 	for (blk = 0; blk < fblks; blk++) {
-/*	    PRINT(("_")); */
-	    buf    = cache_frag(ridisk_frag(blk, pinode = inode_read(pinum)));
-	    if (buf == NULL)
-		break;
+	    buf    = cache_frag(ridisk_frag(blk, pinum));
+#ifndef FAST
+	    if (buf == NULL) {
+		PRINT2(("dir_is: cache gave NULL\n"));
+		return(0);
+	    }
+#endif
 	    dirent = (struct direct *) buf;
 	    bend   = (struct direct *) (buf + ((blk < fblks - 1) ? FSIZE :
 			(spill ? spill : FSIZE)));
 	    while (dirent < bend) {
-
-/*		PRINT((";%s", dirent->d_name)); */
-
 		if (DISK32(dirent->d_ino) == inum)
 		    goto breakloop;
 #ifndef FAST
@@ -731,8 +774,6 @@ int	inum;
 
 	breakloop:
 
-/*	PRINT(("\n")); */
-
 	if (blk != fblks)
 		return(blk * DIRBLKSIZ + ((char *) dirent - buf));
 
@@ -744,22 +785,24 @@ int	inum;
  *	This routine will return a pointer to a directory entry
  *	given that entry's offset into its parent directory.
  */
-struct direct *dir_next(inode, offset)
-struct	icommon *inode;
-ULONG	offset;
+struct direct *
+dir_next(ULONG inum, ULONG offset)
 {
 	ULONG	frag;
 	char	*ptr;
 
-	if ((frag = ridisk_frag(offset / FSIZE, inode)) == 0) {
-		PRINT2(("** dir_next: bad frag %d\n", frag));
+	if ((frag = ridisk_frag(offset / FSIZE, inum)) == 0) {
+		PRINT2(("** dir_next: bad frag %u for inum %u off %u\n",
+			frag, inum, offset));
 		return(NULL);
 	}
 
-	if (ptr = cache_frag(frag))
-		return((struct direct *) (ptr + (offset % FSIZE)));
-	else {
-		PRINT2(("** cache did not give dir_next frag %d\n", frag));
-		return(NULL);
+	ptr = cache_frag(frag);
+#ifndef FAST
+	if (ptr == NULL) {
+		PRINT2(("dir_next: cache gave NULL for frag %d\n", frag));
+		return (NULL);
 	}
+#endif
+	return ((struct direct *) (ptr + (offset % FSIZE)));
 }

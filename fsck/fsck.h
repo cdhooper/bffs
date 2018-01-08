@@ -72,13 +72,17 @@ struct bufarea {
 
 #define	B_INUSE 1
 
+#ifndef EXTERN
+#define EXTERN extern
+#endif
+
 #define	MINBUFS		5	/* minimum number of buffers required */
-extern struct bufarea bufhead;		/* head of list of other blks in filesys */
-extern struct bufarea sblk;		/* file system superblock */
-extern struct bufarea cgblk;		/* cylinder group blocks */
-extern struct bufarea *pdirbp;		/* current directory contents */
-extern struct bufarea *pbp;		/* current inode block */
-extern struct bufarea *getdatablk();
+EXTERN struct bufarea bufhead;		/* head of list of other blks in filesys */
+EXTERN struct bufarea sblk;		/* file system superblock */
+EXTERN struct bufarea cgblk;		/* cylinder group blocks */
+EXTERN struct bufarea *pdirbp;		/* current directory contents */
+EXTERN struct bufarea *pbp;		/* current inode block */
+EXTERN struct bufarea *getdatablk();
 
 #define	dirty(bp)	(bp)->b_dirty = 1
 #define	initbarea(bp) \
@@ -136,8 +140,8 @@ struct dups {
 	struct dups *next;
 	daddr_t dup;
 };
-extern struct dups *duplist;		/* head of dup list */
-extern struct dups *muldup;		/* end of unique duplicate dup block numbers */
+EXTERN struct dups *duplist;		/* head of dup list */
+EXTERN struct dups *muldup;		/* end of unique duplicate dup block numbers */
 
 /*
  * Linked list of inodes with zero link counts.
@@ -146,12 +150,12 @@ struct zlncnt {
 	struct zlncnt *next;
 	ino_t zlncnt;
 };
-extern struct zlncnt *zlnhead;		/* head of zero link count list */
+EXTERN struct zlncnt *zlnhead;		/* head of zero link count list */
 
 /*
  * Inode cache data structures.
  */
-extern struct inoinfo {
+EXTERN struct inoinfo {
 	struct	inoinfo *i_nexthash;	/* next entry in hash chain */
 	ino_t	i_number;		/* inode number of this entry */
 	ino_t	i_parent;		/* inode number of parent */
@@ -160,43 +164,43 @@ extern struct inoinfo {
 	u_int	i_numblks;		/* size of block array in bytes */
 	daddr_t	i_blks[1];		/* actually longer */
 } **inphead, **inpsort;
-extern long numdirs, listmax, inplast;
+EXTERN long numdirs, listmax, inplast;
 
-extern char	*cdevname;		/* name of device being checked */
-extern long	dev_bsize;		/* computed value of DEV_BSIZE */
-extern long	secsize;		/* actual disk sector size */
-extern char	nflag;			/* assume a no response */
-extern char	yflag;			/* assume a yes response */
-extern int	bflag;			/* location of alternate super block */
-extern int	debug;			/* output debugging info */
-extern int	cvtlevel;		/* convert to newer file system format */
-extern int	doinglevel1;		/* converting to new cylinder group format */
-extern int	doinglevel2;		/* converting to new inode format */
-extern int	newinofmt;		/* filesystem has new inode format */
-extern char	preen;			/* just fix normal inconsistencies */
+EXTERN char	*cdevname;		/* name of device being checked */
+EXTERN long	dev_bsize;		/* computed value of DEV_BSIZE */
+EXTERN long	secsize;		/* actual disk sector size */
+EXTERN char	nflag;			/* assume a no response */
+EXTERN char	yflag;			/* assume a yes response */
+EXTERN int	bflag;			/* location of alternate super block */
+EXTERN int	debug;			/* output debugging info */
+EXTERN int	cvtlevel;		/* convert to newer file system format */
+EXTERN int	doinglevel1;		/* converting to new cylinder group format */
+EXTERN int	doinglevel2;		/* converting to new inode format */
+EXTERN int	newinofmt;		/* filesystem has new inode format */
+EXTERN char	preen;			/* just fix normal inconsistencies */
 extern char	hotroot;		/* checking root device */
-extern char	havesb;			/* superblock has been read */
-extern int	fsmodified;		/* 1 => write done to file system */
-extern int	fsreadfd;		/* file descriptor for reading file system */
-extern int	fswritefd;		/* file descriptor for writing file system */
+EXTERN char	havesb;			/* superblock has been read */
+EXTERN int	fsmodified;		/* 1 => write done to file system */
+EXTERN int	fsreadfd;		/* file descriptor for reading file system */
+EXTERN int	fswritefd;		/* file descriptor for writing file system */
 
-extern daddr_t	maxfsblock;		/* number of blocks in the file system */
-extern char	*blockmap;		/* ptr to primary blk allocation map */
-extern ino_t	maxino;			/* number of inodes in file system */
-extern ino_t	lastino;		/* last inode in use */
-extern char	*statemap;		/* ptr to inode state table */
-extern char	*typemap;		/* ptr to inode type table */
-extern short	*lncntp;		/* ptr to link count table */
+EXTERN daddr_t	maxfsblock;		/* number of blocks in the file system */
+EXTERN char	*blockmap;		/* ptr to primary blk allocation map */
+EXTERN ino_t	maxino;			/* number of inodes in file system */
+EXTERN ino_t	lastino;		/* last inode in use */
+EXTERN char	*statemap;		/* ptr to inode state table */
+EXTERN char	*typemap;		/* ptr to inode type table */
+EXTERN short	*lncntp;		/* ptr to link count table */
 
-extern ino_t	lfdir;			/* lost & found directory inode number */
+EXTERN ino_t	lfdir;			/* lost & found directory inode number */
 extern char	*lfname;		/* lost & found directory name */
 extern int	lfmode;			/* lost & found directory creation mode */
 
-extern daddr_t	n_blks;			/* number of blocks in use */
-extern daddr_t	n_files;		/* number of files in use */
+EXTERN daddr_t	n_blks;			/* number of blocks in use */
+EXTERN daddr_t	n_files;		/* number of files in use */
 
 #define	clearinode(dp)	(*(dp) = zino)
-extern struct	dinode zino;
+EXTERN struct	dinode zino;
 
 #define	setbmap(blkno)	setbit(blockmap, blkno)
 #define	testbmap(blkno)	isset(blockmap, blkno)
@@ -223,3 +227,34 @@ extern int DEV_BSHIFT;
         ((unsigned)(bytes) >> DEV_BSHIFT)
 #define dbtob(db)                       /* calculates (db * DEV_BSIZE) */ \
         ((unsigned)(db) << DEV_BSHIFT)
+
+#ifdef cdh
+void errexit();
+int checkfstab();
+int pass1();
+int pass1b();
+int pass2();
+int pass3();
+int pass4();
+int pass5();
+int setup();
+int docheck();
+int inocleanup();
+void pwarn();
+void pfatal();
+void cacheino();
+#endif
+
+#ifdef AMIGA
+typedef unsigned long ulong;
+#include <amiga_unix.h>
+#endif
+
+#ifdef __linux
+void sync(void);
+typedef void (*sighandler_t) (int);
+sighandler_t signal(int signum, sighandler_t handler);
+#define SIGINT           2
+#define SIGQUIT          3
+#define SIG_IGN	((sighandler_t) 1)
+#endif

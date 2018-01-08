@@ -17,10 +17,8 @@
  *	@(#)disklabel.h	7.10 (Berkeley) 6/27/88
  */
 
-/*
- * Disk description table, see disktab(5)
- */
-#define	DISKTAB		"/etc/disktab"
+#ifndef _UCB_SYS_DISKLABEL_H
+#define _UCB_SYS_DISKLABEL_H
 
 /*
  * Each disk has a label which includes information about the hardware
@@ -130,18 +128,7 @@ struct disklabel {
 		u_short	p_cpg;		/* filesystem cylinders per group */
 	} d_partitions[MAXPARTITIONS];	/* actually may be more */
 };
-#else LOCORE
-	/*
-	 * offsets for asm boot files.
-	 */
-	.set	d_secsize,40
-	.set	d_nsectors,44
-	.set	d_ntracks,48
-	.set	d_ncylinders,52
-	.set	d_secpercyl,56
-	.set	d_secperunit,60
-	.set	d_end_,276		/* size of disk label */
-#endif LOCORE
+#endif /* LOCORE */
 
 /* d_type values: */
 #define	DTYPE_SMD		1		/* SMD, XSMD; VAX hp/up */
@@ -208,75 +195,6 @@ static char *fstypenames[] = {
 #define		D_RAMDISK	0x08		/* disk emulator */
 #define		D_CHAIN		0x10		/* can do back-back transfers */
 
-/*
- * Drive data for SMD.
- */
-#define	d_smdflags	d_drivedata[0]
-#define		D_SSE		0x1		/* supports skip sectoring */
-#define	d_mindist	d_drivedata[1]
-#define	d_maxdist	d_drivedata[2]
-#define	d_sdist		d_drivedata[3]
+struct disklabel *getdiskbyname(char *name);
 
-/*
- * Drive data for ST506.
- */
-#define d_precompcyl	d_drivedata[0]
-#define d_gap3		d_drivedata[1]		/* used only when formatting */
-
-#ifndef LOCORE
-/*
- * Structure used to perform a format
- * or other raw operation, returning data
- * and/or register values.
- * Register identification and format
- * are device- and driver-dependent.
- */
-struct format_op {
-	char	*df_buf;
-	int	df_count;		/* value-result */
-	daddr_t	df_startblk;
-	int	df_reg[8];		/* result */
-};
-
-/*
- * Structure used internally to retrieve
- * information about a partition on a disk.
- */
-struct partinfo {
-	struct disklabel *disklab;
-	struct partition *part;
-};
-
-/*
-#define _IOR rreq
-#define _IOW wreq
- * Disk-specific ioctls.
- */
-		/* get and set disklabel; DIOCGPART used internally */
-/*
-#define DIOCGDINFO	_IOR('d', 101, struct disklabel)   get */
-/*
-#define DIOCSDINFO	_IOW('d', 102, struct disklabel)   set */
-/*
-#define DIOCWDINFO	_IOW('d', 103, struct disklabel)   set, update disk */
-/*
-#define DIOCGPART	_IOW('d', 104, struct partinfo)	   get partition */
-
-#define DIOCGDINFO	('d'<<8 | 101)
-#define DIOCWDINFO	('d'<<8 | 103)
-
-/* do format operation, read or write */
-#define DIOCRFORMAT	_IOWR('d', 105, struct format_op)
-#define DIOCWFORMAT	_IOWR('d', 106, struct format_op)
-
-#define DIOCSSTEP	_IOW('d', 107, int)	/* set step rate */
-#define DIOCSRETRIES	_IOW('d', 108, int)	/* set # of retries */
-#define DIOCWLABEL	_IOW('d', 109, int)	/* write en/disable label */
-
-#define DIOCSBAD	_IOW('d', 110, struct dkbad)	/* set kernel dkbad */
-
-#endif LOCORE
-
-#if !defined(KERNEL) && !defined(LOCORE)
-struct	disklabel *getdiskbyname();
-#endif
+#endif /* _UCB_SYS_DISKLABEL_H */

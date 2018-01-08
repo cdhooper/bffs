@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
 #include "sys/types.h"
 
 #undef DEBUG
@@ -11,6 +13,7 @@ extern int DEV_BSIZE;
  * read a block from the file system
  */
 #ifdef AMIGA
+int
 fbread(bf, bno, size)
 #else
 bread(bf, bno, size)
@@ -45,6 +48,7 @@ bread(bf, bno, size)
  * write a block to the file system
  */
 #ifdef AMIGA
+int
 fbwrite(bf, bno, size)
 #else
 bwrite(bf, bno, size)

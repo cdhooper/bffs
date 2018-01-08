@@ -1,5 +1,25 @@
-#include <dos/filehandler.h>
+/*
+ * Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted so long as any redistribution retains the
+ * above copyright notice, this condition, and the below disclaimer.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 
+#include <stdlib.h>
+#include <dos/filehandler.h>
 #include "config.h"
 
 /* no need to go further if we are building the read only release */
@@ -17,9 +37,8 @@ extern int optimization;
 
 
 /* This routine will allocate an entire fs block in the map */
-block_alloc(map, fpos)
-unsigned char *map;
-ULONG	 fpos;
+static void
+block_alloc(unsigned char *map, ULONG fpos)
 {
 	switch (FRAGS_PER_BLK) {
 		case 1:
@@ -44,15 +63,14 @@ ULONG	 fpos;
 			map[fpos >> 3] = 0x00;
 			break;
 		default:
-			PRINT(("block_alloc: Bad frags per blk %d\n", FRAGS_PER_BLK));
+			PRINT2(("block_alloc: Bad frags per blk %d\n", FRAGS_PER_BLK));
 	}
 }
 
 
 /* This routine will deallocate an entire fs block in the map */
-block_dealloc(map, fpos)
-unsigned char *map;
-ULONG	 fpos;
+static void
+block_dealloc(unsigned char *map, ULONG fpos)
 {
 	switch (FRAGS_PER_BLK) {
 		case 1:
@@ -72,15 +90,14 @@ ULONG	 fpos;
 			map[fpos >> 3] = 0xff;
 			break;
 		default:
-			PRINT(("block_dealloc: Bad frags per blk %d\n",FRAGS_PER_BLK));
+			PRINT2(("block_dealloc: Bad frags per blk %d\n",FRAGS_PER_BLK));
 	}
 }
 
 
 /* This routine will return whether an entire block in the map is free */
-block_avail(map, fpos)
-unsigned char *map;
-ULONG	 fpos;
+int
+block_avail(unsigned char *map, ULONG fpos)
 {
 	int temp;
 
@@ -95,7 +112,7 @@ ULONG	 fpos;
 		case 8:
 			return(map[fpos >> 3] == 0xff);
 		default:
-			PRINT(("block_avail: Bad frags per blk %d\n", FRAGS_PER_BLK));
+			PRINT2(("block_avail: Bad frags per blk %d\n", FRAGS_PER_BLK));
 	}
 }
 
@@ -123,10 +140,10 @@ ULONG	 fpos;
  *	equal to min_frags
  *
  *	This routine implements the following policy (loosely):
- *	    TIME:
+ *	    OPT_TIME:
  *		A fragment section forward from the preferred is desired
  *		The closest (large enough) fragment section is preferred
- *	    SPACE:
+ *	    OPT_SPACE:
  *		The smallest (large enough) fragment section is preferred
  *		A fragment section forward from the preferred is desired
  *		Minimum distance is desired less than fragment size match
@@ -141,10 +158,8 @@ ULONG	 fpos;
  *	      would be best to leave the data in the block it already
  *	      occupies.  // This routine returns -1 on failure. //
  */
-int	block_fragblock_find(mycg, preferred, min_frags)
-struct	cg *mycg;
-ULONG	preferred;
-int	min_frags;
+int
+block_fragblock_find(struct cg *mycg, ULONG preferred, int min_frags)
 {
 	int	 index;
 	int	 index2;
@@ -165,11 +180,12 @@ int	min_frags;
 */
 
 	if ((min_frags < 1) || (min_frags > FRAGS_PER_BLK)) {
-		PRINT(("Error calling block_fragblock_find, size=%d\n", min_frags));
+		PRINT2(("Error calling block_fragblock_find, size=%d\n", min_frags));
 		return(-1);
 	}
 
-	if (optimization == TIME) {  /* find closest block with size >= needed */
+	if (optimization == OPT_TIME) {
+	    /* find closest block with size >= needed */
 	    PRINT(("time\n"));
 	    for (index = preferred; index < mycg->cg_ndblk;
 		 index += FRAGS_PER_BLK) {
@@ -197,7 +213,7 @@ int	min_frags;
 		    } else
 			freehere = 0;
 	    }
-	    PRINT(("nothing found!|\n"));
+	    PRINT(("nothing found\n"));
 	    return(-1);
 	} else {
 /*	    PRINT(("space\n")); */
@@ -246,9 +262,8 @@ int	min_frags;
 
    if given a block address, can also tell if the entire block is free
 */
-rest_is_free(map, frag)
-unsigned char	*map;
-ULONG	 frag;
+int
+rest_is_free(unsigned char *map, ULONG frag)
 {
 	int index;
 	for (index = frag % FRAGS_PER_BLK + 1; index < FRAGS_PER_BLK; index++)
@@ -257,27 +272,13 @@ ULONG	 frag;
 	return(1);
 }
 
-/* this routine will tell whether the given frag is free */
-frag_is_free(map, frag)
-unsigned char *map;
-ULONG	 frag;
-{
-	if (bit_val(map, frag))
-		return(1);
-	else
-		return(0);
-}
-
 /* This routine will find the nearest free full fs block */
-ULONG block_free_find(mycg, preferred)
-struct	cg *mycg;
-ULONG	preferred;
+static ULONG
+block_free_find(struct cg *mycg, ULONG preferred)
 {
 	int	 fragpos = -1;
 	int	 mindist;
 	int	 index;
-	int	 temp;
-	int	 temp2;
 	int	 maxfrag;
 	unsigned char *map;
 
@@ -293,75 +294,112 @@ ULONG	preferred;
 	    case 1:
 		for (index = 0; index < maxfrag; index++) {
 			if (bit_val(map, index)) {
-				temp = abs(preferred - index);
-				if (temp <= mindist) {
+				int dist = preferred - index;
+				int absdist = abs(dist);
+				if (absdist <= mindist) {
 					fragpos = index;
-					mindist = temp;
-				} else
+					mindist = absdist;
+				} else {
+					/*
+					 * The "else break" should cut down on
+					 * search time - once the sweet spot is
+					 * passed and we're not finding closer
+					 * holes anymore.
+					 */
 					break;
+				}
 			}
 		}
-/* I think the else break will cut down on search time - once the
-   sweet spot is passed and we're not finding closer holes anymore */
 		break;
 	    case 2:
 		for (index = 0; index < maxfrag; index += 2) {
 			if ((bit_val(map, index & ~1)) &&
 			    (bit_val(map, index | 1))) {
-				temp = abs(preferred - index);
-				if (temp <= mindist) {
+				int dist = preferred - index;
+				int absdist = abs(dist);
+				if (absdist <= mindist) {
 					fragpos = index;
-					mindist = temp;
-				} else
+					mindist = absdist;
+				} else {
+					/* Past preferred position */
 					break;
+				}
 			}
 		}
 		break;
 	    case 4:
 		for (index = 0; index < maxfrag; index += 8) {
-			temp2 = index >> 3;
+			int temp2 = index >> 3;
 			if ((map[temp2] & 0x0f) == 0x0f) {
-				temp = abs(preferred - index);
-				if (temp <= mindist) {
+				int dist = preferred - index;
+				int absdist = abs(dist);
+				if (absdist <= mindist) {
 					fragpos = index;
-					mindist = temp;
+					mindist = absdist;
 				} else
 					break;
 			}
 			if ((map[temp2] & 0xf0) == 0xf0) {
-				temp = abs(preferred - (index + 4));
-				if (temp <= mindist) {
+				int dist = preferred - (index + 4);
+				int absdist = abs(dist);
+				if (absdist <= mindist) {
 					fragpos = index + 4;
-					mindist = temp;
-				} else
+					mindist = absdist;
+				} else {
+					/* Past preferred position */
 					break;
+				}
 			}
 		}
 		break;
-	    case 8:
+	    case 8: {
+		int nindex;
+		int pindex;
+
 		preferred >>= 3;
 		maxfrag   >>= 3;
-		for (index = 0; index < maxfrag; index++) {
-			if (map[index] == 0xff) {
-				temp = abs(preferred - index);
-				if (temp <= mindist) {
-					fragpos = index << 3;
-					mindist = temp;
-				} else
-					break;
-			}
+
+                /* Search backward from preferred position */
+                for (nindex = preferred; nindex >= 0; nindex--)
+                    if (map[nindex] == 0xff)
+			break;
+
+                /* Search forward */
+                for (pindex = preferred + 1; pindex < maxfrag; pindex++)
+                    if (map[pindex] == 0xff)
+			break;
+
+		/* Handle cases where both directions failed */
+		if (nindex < 0) {
+		    if (pindex < maxfrag)
+			fragpos = pindex << 3;
+		    break;
 		}
+		if (pindex >= maxfrag) {
+		    fragpos = nindex << 3;
+		    break;
+		}
+
+		/* Compare distance of solutions */
+		int pdist = pindex - preferred;
+		int ndist = preferred - nindex;
+
+		if (pdist < ndist)
+		    fragpos = pindex << 3;
+		else
+		    fragpos = nindex << 3;
 		break;
+	    }
 	    default:
-		PRINT(("bff: Unsupported frags per blocks!! %d\n", FRAGS_PER_BLK));
+		PRINT2(("bff: Unsupported frags per blocks %d\n",
+			FRAGS_PER_BLK));
 	}
 
 	return(fragpos);
 }
 
-
-ULONG block_allocate(nearblock)
-ULONG nearblock;
+ULONG
+block_allocate(ULONG nearblock)
 {
 	ULONG	cgx;
 	ULONG	bfree;
@@ -374,9 +412,7 @@ ULONG nearblock;
 	cgx  = dtog(superblock, nearblock);
 	mycg = cache_cg(cgx);
 
-
-	PRINT(("balloc: around blk %d (cg %d) - ", nearblock, cgx));
-
+	PRINT(("balloc: ~blk %d (cg %d) - ", nearblock, cgx));
 
 	if (superblock->fs_cstotal.cs_nbfree == 0) {
 		PRINT(("no blocks available in filesystem\n"));
@@ -409,7 +445,7 @@ ULONG nearblock;
 
 #ifndef FAST
 		if (block == -1) {
-			PRINT2(("INCON: cg %d should have block free!\n", cgx));
+			PRINT2(("INCON: cg %d should have block free\n", cgx));
 			return(0);
 		}
 #endif
@@ -419,11 +455,16 @@ ULONG nearblock;
 	PRINT(("found block %d in cg %d\n", block, cgx));
 */
 	mycg = cache_cg_write(cgx);
+#ifndef FAST
+	if (mycg == NULL) {
+	    PRINT2(("balloc: ~blk %u cache_cg_write gave NULL", nearblock));
+	    return (0);
+	}
+#endif
 	block_alloc(cg_blksfree(mycg), block);
 	mycg->cg_cs.cs_nbfree--;
 
 #ifdef INTEL
-
 	temp = DISK32(superblock->fs_fmod) + 1;
 	superblock->fs_fmod = DISK32(temp);
 
@@ -438,24 +479,20 @@ ULONG nearblock;
 	cg_blks(superblock, mycg, cylinder)[cbtorpos(superblock, block)] = DISK16(temp);
 	temp = DISK16(cg_blktot(mycg)[cylinder]) - 1;
 	cg_blktot(mycg)[cylinder] = DISK16(temp);
-
 #else
-
 	superblock->fs_fmod++;
 	superblock->fs_cstotal.cs_nbfree--;
 	superblock->fs_cs(superblock, cgx).cs_nbfree--;
 	cylinder = cbtocylno(superblock, block);
 	cg_blks(superblock, mycg, cylinder)[cbtorpos(superblock, block)]--;
 	cg_blktot(mycg)[cylinder]--;
-
 #endif
 
 	return(block + cgbase(superblock, cgx));
 }
 
-
-block_deallocate(block)
-ULONG block;
+void
+block_deallocate(ULONG block)
 {
 	ULONG	cgx;
 	ULONG	cblock;
@@ -466,6 +503,12 @@ ULONG block;
 
 	cgx  = dtog(superblock, block);
 	mycg = cache_cg_write(cgx);
+#ifndef FAST
+	if (mycg == NULL) {
+	    PRINT2(("bdealloc: blk %u cache_cg_write gave NULL", block));
+	    return;
+	}
+#endif
 
 	cblock = dtogd(superblock, block);
 
@@ -480,9 +523,8 @@ ULONG block;
 }
 
 
-frags_allocate(fragstart, frags)
-ULONG fragstart;
-ULONG frags;
+int
+frags_allocate(ULONG fragstart, ULONG frags)
 {
 	int	index;
 	int	fragoffset;
@@ -494,18 +536,19 @@ ULONG frags;
 	ULONG	blkstart;
 	ULONG	cgx;
 
-/*	PRINT(("frags_allocate: start=%d frags=%d\n", fragstart, frags)); */
-
 	cgx  = dtog(superblock, fragstart);
 	mycg = cache_cg_write(cgx);
+#ifndef FAST
+	if (mycg == NULL) {
+	    PRINT2(("fdealloc: frag %u cache_cg_write gave NULL", fragstart));
+	    return (1);
+	}
+#endif
 
 	cgfragstart = dtogd(superblock, fragstart);
 	fragoffset  = cgfragstart % FRAGS_PER_BLK;
 	cgblkstart  = cgfragstart - fragoffset;
 	blkstart    =   fragstart - fragoffset;
-
-/*	PRINT(("cgfragstart=%d fragoffset=%d cgblkstart=%d blkstart=%d\n",
-		cgfragstart, fragoffset, cgblkstart, blkstart)); */
 
 	/* check for low frags which will be broken off */
 	for (index = fragoffset - 1; index >= 0; index--)
@@ -528,8 +571,6 @@ ULONG frags;
 	if (count_high)
 		mycg->cg_frsum[count_high]++;
 
-/*	PRINT(("alloc: low=%d frags=%d high=%d\n", count_low, frags, count_high)); */
-
 	superblock->fs_fmod++;
 	superblock->fs_cstotal.cs_nffree	     -= frags;
 	superblock->fs_cs(superblock, cgx).cs_nffree -= frags;
@@ -540,9 +581,19 @@ ULONG frags;
 		cgblkstart = block_allocate(blkstart);
 		if (cgblkstart != blkstart) {
 			PRINT2(("INCON: blk %d should be free for split, but isn't!  got %d instead\n", blkstart, cgblkstart));
+			PRINT2(("       frags=%u count_low=%d count_high=%u FPB=%u\n", frags, count_low, count_high, FRAGS_PER_BLK));
+
+			/* Roll back changes */
 			if (cgblkstart)
 				block_deallocate(cgblkstart);
-			return;
+			superblock->fs_cstotal.cs_nffree	     += frags;
+			superblock->fs_cs(superblock, cgx).cs_nffree += frags;
+			mycg->cg_cs.cs_nffree			     += frags;
+			if (count_low)
+				mycg->cg_frsum[count_low]--;
+			if (count_high)
+				mycg->cg_frsum[count_high]--;
+			return (1);
 		}
 
 		/* deallocate unused block fragments */
@@ -561,13 +612,13 @@ ULONG frags;
 		for (index = 0; index < frags; index++)
 			bit_clr(cg_blksfree(mycg), cgfragstart + index);
 	}
+	return (0);
 }
 
 
 /* deallocate requested number of frags starting at fragsstart */
-frags_deallocate(fragstart, frags)
-ULONG fragstart;
-ULONG frags;
+void
+frags_deallocate(ULONG fragstart, ULONG frags)
 {
 	int	index;
 	int	fragoffset;
@@ -586,6 +637,13 @@ ULONG frags;
 
 	cgx  = dtog(superblock, fragstart);
 	mycg = cache_cg_write(cgx);
+#ifndef FAST
+	if (mycg == NULL) {
+	    PRINT2(("fragsdealloc: frags %u-%u cache_cg_write gave NULL",
+		   fragstart, fragstart + frags - 1));
+	    return;
+	}
+#endif
 
 	cgfragstart = dtogd(superblock, fragstart);
 	fragoffset  = cgfragstart % FRAGS_PER_BLK;

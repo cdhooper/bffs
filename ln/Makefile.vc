@@ -1,0 +1,22 @@
+ARCH=vc
+DOTDOT=
+PROG=$(DOTDOT)/bin/ln
+OBJ=$(DOTDOT)/obj.$(ARCH)/
+OBJS=$(OBJ)ln.o $(OBJ)amiga_unix.o
+
+
+CC=vc
+CFLAGS=-Dcdh -Ivincludeos3:amiga20 -I/ucbinclude -O3 -lamiga -sc -sd
+RM=delete force
+
+$(PROG): $(OBJS)
+	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
+
+clean:
+	$(RM) $(OBJS) $(PROG)
+
+$(OBJ)ln.o: ln.c
+	$(CC) $(CFLAGS) -c ln.c -o $(OBJ)ln.o
+
+$(OBJ)amiga_unix.o: $(DOTDOT)/unix_support/amiga_unix.c
+	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/amiga_unix.c -o $(OBJ)amiga_unix.o

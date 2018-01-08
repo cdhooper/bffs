@@ -1,4 +1,25 @@
+/*
+ * Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted so long as any redistribution retains the
+ * above copyright notice, this condition, and the below disclaimer.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include <exec/memory.h>
+#include <clib/exec_protos.h>
 #include <dos/filehandler.h>
 
 #include "config.h"
@@ -16,7 +37,7 @@
 
 struct	cache_set *hashtable[HASH_SIZE];
 struct	cg *cache_cg_data[CACHE_CG_MAX];
-int	cache_cg_state[CACHE_CG_MAX];
+char    cache_cg_state[CACHE_CG_MAX];
 struct	cache_set *cache_stack;
 struct	cache_set *cache_stack_tail;
 int	cache_alloced	    = 0;
@@ -25,10 +46,19 @@ int	cache_item_dirty    = 0;
 extern int cache_size;		/* initial cache frags if 0 in mountlist */
 extern int cache_cg_size;	/* number of cylinder group fsblock buffers */
 
-#define CACHE_HASH(blk) 	(blk & (HASH_SIZE - 1))
+#define CACHE_HASH(blk)		(blk & (HASH_SIZE - 1))
 /*			was	((blk >> 4) & (HASH_SIZE - 1)) */
 
-
+static struct cache_set *cache_node(int blk);
+static struct cache_set *cache_alloc(int flags);
+static void cache_free(struct cache_set *node);
+static void cache_cycle_dirty(void);
+static void cache_insert(struct cache_set **head, struct cache_set *node);
+static void cache_add(struct cache_set *node);
+static void cache_remove(struct cache_set *node);
+static void cache_refresh(struct cache_set *node);
+static void cache_popup_cg(int pos);
+static struct cache_set *cache_getnode(int blk);
 
 /* cache_frag()
  *	This routine will return a pointer to a copy of the specified
@@ -36,27 +66,33 @@ extern int cache_cg_size;	/* number of cylinder group fsblock buffers */
  *	so that it is more likely frequently requested blocks will
  *	remain in the cache.
  */
-char *cache_frag(blk)
-int blk;
+char *
+cache_frag(int blk)
 {
 	struct cache_set *node;
 
 	if ((node = cache_node(blk)) != NULL) {
-		UPSTAT(hit_data_read);
-		cache_refresh(node);
+	    UPSTAT(hit_data_read);
+	    cache_refresh(node);
 	} else {
-		UPSTAT(miss_data_read);
-		node = cache_getnode(blk);
-		if (data_read(node->buf, node->blk, FSIZE))
-			PRINT2(("** data read fault for cache_frag\n"));
-		cache_add(node);
+	    UPSTAT(miss_data_read);
+	    node = cache_getnode(blk);
+	    if (data_read(node->buf, node->blk, FSIZE)) {
+		PRINT2(("cache_frag: data_read failed\n"));
+		return (NULL);
+	    }
+	    cache_add(node);
 	}
 	return(node->buf);
 }
 
-
-char *cache_available(blk)
-int blk;
+/* cache_available()
+ *	This routine returns the memory address of a frag if it's
+ *	already in cache.  It will return NULL if the frag is not
+ *	in memory.  Use cache_frag() to fetch frags from disk.
+ */
+char *
+cache_available(int blk)
 {
 	struct cache_set *node;
 
@@ -70,48 +106,50 @@ int blk;
 
 #ifndef RONLY
 /* cache_frag_write()
-	This routine will return a buffer to write the given block into.
-	The buffer is pre-set to be a dirty block.  The caching mechanism
-	will automatically take care of flushing dirty frags once the
-	buffer is full.  If readflag is set (non-zero), the calling routine
-	is guaranteed the current contents of the fragment is read into the
-	cache.  Otherwise, the buffer contents will be the fragment from the
-	disk only if it is already in the cache.
-*/
-char *cache_frag_write(blk, readflag)
-int blk;
-int readflag;
+ *	This routine will return a buffer to write the given block into.
+ *	The buffer is pre-set to be a dirty block.  The caching mechanism
+ *	will automatically take care of flushing dirty frags once the
+ *	buffer is full.  If readflag is set (non-zero), the calling routine
+ *	is guaranteed the current contents of the fragment is read into the
+ *	cache.  Otherwise, the buffer contents will be the fragment from the
+ *	disk only if it is already in the cache.
+ */
+char *
+cache_frag_write(int blk, int readflag)
 {
 	struct cache_set *node;
 
 	if ((node = cache_node(blk)) != NULL) {
-		UPSTAT(hit_data_write);
-		cache_refresh(node);
+	    UPSTAT(hit_data_write);
+	    cache_refresh(node);
 	} else {
-		node = cache_getnode(blk);
-		if (readflag) {
-			UPSTAT(miss_data_write);
-			if (data_read(node->buf, node->blk, FSIZE))
-				PRINT2(("** data read fault for cache_frag_write\n"));
+	    node = cache_getnode(blk);
+	    if (readflag) {
+		UPSTAT(miss_data_write);
+		if (data_read(node->buf, node->blk, FSIZE)) {
+		    PRINT2(("cache_frag_write: data read failed\n"));
+		    return (NULL);
 		}
-		cache_add(node);
+	    }
+	    cache_add(node);
 	}
 	if (!(node->flags & CACHE_DIRTY)) {
-		node->flags |= CACHE_DIRTY;
-		cache_item_dirty++;
+	    node->flags |= CACHE_DIRTY;
+	    cache_item_dirty++;
 	}
 	return(node->buf);
 }
 #endif
 
 
+#if 0
 /* cache_frag_lock()
  *	This routine will lock a frag in the cache.  It is used to
  *	alleviate the number of calls to cache_frag and cache_frag_write
  *	just to assure a frag remains in the cache.
  */
-cache_frag_lock(blk)
-int blk;
+void
+cache_frag_lock(int blk)
 {
 	struct cache_set *node;
 	if ((node = cache_node(blk)) != NULL) {
@@ -125,15 +163,15 @@ int blk;
 		}
 #endif
 	} else
-		PRINT(("call to lock for frag %d not in cache!\n", blk));
+		PRINT2(("call to lock for frag %d not in cache\n", blk));
 }
 
 
 /* cache_frag_unlock()
  *	This routine will unlock a locked frag in the cache
  */
-cache_frag_unlock(blk)
-int blk;
+void
+cache_frag_unlock(int blk)
 {
 	struct cache_set *node;
 	if ((node = cache_node(blk)) != NULL) {
@@ -147,16 +185,17 @@ int blk;
 		}
 #endif
 	} else
-		PRINT(("call to lock for frag %d not in cache!\n", blk));
+		PRINT2(("call to lock for frag %d not in cache\n", blk));
 }
+#endif
 
 
 /* cache_invalidate()
  *	This routine will throw out a cache entry for the passed block
  *	No flushing will be done for dirty frags.
  */
-cache_invalidate(blk)
-int blk;
+void
+cache_invalidate(int blk)
 {
 	struct cache_set *node;
 
@@ -167,10 +206,10 @@ int blk;
 		if (node->flags != CACHE_CLEAN) {
 			if (node->flags & CACHE_DIRTY) {
 			    if (node->flags & CACHE_LOCKED)
-				PRINT2(("invalidating locked dirty frag! %d\n",
+				PRINT2(("invalidating locked dirty frag %d\n",
 					blk));
 			} else
-			    PRINT2(("invalidating locked clean frag! %d\n", blk));
+			    PRINT2(("invalidating locked clean frag %d\n", blk));
 			node->flags = CACHE_CLEAN;
 		}
 		cache_add(node);
@@ -183,7 +222,8 @@ int blk;
  *	cache destroy, except the structure of the cache remains
  *	intact.  This routine does NOT flush dirty entries first.
  */
-cache_full_invalidate()
+void
+cache_full_invalidate(void)
 {
 	struct	cache_set *node;
 
@@ -196,9 +236,9 @@ cache_full_invalidate()
 		if (node->flags != CACHE_CLEAN) {
 			if (node->flags & CACHE_DIRTY) {
 			    if (node->flags & CACHE_LOCKED)
-				PRINT2(("invalidating locked dirty frag!\n"));
+				PRINT2(("invalidating locked dirty frag\n"));
 			} else
-			    PRINT2(("invalidating locked clean frag!\n"));
+			    PRINT2(("invalidating locked clean frag\n"));
 			node->flags = CACHE_CLEAN;
 		}
 #endif
@@ -213,13 +253,13 @@ cache_full_invalidate()
  *	This routine will flush a single block if it exists in the cache
  *	and is dirty.  It will not invalidate it from the cache.
  */
-cache_frag_flush(blk)
-int blk;
+void
+cache_frag_flush(int blk)
 {
 	struct cache_set *node;
 
 	if ((node = cache_node(blk)) == NULL)
-		return(0);
+		return;
 
 	if (node->flags & CACHE_DIRTY) {
 		UPSTAT(cache_force_writes);
@@ -230,7 +270,6 @@ int blk;
 		if (data_write(node->buf, node->blk, FSIZE))
 			PRINT2(("** data write fault for cache frag flush\n"));
 	}
-	return(1);
 }
 #endif
 
@@ -245,9 +284,10 @@ int blk;
  *	This is an internal cache routine and should not be called
  *	from outside the cache code.
  */
-struct cache_set *cache_getnode(blk)
-int blk;
+static struct cache_set *
+cache_getnode(int blk)
 {
+	int count = 0;
 	struct cache_set *node;
 
 	cache_getnode_top:
@@ -255,8 +295,8 @@ int blk;
 		cache_cycle_dirty();     /* Put those dirty blocks on bottom */
 
 	if ((node = cache_stack) == NULL) {
-		PRINT(("ERROR: no cache buffers available!\n"));
-/*		close_filesystem(); */
+		if (count++ < 5)
+		    PRINT2(("ERROR: no cache buffers available\n"));
 		goto cache_getnode_top;
 	}
 	cache_remove(node);
@@ -273,12 +313,13 @@ int blk;
  *	than cycling through the cache.  Perhaps there could be a tag
  *	saying how many times a dirty frag has been recycled.
  */
-cache_cycle_dirty()
+static void
+cache_cycle_dirty(void)
 {
 	struct cache_set *node;
 
 	if (cache_stack == NULL) {
-		PRINT(("Error: cycle dirty found NULL stack.\n"));
+		PRINT2(("Error: cycle dirty found NULL stack.\n"));
 		return;
 	}
 
@@ -305,7 +346,7 @@ cache_cycle_dirty()
 		}
 
 		if (cache_stack->flags != CACHE_CLEAN)
-			PRINT2(("** ERROR - all frags in cache locked!\n"));
+			PRINT2(("** ERROR - all frags in cache locked\n"));
 	}
 #endif
 }
@@ -316,7 +357,8 @@ cache_cycle_dirty()
  *	responsible for maintaining the cache.  It initializes both
  *	the regular fragment cache and the cg block cache.
  */
-open_cache()
+void
+open_cache(void)
 {
 	int index;
 
@@ -347,20 +389,23 @@ open_cache()
  *	the cache.  It is responsible for allocating and deallocating
  *	cache buffers as needed.
  */
-cache_adjust()
+void
+cache_adjust(void)
 {
 	struct cache_set *node;
 
 	/* if the cache is too small */
 	while (cache_alloced < cache_size) {
+		int tries = 0;
 		cache_adjust_top:
-		if ((node = cache_alloc(CACHE_CLEAN)) == NULL)
-		    if (cache_size > 2) {
-			PRINT(("ERROR: unable to allocate cache buffers\n"));
-/*			close_filesystem(); */
-			goto cache_adjust_top;
-		    } else
-			break;
+		if ((node = cache_alloc(CACHE_CLEAN)) == NULL) {
+		    if (cache_alloced <= 2) {
+			PRINT2(("ERROR: unable to allocate cache buffers\n"));
+			if (tries++ < 5)
+			    goto cache_adjust_top;
+		    }
+		    break;  /* Give up */
+		}
 		node->blk = 0;
 		cache_add(node);
 	}
@@ -393,7 +438,8 @@ cache_adjust()
  *	the number of cg cache entries.  It is responsible for deallocating
  *	(only) cache buffers as needed.
  */
-cache_cg_adjust()
+void
+cache_cg_adjust(void)
 {
 	int index;
 
@@ -424,7 +470,8 @@ cache_cg_adjust()
  *	and return the memory allocated to the cache buffers to the
  *	system free pool.
  */
-close_cache()
+void
+close_cache(void)
 {
 	int	index;
 	struct	cache_set *temp;
@@ -434,7 +481,7 @@ close_cache()
 	/* free the list of cache blocks */
 	while (cache_stack != NULL) {
 		if (cache_stack->flags & CACHE_DIRTY)
-			PRINT(("mess! destroying dirty %d\n", cache_stack->blk));
+			PRINT2(("destroying dirty %d\n", cache_stack->blk));
 		temp = cache_stack->stack_down;
 		cache_free(cache_stack);
 		cache_stack = temp;
@@ -462,7 +509,8 @@ close_cache()
  *	the cache out to disk (in sorted order).  It is called
  *	by external routines to synchronize the disk.
  */
-cache_flush()
+void
+cache_flush(void)
 {
 	struct cache_set *head;
 	struct cache_set *temp;
@@ -470,7 +518,7 @@ cache_flush()
 
 	if (!cache_item_dirty) {
 		PRINT(("cache_flush: no items dirty\n"));
-		return(0);
+		return;
 	}
 
 	UPSTAT(cache_flushes);
@@ -481,7 +529,7 @@ cache_flush()
 	while (temp != NULL) {
 		if (temp->flags == CACHE_DIRTY) {
 			if (temp->blk == 0) {
-				PRINT2(("INCON: bad dirty block!\n"));
+				PRINT2(("INCON: bad dirty block\n"));
 				temp = temp->stack_down;
 				continue;
 			}
@@ -508,14 +556,13 @@ cache_flush()
 /* cache_insert()
  *	This routine maintains an ordered list of cache blocks which
  *	will be used by the flush routine to accomplish an elevator-
- *	type synchromization of dirty cache frags to the disk.
+ *	type synchronization of dirty cache frags to the disk.
  *
  *	This is an internal cache routine and should not be called
  *	from outside the cache code.
  */
-cache_insert(head, node)
-struct cache_set **head;
-struct cache_set *node;
+static void
+cache_insert(struct cache_set **head, struct cache_set *node)
 {
 	struct cache_set *current;
 	struct cache_set *parent;
@@ -557,9 +604,8 @@ struct cache_set *node;
  *	frag allocators) to efficiently move disk blocks that are most
  *	likely in the cache already.
  */
-cache_frag_move(to_blk, from_blk)
-int to_blk;
-int from_blk;
+void
+cache_frag_move(int to_blk, int from_blk)
 {
 	struct cache_set *node;
 
@@ -594,8 +640,8 @@ int from_blk;
  *	This is an internal cache routine and should not be called
  *	from outside the cache code.
  */
-struct cache_set *cache_alloc(flags)
-int flags;
+static struct cache_set *
+cache_alloc(int flags)
 {
 	struct cache_set *node;
 
@@ -621,8 +667,8 @@ int flags;
  *	This is an internal cache routine and should not be called
  *	from outside the cache code.
  */
-cache_free(node)
-struct cache_set *node;
+static void
+cache_free(struct cache_set *node)
 {
 #ifndef FAST
 	if (node == NULL)
@@ -643,14 +689,14 @@ struct cache_set *node;
  *	This is an internal cache routine and should not be called
  *	from outside the cache code.
  */
-cache_add(node)
-struct cache_set *node;
+static void
+cache_add(struct cache_set *node)
 {
 	int index;
 
 #ifndef FAST
 	if (node == NULL) {
-		PRINT(("cache_add got NULL node.\n"));
+		PRINT2(("cache_add got NULL node.\n"));
 		return;
 	}
 #endif
@@ -686,14 +732,14 @@ struct cache_set *node;
  *	This is an internal cache routine and should not be called
  *	from outside the cache code.
  */
-cache_remove(node)
-struct cache_set *node;
+static void
+cache_remove(struct cache_set *node)
 {
 	int index;
 
 #ifndef FAST
 	if (node == NULL) {
-		PRINT(("cache_remove got NULL node.\n"));
+		PRINT2(("cache_remove got NULL node.\n"));
 		return;
 	}
 #endif
@@ -732,12 +778,12 @@ struct cache_set *node;
  *	This is an internal cache routine and should not be called
  *	from outside the cache code.
  */
-cache_refresh(node)
-struct cache_set *node;
+static void
+cache_refresh(struct cache_set *node)
 {
 #ifndef FAST
 	if (node == NULL) {
-		PRINT(("cache_refresh given NULL node.\n"));
+		PRINT2(("cache_refresh given NULL node.\n"));
 		return;
 	}
 #endif
@@ -768,8 +814,8 @@ struct cache_set *node;
  *	This is an internal cache routine and should not be called
  *	from outside the cache code.
  */
-struct cache_set *cache_node(blk)
-int blk;
+static struct cache_set *
+cache_node(int blk)
 {
 	struct cache_set *temp;
 
@@ -790,15 +836,15 @@ int blk;
  *	table is updated to reflect this cg has been the most recent
  *	request.
  */
-struct cg *cache_cg(cgx)
-ULONG cgx;
+struct cg *
+cache_cg(ULONG cgx)
 {
 	int index;
 	struct cg *entry;
 
 #ifndef FAST
 	if (cgx > superblock->fs_ncg) {
-		PRINT(("cg %d too large!\n"));
+		PRINT2(("cg %u too large\n"));
 		return(NULL);
 	}
 #endif
@@ -809,7 +855,7 @@ ULONG cgx;
 		cache_cg_state[index] = 0;
 		cache_cg_data[index] = (struct cg *) AllocMem(FBSIZE, MEMF_PUBLIC);
 		if (cache_cg_data[index] == NULL) {
-		    PRINT(("unable to alloc, returning NULL\n"));
+		    PRINT2(("unable to alloc, returning NULL\n"));
 		    return(NULL);
 		}
 		break;
@@ -851,8 +897,8 @@ ULONG cgx;
  *	This is an internal cache routine and should not be called
  *	from outside the cache code.
  */
-cache_popup_cg(pos)
-int pos;
+static void
+cache_popup_cg(int pos)
 {
 	int index;
 	int	   save_state;
@@ -876,6 +922,7 @@ int pos;
 	cache_cg_state[index - 1] = save_state;
 }
 
+#ifndef RONLY
 /* cache_cg_write()
  *	This routine will return a pointer to a copy of the specified
  *	cylinder group summary information from the disk.  The CG LRU
@@ -883,10 +930,11 @@ int pos;
  *	request.  The cg is marked as dirty and will be flushed to
  *	disk automatically the next time the cg flush routine is called.
  */
-struct cg *cache_cg_write(cgx)
-ULONG cgx;
+struct cg *
+cache_cg_write(ULONG cgx)
 {
 	int index;
+	int count = 0;
 	struct cg *entry;
 
 	for (index = 0; index < cache_cg_size; index++) {
@@ -901,10 +949,11 @@ ULONG cgx;
 	cache_cg_write_top:
 	entry = cache_cg(cgx);
 	if (entry == NULL) {
-		PRINT(("cache_cg was unable to cache cg!\n"));
-/*		close_filesystem(); */
-/*		close_ufs(0); */
-		goto cache_cg_write_top;
+		if (count++ < 2) {
+		    PRINT2(("cache_cg was unable to cache cg %u\n", cgx));
+		    goto cache_cg_write_top;
+		}
+		return (NULL);
 	}
 
 	for (index = 0; index < cache_cg_size; index++)
@@ -914,29 +963,33 @@ ULONG cgx;
 			return(entry);
 		}
 
-	PRINT2(("INCON: Unable to find cg cache entry!  Should not happen\n"));
+	PRINT2(("INCON: Unable to find cg %u cache entry\n", cgx));
 	return(NULL);
 }
 
 
-#ifndef RONLY
 /* cache_cg_flush()
  *	This routine is called to synchronize the disk with all
  *	dirty cylinder group summary information currently in the
  *	CG cache.
  */
-cache_cg_flush()
+void
+cache_cg_flush(void)
 {
 	int index;
 
 	for (index = 0; index < CACHE_CG_MAX; index++)
 	    if (cache_cg_state[index]) {	/* dirty */
-		PRINT(("flushing cg %d - ", cache_cg_data[index]->cg_cgx));
+		struct cg *cgp = cache_cg_data[index];
+		PRINT(("flushing cg %d - ", cgp->cg_cgx));
 		UPSTAT(cache_cg_flushes);
-		if (data_write(cache_cg_data[index], cgtod(superblock,
-				cache_cg_data[index]->cg_cgx), FBSIZE))
+		if (data_write(cgp, cgtod(superblock, cgp->cg_cgx), FBSIZE)) {
 			PRINT2(("** data write fault for cache cg %d\n",
-				cache_cg_data[index]->cg_cgx));
+				cgp->cg_cgx));
+			PRINT2(("** magic=%x nclusterblks=%d ncyl=%d\n",
+				cgp->cg_magic, cgp->cg_nclusterblks,
+				cgp->cg_ncyl));
+		}
 		cache_cg_state[index] = 0;
 	    }
 }

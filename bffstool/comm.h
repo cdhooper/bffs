@@ -72,4 +72,8 @@ extern struct stat *stat;
 extern struct MsgPort *fs;
 extern struct cache_set *cache_stack;
 
-struct stat *get_stat();
+int open_handler(char *name);
+void close_handler(void);
+int get_filesystems(char *name);
+int sync_filesystem(void);
+struct stat *get_stat(void);

@@ -26,17 +26,11 @@
  * dp->d_ino set to 0.
  */
 
-#ifndef _ufs_fsdir_h
-#define	_ufs_fsdir_h
+#ifndef _UFS_DIR_H
+#define	_UFS_DIR_H
 
-/* OLD
-#define	DIRBLKSIZ	DEV_BSIZE
-*/
 #define DIRBLKSIZ	phys_sectorsize
 
-#ifdef	MAXNAMLEN	/* posix may have forced it to be defined as ... */
-#undef	MAXNAMLEN	/* _MAXNAMLEN already. This needs work. XXX */
-#endif
 #define	MAXNAMLEN	255
 
 struct	direct {
@@ -84,5 +78,4 @@ struct	odirect {
 	((sizeof (struct direct) - (MAXNAMLEN+1)) + \
 	((DISK16((dp)->d_namlen)+1 + 3) &~ 3))
 
-
-#endif
+#endif /* _UFS_DIR_H_ */

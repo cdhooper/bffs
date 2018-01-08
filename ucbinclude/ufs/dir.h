@@ -40,8 +40,8 @@
  *	@(#)dir.h	8.2 (Berkeley) 1/21/94
  */
 
-#ifndef _DIR_H_
-#define	_DIR_H_
+#ifndef _UCB_UFS_DIR_H_
+#define	_UCB_UFS_DIR_H_
 
 /*
  * A directory consists of some number of blocks of DIRBLKSIZ
@@ -147,4 +147,4 @@ struct odirtemplate {
 	u_short	dotdot_namlen;
 	char	dotdot_name[4];		/* ditto */
 };
-#endif /* !_DIR_H_ */
+#endif /* _UCB_UFS_DIR_H_ */

@@ -1,3 +1,6 @@
+#ifndef _UCB_SYS_DIRENT_H_
+#define _UCB_SYS_DIRENT_H_
+
 struct  dirent {
         off_t           d_off;
         unsigned long   d_fileno;
@@ -11,3 +14,5 @@ struct  dirent {
 #ifndef DIRSIZ
 #define DIRSIZ(dp) (((sizeof(struct dirent) - (MAXNAMLEN+1) + ((dp)->d_namlen+1)) +3) & ~3)
 #endif
+
+#endif /* _UCB_SYS_DIRENT_H_ */

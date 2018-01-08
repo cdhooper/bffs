@@ -1,3 +1,24 @@
+/*
+ * Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted so long as any redistribution retains the
+ * above copyright notice, this condition, and the below disclaimer.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#include <string.h>
 #include <exec/types.h>
 #include <exec/memory.h>
 #include <exec/io.h>
@@ -5,25 +26,21 @@
 #include <exec/interrupts.h>
 #include <devices/timer.h>
 #include <dos/filehandler.h>
-#include <dos30/dosextens.h>
-
 #ifdef GCC
 #include <inline/dos.h>
-struct MsgPort *CreatePort(UBYTE *name, long pri);
-ULONG SysBase;
-int __nocommandline = 1; /* Disable commandline parsing */
-/* int __initlibraries = 0;  * Disable auto-library-opening */
 #else
 #include <clib/alib_protos.h>
 #include <clib/exec_protos.h>
 #include <clib/dos_protos.h>
 #endif
-
 #include "config.h"
 #include "handler.h"
 #include "packets.h"
 #include "table.h"
 #include "stat.h"
+#include "bffs_dosextens.h"
+#include "system.h"
+#include "ufs.h"
 
 #define RESTART_TIMER timerIO->tr_time.tv_secs  = timer_secs;	\
 		      timerIO->tr_time.tv_micro = 0;		\
@@ -41,6 +58,7 @@ static struct	MsgPort		*timerPort   = NULL;
 static int	write_items	= 0;
 static int	write_delay	= 0;
 
+/* attempt to reduce stack space consumption; these are for main */
 struct	MsgPort		*DosPort;
 struct	DosPacket	*pack;
 struct	DeviceNode	*DevNode;
@@ -57,9 +75,15 @@ extern int timer_secs;  /* delay seconds after write for cleanup */
 extern int timer_loops; /* maximum delays before forced cleanup */
 extern char *version;	/* BFFS version string */
 
+static void close_timer(int normal);
+static int  open_timer(void);
 
-/* attempt to reduce stack space consumption, these are for main */
-
+#ifdef GCC
+struct MsgPort *CreatePort(UBYTE *name, long pri);
+ULONG SysBase;
+int __nocommandline = 1; /* Disable commandline parsing */
+/* int __initlibraries = 0;  * Disable auto-library-opening */
+#endif
 
 void
 handler(void)
@@ -85,7 +109,7 @@ handler(void)
 
     InitStats();
 
-    PRINT(("%s\n", version + 7));
+    PRINT2(("%s\n", version + 7));
 
     pack = WaitPkt();  /* wait for startup packet */
 
@@ -138,7 +162,6 @@ handler(void)
 			PFlush();
 			timing = 0;
 		    } else {
-			PRINT(("write delay %d\n", write_delay));
 			write_items = cache_item_dirty;
 			write_delay--;
 			RESTART_TIMER;
@@ -171,7 +194,7 @@ handler(void)
 
 	    pkt_func = packet_lookup(pack->dp_Type, &pkt_name, &check_inhibit);
 	    if (pkt_func != NULL) {
-	        PRINT1(("%-14s 1=%d 2=%d 3=%d 4=%d\n", pkt_name, pack->dp_Arg1,
+	        PRINT(("%-14s 1=%d 2=%d 3=%d 4=%d\n", pkt_name, pack->dp_Arg1,
 			pack->dp_Arg2, pack->dp_Arg3, pack->dp_Arg4));
 
 		if (dev_openfail && check_inhibit)
@@ -181,7 +204,7 @@ handler(void)
 		pkt_func();
 		goto endpack;
 	    } else {
-		PRINT1(("p=%d E 1=%d 2=%d 3=%d 4=%d unknown packet\n",
+		PRINT1(("Unknown Packet %d 1=%d 2=%d 3=%d 4=%d\n",
 			pack->dp_Type, pack->dp_Arg1, pack->dp_Arg2,
 			pack->dp_Arg3, pack->dp_Arg4));
 
@@ -191,8 +214,9 @@ handler(void)
 
 	    endpack:
 
-	    /* strategy: If the motor is on, start timer to shut it off
-	     *	Once the timer expires, if there have been writes,
+	    /*
+	     * Strategy: If the motor is on, start timer to shut it off.
+	     * Once the timer expires, if there have been writes,
 	     *		restart the timer again.  If the timer expires
 	     *		a second time, then flush the buffer regardless.
 	     *		Turn the motor off once there are no dirty buffers
@@ -213,9 +237,11 @@ handler(void)
         }
     }
 
-    /* according to the RKM, it's not wise to disappear completely, so we
-	will "just say no" to anything sent to us.  Eventually, wait for
-	all locks to be freed, then exit. */
+    /*
+     * According to the RKM, it's not wise to disappear completely, so we
+     * will "just say no" to anything sent to us.  Eventually, wait for
+     * all locks to be freed, then exit.
+     */
 
     close_dchange(1);
     close_timer(1);
@@ -229,23 +255,16 @@ handler(void)
 	    case ACTION_FS_STATS:
 		inhibited = 0;
 		if (open_filesystem()) {
-			PRINT(("cannot open filesystem\n"));
+			PRINT2(("cannot open filesystem\n"));
 			continue;
 		}
 		if (open_timer()) {
 			close_timer(0);
-			PRINT(("cannot open timer\n"));
+			PRINT2(("cannot open timer\n"));
 			continue;
 		}
-		if (open_dchange()) {
+		if (open_dchange())
 			close_dchange(0);
-/*
- *  Don't consider it fatal that dchange is not supported
- *
-			PRINT(("cannot open disk change service\n"));
-			continue;
-*/
-		}
 		receiving_packets = 1;
 		goto endpack;
 	    case ACTION_FREE_LOCK:
@@ -265,30 +284,31 @@ handler(void)
     }
 }
 
-open_timer()
+static int
+open_timer(void)
 {
 	if (!(timerPort = CreatePort("BFFSsync_timer", 0))) {
-		PRINT(("unable to createport for timerIO\n"));
+		PRINT2(("unable to createport for timerIO\n"));
 		return(1);
 	}
 
 
 	if (!(timerIO = (struct timerequest *)
 			CreateExtIO(timerPort, sizeof(struct timerequest)))) {
-		PRINT(("unable to createextio for timerIO\n"));
+		PRINT2(("unable to createextio for timerIO\n"));
 		return(1);
 	}
 
 	if (OpenDevice(TIMERNAME, UNIT_VBLANK, &timerIO->tr_node, 0)) {
-		PRINT(("unable to open timer device %s\n", TIMERNAME));
+		PRINT2(("unable to open timer device %s\n", TIMERNAME));
 		return(1);
 	}
 
 	return(0);
 }
 
-close_timer(normal)
-int normal;
+static void
+close_timer(int normal)
 {
 	if (normal && timerIO) {
 		if (timing)

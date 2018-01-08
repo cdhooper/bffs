@@ -1,0 +1,24 @@
+root:
+	FileSystem = bffssrc:fs/BFFSFileSystem
+	Device = uaehf.device
+	Sectorsize = 512
+	Unit = 2
+	Flags = 0
+	Mount = 1
+	Stacksize = 512
+	Priority = -1
+	GlobVec = -1
+	Surfaces = 64
+	BlocksPerTrack = 63
+	Reserved = 0
+        PreAlloc = 0x701
+	Interleave = 0
+	LowCyl = 2
+	HighCyl = 103
+	Buffers = 30
+	BufMemType = 0
+	MaxTransfer = 0x00FFFFFF
+	Mask = 0x7FFFFFFE
+	BootPri = 0
+	DosType = 0x42464653   /* BFFS */
+#

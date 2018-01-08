@@ -1,5 +1,5 @@
 testdev:
-    FileSystem = fs:bffs
+    FileSystem = fs:BFFSFileSystem
     Device = fmsdisk.device
     Unit = 14
     Flags = 0

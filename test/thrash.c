@@ -1,15 +1,24 @@
+/* fs_thrash
+ *      This program is Copyright 2018 Chris Hooper.  All code herein
+ *      is freeware.  No portion of this code may be sold for profit.
+ */
+
+const char *version = "\0$VER: fs_thrash 1.0 (19-Jan-2018) © Chris Hooper";
+
 #include <stdio.h>
-#ifndef AMIGA
+#include <stdlib.h>
+#include <fcntl.h>
+#include <time.h>
+#ifdef AMIGA
+#define MKDIR(x,y) mkdir(x)
+#else
+#define MKDIR(x,y) mkdir(x,y)
 #include <signal.h>
 #endif
 
 #define OPS 3000000
 
-#ifdef AMIGA
-char *path = "tdev:run";
-#else
-char *path = "run";
-#endif
+char *path = NULL;
 
 #define	CREATE
 #define	READIT
@@ -47,6 +56,7 @@ int deletes = 0;
 int newdirs = 0;
 int stats = 0;
 int reads = 0;
+int verbose = 0;
 unsigned long start;
 unsigned long end;
 
@@ -72,13 +82,26 @@ open_it(char *type)
 }
 
 int
+close_it(void)
+{
+	int rc = 0;
+	if (fp == NULL)
+		return (0);
+	if (fclose(fp))
+		rc = 0;  /* Not sure why, but I get close errors */
+	fp = NULL;
+	return (rc);
+}
+
+int
 create(void)
 {
 	int rc = 0;
 #ifdef CREATE
 	size_t len = (rand() >> 4) & BUFMASK;
 	creates++;
-	write(1, "c", 1);
+	if (verbose)
+	    write(1, "c", 1);
 	open_it("w");
 	if (fp == NULL) {
 		printf("\nCould not open %s for create\n", filename);
@@ -107,7 +130,8 @@ modify(void)
 	int    pos = (rand() >> 4) & FSIZEMASK;
 	size_t len = (rand() >> 6) & BUFMASK;
 	modifies++;
-	write(1, "m", 1);
+	if (verbose)
+	    write(1, "m", 1);
 	open_it("r+");
 	if (fp == NULL)
 		return (0);
@@ -136,7 +160,8 @@ append(void)
 #ifdef APPEND
 	int len = (rand() >> 3) & BUFMASK;
 	appends++;
-	write(1, "a", 1);
+	if (verbose)
+	    write(1, "a", 1);
 	open_it("a");
 	if (fp == NULL) {
 		printf("\nCould not open %s for append\n", filename);
@@ -163,7 +188,8 @@ delete(void)
 	int rc = 0;
 #ifdef DELETE
 	deletes++;
-	write(1, "d", 1);
+	if (verbose)
+	    write(1, "d", 1);
 	pickname();
 	(void) unlink(filename);
 #endif
@@ -176,24 +202,13 @@ makedir(void)
 	int rc = 0;
 #ifdef NEWDIR
 	newdirs++;
-	write(1, "/", 1);
+	if (verbose)
+	    write(1, "/", 1);
 	pickdir();
-	if (mkdir(dirname, 0755) < 0)
+	if (MKDIR(dirname, 0755) < 0)
 		rc = 1;
 #endif
 	return (0);
-}
-
-int
-close_it(void)
-{
-	int rc = 0;
-	if (fp == NULL)
-		return (0);
-	if (fclose(fp))
-		rc = 0;  /* Not sure why, but I get close errors */
-	fp = NULL;
-	return (rc);
 }
 
 int
@@ -201,7 +216,8 @@ statit(void)
 {
 	int rc = 0;
 #ifdef STATIT
-	write(1, "s", 1);
+	if (verbose)
+	    write(1, "s", 1);
 	stats++;
 	open_it("r");
 	if (fp == NULL)
@@ -221,7 +237,8 @@ readit(void)
 #ifdef READIT
 	long   pos = (rand() >> 4) & FSIZEMASK;
 	size_t len = (rand() >> 6) & BUFMASK;
-	write(1, "r", 1);
+	if (verbose)
+	    write(1, "r", 1);
 	reads++;
 	open_it("r");
 	if (fp == NULL)
@@ -308,7 +325,7 @@ printstats(void)
 	printf(" ops/sec]\n");
 }
 
-void
+int
 break_abort(void)
 {
 	time(&end);
@@ -316,29 +333,57 @@ break_abort(void)
 	exit(0);
 }
 
+static void
+usage(void)
+{
+    fprintf(stderr,
+	    "Usage: %s [-v] <path>\n"
+	    "    -v is verbose mode\n");
+}
+
 int
 main(int argc, char *argv[])
 {
+	int arg;
 	int index;
 /*	srand(1); */
 	time(&start);
 	srand(start);
 
-	if (argc > 1)
-		path = argv[1];
-	else {
-		fprintf(stderr, "%s: Directory to thrash must be provided\n",
-			argv[0]);
+	for (arg = 1; arg < argc; arg++) {
+	    if (*argv[arg] == '-') {
+		char *ptr;
+		for (ptr = argv[arg] + 1; *ptr != '\0'; ptr++)
+		    if (*ptr == 'v') {
+			verbose = 1;
+		    } else {
+			fprintf(stderr, "Unknown argument -%s\n", ptr);
+			usage();
+			exit(1);
+		    }
+	    } else if (path != NULL) {
+		fprintf(stderr,
+			"Path \"%s\" specified -- \"%s\" is unknown\n",
+			path, argv[arg]);
+		usage();
 		exit(1);
+	    } else {
+		path = argv[arg];
+	    }
+	}
+	if (path == NULL) {
+	    fprintf(stderr, "%s: Directory to thrash must be provided\n",
+		    argv[0]);
+	    exit(1);
 	}
 
-	mkdir(path, 0755);
+	MKDIR(path, 0755);
 
 #ifdef DELETE
 	makedir();
 #else
 	pickdir();
-	mkdir(dirname, 0755);
+	MKDIR(dirname, 0755);
 #endif
 	for (index = 0; index < BUFMAX; index++)
 		wbuffer[index] = rand() & 0xff;
@@ -349,7 +394,7 @@ main(int argc, char *argv[])
 #else
 	signal(SIGINT, break_abort);
 #endif
-	for (index = 0; index < OPS - 1; index++)
+	for (index = 0; index < OPS - 1; index++) {
 		switch ((rand() >> 5) & 15) {
 			case 0:
 				if (create()) {
@@ -393,6 +438,8 @@ failure:
 					goto failure;
 				break;
 		}
+		chkabort();
+	}
 terminate:
 	time(&end);
 	printstats();

@@ -1,28 +1,50 @@
-ARCH=ami
+#
+# Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted so long as any redistribution retains the
+# above copyright notice, this condition, and the below disclaimer.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+
 DOTDOT=
-#PROG=$(DOTDOT)/bin/tunefs.$(ARCH)
 PROG=$(DOTDOT)/bin/tunefs
-OBJ=$(DOTDOT)/obj.$(ARCH)/
-OBJS=$(OBJ)tunefs.o $(OBJ)tunefs_other.o $(OBJ)amiga_device.o
+OBJ=obj
+SRCS=tunefs.c tunefs_other.c amiga_device.c
+OBJS=$(SRCS:*.*:"$(OBJ)/%1.o")
 
 CC=dcc
-CFLAGS=-I/ucbinclude -I/fs -Dcdh
+CFLAGS=-O2 -r -I/ucbinclude -I/fs -I/unix_support -Dcdh
 RM = -delete force >NIL:
 
-$(PROG): $(OBJS)
-	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
+$(PROG): $(OBJ) $(OBJS)
+	$(CC) $(CFLAGS) %(right:*.o) -o %(left)
 
-$(OBJ)tunefs.o: tunefs.c
-	$(CC) $(CFLAGS) -c tunefs.c -o $(OBJ)tunefs.o
+$(OBJ): $(OBJ)
+	makedir %(left)
 
-$(OBJ)tunefs_other.o: tunefs_other.c
-	$(CC) $(CFLAGS) -c tunefs_other.c -o $(OBJ)tunefs_other.o
+$(OBJ)/tunefs.o: tunefs.c
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)getopt.o: $(DOTDOT)/unix_support/getopt.c
-	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/getopt.c -o $(OBJ)getopt.o
+$(OBJ)/tunefs_other.o: tunefs_other.c
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)amiga_device.o: $(DOTDOT)/unix_support/amiga_device.c
-	$(CC) $(CFLAGS) -c $(DOTDOT)/unix_support/amiga_device.c -o $(OBJ)amiga_device.o
+$(OBJ)/getopt.o: $(DOTDOT)/unix_support/getopt.c
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/amiga_device.o: $(DOTDOT)/unix_support/amiga_device.c
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
 clean:
 	$(RM) $(OBJS) $(PROG)

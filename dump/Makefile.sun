@@ -1,0 +1,27 @@
+OBJS=itime.o main.o optr.o dumprmt.o tape.o traverse.o unctime.o
+CC=cc
+CFLAGS=-I. -Dsun
+
+dump: $(OBJS)
+	$(CC) $(CFLAGS) -o dump $(OBJS)
+
+itime.o: itime.c
+	$(CC) $(CFLAGS) -c itime.c
+
+main.o: main.c
+	$(CC) $(CFLAGS) -c main.c
+
+optr.o: optr.c
+	$(CC) $(CFLAGS) -c optr.c
+
+dumprmt.o: dumprmt.c
+	$(CC) $(CFLAGS) -c dumprmt.c
+
+tape.o: tape.c
+	$(CC) $(CFLAGS) -c tape.c
+
+traverse.o: traverse.c
+	$(CC) $(CFLAGS) -c traverse.c
+
+unctime.o: unctime.c
+	$(CC) $(CFLAGS) -c unctime.c

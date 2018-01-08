@@ -1,0 +1,69 @@
+PROG=../bin/fsck
+OBJ=obj.unix
+OBJS=$(OBJ)/main.o $(OBJ)/fsck_inode.o $(OBJ)/pass1.o $(OBJ)/pass1b.o $(OBJ)/pass2.o $(OBJ)/pass3.o $(OBJ)/pass4.o $(OBJ)/pass5.o $(OBJ)/preen.o $(OBJ)/setup.o $(OBJ)/utilities.o $(OBJ)/dir.o $(OBJ)/ffs_subr.o $(OBJ)/ffs_tables.o $(OBJ)/other.o
+
+CC=gcc
+RM=rm -rf
+#CFLAGS=-O2 -I./include
+CFLAGS=-I../ucbinclude -Dcdh
+#CFLAGS += -D__BEGIN_NAMESPACE_STD -D__END_NAMESPACE_STD
+#CFLAGS += -D_UCB_SYS_TIME_H_
+
+all: $(PROG)
+	@true
+
+$(PROG): $(OBJS)
+	$(CC) $(CFLAGS) $(OBJS) -o $@
+
+$(OBJS): | $(OBJ)
+
+$(OBJ):
+	mkdir $@
+
+clean:
+	$(RM) $(OBJS) $(PROG)
+
+$(OBJ)/main.o: main.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ)/fsck_inode.o: fsck_inode.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ)/pass1.o: pass1.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ)/pass1b.o: pass1b.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ)/pass2.o: pass2.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ)/pass3.o: pass3.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ)/pass4.o: pass4.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ)/pass5.o: pass5.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ)/preen.o: preen.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ)/setup.o: setup.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ)/utilities.o: utilities.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ)/dir.o: dir.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ)/other.o: other.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ)/ffs_subr.o: ../unix_support/ffs_subr.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ)/ffs_tables.o: ../unix_support/ffs_tables.c
+	$(CC) $(CFLAGS) -c $< -o $@

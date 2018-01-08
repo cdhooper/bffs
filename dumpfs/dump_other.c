@@ -28,10 +28,7 @@ void break_abort()
 /*
  * read a block from the file system
  */
-fbread(buf, bno, size)
-        char *buf;
-        int bno;
-        int size;
+fbread(char *buf, int bno, int size)
 {
         int n;
 
@@ -55,7 +52,7 @@ fbread(buf, bno, size)
         return(0);
 }
 
-fbwrite(buf, bno, size)
+fbwrite(char *buf, int bno, int size)
 {
         fprintf(stderr, "Error, attempt to write aborted!\n");
         error_exit(1);

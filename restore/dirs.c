@@ -97,7 +97,11 @@ static struct inotab *inotab[HASHSIZE];
  */
 struct modeinfo {
 	ino_t ino;
+#ifdef AMIGA
+	unix_timeval_t timep[2];
+#else
 	struct timeval timep[2];
+#endif
 	mode_t mode;
 	uid_t uid;
 	gid_t gid;

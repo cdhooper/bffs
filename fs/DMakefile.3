@@ -1,0 +1,102 @@
+#
+# Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted so long as any redistribution retains the
+# above copyright notice, this condition, and the below disclaimer.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+
+PROG=/bin/dbprint
+CC=dcc
+CFLAGS=-O2 -r -proto -ms $(CFLAGS_ADD)
+ASM=das
+RM=-delete force >NIL:
+SRCS=stack.asm handler.c debug.c packets.c ufs.c system.c fread.c fwrite.c file.c inode.c cache.c dir.c table.c alloc.c unixtime.c config.c request.c inthand.asm
+
+# The "FS" and "OBJ" variables are provided in the environment by the
+# top level DMakefile
+#
+#FS=/l/BFFSFileSystem
+#OBJ=obj
+
+OBJS=$(SRCS:*.*:"$(OBJ)/%1.o")
+
+all: $(OBJ) $(FS) $(PROG)
+
+$(FS): $(OBJ) $(OBJS)
+	$(CC) $(CFLAGS) %(right:*.o) -o %(left)
+
+$(OBJ): $(OBJ)
+	makedir %(left)
+
+$(PROG): $(OBJ) dbprint.c
+	$(CC) $(CFLAGS) %(right:*.c) -o %(left)
+
+$(OBJ)/ufs.o: ufs.c config.h handler.h superblock.h ufs.h fsmacros.h file.h stat.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/handler.o: handler.c config.h handler.h packets.h table.h stat.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/debug.o: debug.c config.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/packets.o: packets.c config.h superblock.h fsmacros.h packets.h system.h handler.h file.h cache.h stat.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/system.o: system.c config.h handler.h superblock.h ufs.h fsmacros.h packets.h system.h stat.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/fread.o: fread.c config.h ufs.h superblock.h fsmacros.h file.h handler.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/fwrite.o: fwrite.c config.h fsmacros.h file.h alloc.h cache.h handler.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/file.o: file.c config.h handler.h ufs.h file.h cache.h alloc.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/inode.o: inode.c config.h superblock.h file.h cache.h alloc.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/cache.o: cache.c config.h superblock.h ufs.h fsmacros.h cache.h file.h handler.h stat.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/dir.o: dir.c config.h ufs.h file.h handler.h cache.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/table.o: table.c config.h table.h packets.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/request.o: request.c config.h request.h config.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/alloc.o: alloc.c config.h superblock.h alloc.h fsmacros.h cache.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/unixtime.o: unixtime.c unixtime.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/config.o: config.c alloc.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+
+$(OBJ)/inthand.o: inthand.asm
+	$(ASM) %(right:*.asm) -o %(left)
+
+$(OBJ)/stack.o: stack.asm
+	$(ASM) %(right:*.asm) -o %(left)
+
+clean:
+	$(RM) $(OBJS) $(PROG) $(FS)

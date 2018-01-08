@@ -1,0 +1,37 @@
+cd sys:git
+makedir tdev:bffs
+
+;copy .gitignore bffstool bin build dcp disklabel dist DMakefile DMakefile.2.06 doc dump dumpfs chmod chown edumpfs ln ls touch fs fsck mknod mountlist newfs rdb restore tunefs ucbinclude umount unix_support tdev:bffs/. all clone
+
+copy all clone quiet .gitignore tdev:bffs/.gitignore
+copy all clone quiet bffstool tdev:bffs/bffstool
+copy all clone quiet bin tdev:bffs/bin
+copy all clone quiet build tdev:bffs/build
+copy all clone quiet chmod tdev:bffs/chmod
+copy all clone quiet chown tdev:bffs/chown
+copy all clone quiet dcp tdev:bffs/dcp
+copy all clone quiet disklabel tdev:bffs/disklabel
+copy all clone quiet dist tdev:bffs/dist
+copy all clone quiet DMakefile tdev:bffs/DMakefile
+copy all clone quiet DMakefile.2.06 tdev:bffs/DMakefile.2.06
+copy all clone quiet doc tdev:bffs/doc
+copy all clone quiet dump tdev:bffs/dump
+copy all clone quiet dumpfs tdev:bffs/dumpfs
+copy all clone quiet edumpfs tdev:bffs/edumpfs
+copy all clone quiet ln tdev:bffs/ln
+copy all clone quiet ls tdev:bffs/ls
+copy all clone quiet touch tdev:bffs/touch
+copy all clone quiet fs tdev:bffs/fs
+copy all clone quiet fsck tdev:bffs/fsck
+copy all clone quiet mknod tdev:bffs/mknod
+copy all clone quiet mountlist tdev:bffs/mountlist
+copy all clone quiet newfs tdev:bffs/newfs
+copy all clone quiet rdb tdev:bffs/rdb
+copy all clone quiet restore tdev:bffs/restore
+copy all clone quiet tunefs tdev:bffs/tunefs
+copy all clone quiet ucbinclude tdev:bffs/ucbinclude
+copy all clone quiet umount tdev:bffs/umount
+copy all clone quiet unix_support tdev:bffs/unix_support
+makedir tdev:bffs/l
+makedir tdev:bffs/test
+copy clone quiet test/* tdev:bffs/test

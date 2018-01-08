@@ -37,8 +37,8 @@
  *	$Id: glob.h,v 1.4 1993/11/06 01:11:43 cgd Exp $
  */
 
-#ifndef _GLOB_H_
-#define	_GLOB_H_
+#ifndef _UCB_GLOB_H_
+#define	_UCB_GLOB_H_
 
 #include <sys/cdefs.h>
 
@@ -70,15 +70,12 @@ typedef struct {
 #define	GLOB_MARK	0x0008	/* Append / to matching directories. */
 #define	GLOB_NOCHECK	0x0010	/* Return pattern itself if nothing matches. */
 #define	GLOB_NOSORT	0x0020	/* Don't sort. */
-
-#ifndef _POSIX_SOURCE
 #define	GLOB_ALTDIRFUNC	0x0040	/* Use alternately specified directory funcs. */
 #define	GLOB_BRACE	0x0080	/* Expand braces ala csh. */
 #define	GLOB_MAGCHAR	0x0100	/* Pattern had globbing characters. */
 #define	GLOB_NOMAGIC	0x0200	/* GLOB_NOCHECK without magic chars (csh). */
 #define	GLOB_QUOTE	0x0400	/* Quote special chars with \. */
 #define	GLOB_TILDE	0x0800	/* Expand tilde names from the passwd file. */
-#endif
 
 #define	GLOB_NOSPACE	(-1)	/* Malloc call failed. */
 #define	GLOB_ABEND	(-2)	/* Unignored error. */
@@ -88,4 +85,4 @@ int	glob __P((const char *, int, int (*)(const char *, int), glob_t *));
 void	globfree __P((glob_t *));
 __END_DECLS
 
-#endif /* !_GLOB_H_ */
+#endif /* _UCB_GLOB_H_ */

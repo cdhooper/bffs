@@ -1,0 +1,38 @@
+------------------------------------------------------------------------
+Version 1.1 of chmod
+------------------------------------------------------------------------
+
+chmod - change file permissions
+
+
+This program acts nearly identical to the Unix command of the same name.
+
+
+Usage:
+        chmod [<options>] <perms> <filename> [<filename>...]
+
+Where 
+	<options> is one or more of the options below
+        <perms> are either an octal value representing the perms to
+                set, or character format: [[ugo]<-+=>[rwxXst]]|####]
+
+Options are
+        -R is recursive
+        -f is force
+        -v is verbose
+
+Example (recursively remove read permission for group and other):
+	chmod -R go-rwx safe_dir
+
+Example (add AmigaOS Script attribute) to an executable script: 
+	chmod +s bf0:prog_file
+
+Example (remove write permission for everyone on a file):
+	chmod ugo-w ./ro_file
+
+
+------------------------------------------------------------------------
+
+
+This program was created by Chris Hooper (amiga@cdh.eebugs.com)
+------------------------------------------------------------------------

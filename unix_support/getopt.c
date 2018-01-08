@@ -36,10 +36,6 @@ static char sccsid[] = "@(#)getopt.c	4.13 (Berkeley) 2/23/91";
 #endif /* LIBC_SCCS and not lint */
 
 #include <stdio.h>
-/*
-#include <stdlib.h>
-#include <string.h>
-*/
 
 #define rindex strchr
 char *rindex();
@@ -56,10 +52,7 @@ char	*optarg;		/* argument associated with option */
 #define	EMSG	""
 
 int
-getopt(nargc, nargv, ostr)
-	int nargc;
-	char * /*const */ *nargv;
-	/* const*/ char *ostr;
+getopt(int nargc, char * const *nargv, const char *ostr)
 {
 	static char *place = EMSG;		/* option letter processing */
 	register char *oli;			/* option letter list index */

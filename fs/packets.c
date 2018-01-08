@@ -1,7 +1,30 @@
+/*
+ * Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted so long as any redistribution retains the
+ * above copyright notice, this condition, and the below disclaimer.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#include <stdlib.h>
+#include <string.h>
 #include <exec/memory.h>
-#include <dos30/dos.h>
-#include <dos30/dosextens.h>
+#include <dos/dos.h>
+#include <dos/dosextens.h>
 #include <dos/filehandler.h>
+#include <clib/exec_protos.h>
 
 #include "config.h"
 #include "superblock.h"
@@ -9,18 +32,17 @@
 #include "ufs/dir.h"
 #include "fsmacros.h"
 #include "packets.h"
-#include "system.h"
 #include "handler.h"
 #include "file.h"
 #include "cache.h"
 #include "stat.h"
+#include "bffs_dosextens.h"
+#include "system.h"
+#include "inode.h"
+#include "dir.h"
+#include "ufs.h"
+#include "unixtime.h"
 
-char	*strchr();
-extern	ULONG	path_parse();
-extern	ULONG	parent_parse();
-extern	struct	direct *dir_next();
-
-extern	int GMT;
 extern	int resolve_symlinks;
 extern	struct DosPacket *pack;
 extern	int minfree;
@@ -33,14 +55,16 @@ extern	ULONG phys_sectorsize;
 #define ARG4 pack->dp_Arg4
 
 
-
-void PUnimplemented() {
-	PRINT2(("Unimplemented\n"));
+void
+PUnimplemented(void)
+{
+	PRINT(("Unimplemented %d\n", pack->dp_Type));
 	global.Res1 = DOSFALSE;
 	global.Res2 = ERROR_ACTION_NOT_KNOWN;
 }
 
-void PLocateObject()
+void
+PLocateObject(void)
 {
 	struct	BFFSLock *lock;
 	char	*name;
@@ -110,14 +134,14 @@ void PLocateObject()
 }
 
 
-void FreeLock(lock)
-struct BFFSLock *lock;
+void
+FreeLock(struct BFFSLock *lock)
 {
     struct BFFSLock *current;
     struct BFFSLock *parent;
 
     if (lock == NULL) {
-	PRINT2(("** ERROR - FreeLock called with NULL lock!\n"));
+	PRINT2(("** ERROR - FreeLock called with NULL lock\n"));
 	return;
     }
 
@@ -143,18 +167,83 @@ struct BFFSLock *lock;
     Permit();
 
     if (current == NULL) {
-	PRINT(("Did not find lock in global locklist\n"));
+	PRINT2(("Did not find lock in global locklist\n"));
 	global.Res1 = DOSFALSE;
     } else
 	FreeMem(current, sizeof(struct BFFSLock));
 }
 
 
-void PFreeLock()
+void
+PFreeLock(void)
 {
 	FreeLock((struct BFFSLock *) BTOC(ARG1));
 }
 
+
+/*
+ * examine_common() will fill in a FileInfoBlock structure for the
+ * specified file (the lock).  It will optionally fill the fattr
+ * structure as well, if non-NULL.
+ *
+ * RES1 = Success (DOSTRUE) / Failure (DOSFALSE)
+ * RES2 = Failure code when RES1 == DOSFALSE
+ *        Can be ERROR_IS_SOFT_LINK or ERROR_OBJECT_NOT_FOUND.
+ */
+static void
+examine_common(struct BFFSLock *lock, FileInfoBlock_3_t *fib, fileattr_t *fattr)
+{
+    ULONG           inum    = lock->fl_Key;
+    struct direct  *dir_ent = NULL;
+    struct icommon *inode;
+
+    UPSTAT(examines);
+    fib->fib_DirOffset = MSb;
+
+    if (inum != ROOTINO) {
+	inode = inode_read(inum);
+	if ((DISK16(inode->ic_mode) & IFMT) == IFLNK) {
+	    if (resolve_symlinks) {
+		ULONG  ninum = 0;
+		ULONG  filesize = IC_SIZE(inode);
+		char  *buf = (char *) AllocMem(filesize + 1, MEMF_PUBLIC);
+
+		if (bsd44fs && (filesize < MAXSYMLINKLEN)) {
+		    strncpy(buf, inode->ic_db, filesize);
+		    buf[filesize] = '\0';
+		    ninum = file_find(lock->fl_Pinum, buf);
+		} else if (file_read(inum, 0, filesize, buf) == filesize) {
+		    buf[filesize] = '\0';
+		    ninum = file_find(lock->fl_Pinum, buf);
+		}
+		FreeMem(buf, filesize + 1);
+		if (ninum == 0) {
+		    /* Broken link, so just report it as a soft link */
+		    global.Res1 = DOSFALSE;
+		    global.Res2 = ERROR_IS_SOFT_LINK;
+		    return;
+		}
+		dir_ent = dir_next(global.Pinum, global.Poffset);
+		PRINT(("resolved link: %d to %d (%s)\n", lock->fl_Key,
+		       ninum, dir_ent->d_name));
+		lock->fl_Key     = ninum;
+		lock->fl_Pinum   = global.Pinum;
+		lock->fl_Poffset = global.Poffset;
+		inum = ninum;
+	    } else {
+		global.Res1 = DOSFALSE;
+		global.Res2 = ERROR_IS_SOFT_LINK;
+		return;
+	    }
+	} else {
+	    dir_ent = dir_next(lock->fl_Pinum, lock->fl_Poffset);
+	}
+    }
+    inode = inode_read(inum);
+    FillInfoBlock(fib, lock, inode, dir_ent);
+    if (fattr != NULL)
+	FillAttrBlock(fattr, inode);
+}
 
 /*
  * PExamineObject() implements both ACTION_EXAMINE_OBJECT (23) and
@@ -163,7 +252,7 @@ void PFreeLock()
  *
  * ACTION_EX_OBJECT is used by the AS225 "ls" command to acquire
  * additional UNIX attributes on each directory object.  The main
- * difference is that ARG3 is added as a C pointer to an addditional
+ * difference is that ARG3 is added as a C pointer to an additional
  * Sun NFS RPC NFS fattr data structure.
  *
  * ARG1 = File lock
@@ -176,56 +265,14 @@ void PFreeLock()
 void
 PExamineObject(void)
 {
-    ULONG  inum;
-    char   *buf;
-    ULONG  filesize;
-    struct BFFSLock	 *lock;
-    struct FileInfoBlock *fib;
-    struct direct	 *dir_ent = NULL;
-    struct icommon	 *inode;
-
-    lock = (struct BFFSLock *) BTOC(ARG1);
-    fib  = (struct FileInfoBlock *) BTOC(ARG2);
-
-    UPSTAT(examines);
-    inum = lock->fl_Key;
-    fib->fib_DirOffset = MSb;
-
-    inode = inode_read(inum);
-
-    if (inum != ROOTINO)
-	if ((DISK16(inode->ic_mode) & IFMT) == IFLNK)
-	    if (resolve_symlinks) {
-		filesize = IC_SIZE(inode);
-		buf = (char *) AllocMem(filesize, MEMF_PUBLIC);
-		file_read(inum, 0, filesize, buf);
-		inum = file_find(lock->fl_Pinum, buf);
-		FreeMem(buf, filesize);
-		if (inum) {
-		    dir_ent = dir_next(inode_read(global.Pinum), global.Poffset);
-		    PRINT(("resolved link: %d to %d (%s)\n", lock->fl_Key,
-			   inum, dir_ent->d_name));
-		    inode = inode_read(inum);
-		    lock->fl_Key     = inum;
-		    lock->fl_Pinum   = global.Pinum;
-		    lock->fl_Poffset = global.Poffset;
-		} else {
-		    global.Res1 = DOSFALSE;
-		    global.Res2 = ERROR_OBJECT_NOT_FOUND;
-		    return;
-		}
-	    } else {
-		global.Res1 = DOSFALSE;
-		global.Res2 = ERROR_IS_SOFT_LINK;
-		return;
-	    }
-	else
-	    dir_ent = dir_next(inode_read(lock->fl_Pinum), lock->fl_Poffset);
-
-    FillInfoBlock(fib, lock, inode, dir_ent);
+    struct BFFSLock   *lock  = (struct BFFSLock *) BTOC(ARG1);
+    FileInfoBlock_3_t *fib   = (FileInfoBlock_3_t *) BTOC(ARG2);
+    fileattr_t        *fattr = NULL;
 
     if ((pack->dp_Type == ACTION_EX_OBJECT) && (ARG3 != 0))
-	FillAttrBlock((fileattr_t *) ARG3, inode);
+	fattr = (fileattr_t *) ARG3;
+
+    examine_common(lock, fib, fattr);
 }
 
 /*
@@ -236,12 +283,12 @@ PExamineObject(void)
  *
  * ACTION_EX_NEXT is used by the AS225 "ls" command to acquire
  * additional UNIX attributes on each directory object.  The main
- * difference is that ARG3 is added as a C pointer to an addditional
+ * difference is that ARG3 is added as a C pointer to an additional
  * Sun NFS RPC NFS fattr data structure.
  *
  * ARG1 = File lock
  * ARG2 = BPTR FileInfoBlock
- * ARG3 = Pointer to File Attr Block (ACTION_EX_OBJECT only)
+ * ARG3 = Pointer to File Attr Block (ACTION_EX_NEXT only)
  *
  * RES1 = Success (DOSTRUE) / Failure (DOSFALSE)
  * RES2 = Failure code when RES1 == DOSFALSE
@@ -250,13 +297,20 @@ void
 PExamineNext(void)
 {
     struct BFFSLock *lock;
-    struct FileInfoBlock *fib;
+    FileInfoBlock_3_t *fib;
     struct icommon *pinode;
     struct icommon *inode;
     struct direct *dir_ent;
+#ifdef SHOWDOTDOT
+    const int showdotdot = 1;
+#else
+    const int showdotdot = 0;
+#endif
+    ULONG ic_size;
+    ULONG inum;
 
     lock = (struct BFFSLock *) BTOC(ARG1);
-    fib  = (struct FileInfoBlock *) BTOC(ARG2);
+    fib  = (FileInfoBlock_3_t *) BTOC(ARG2);
 
     UPSTAT(examinenexts);
     if (fib->fib_DirOffset & MSb) {
@@ -282,40 +336,43 @@ PExamineNext(void)
 	global.Res2 = ERROR_DIR_NOT_FOUND;  /* NO_DEFAULT_DIR OBJECT_WRONG_TYPE */
 	return;
     }
+    ic_size = IC_SIZE(pinode);
 
 getname:
-    if (fib->fib_DirOffset >= IC_SIZE(pinode))  {
+    if (fib->fib_DirOffset >= ic_size) {
 	global.Res1 = DOSFALSE;
 	global.Res2 = ERROR_NO_MORE_ENTRIES;
 	return;
     }
 
-    dir_ent = dir_next(pinode, fib->fib_DirOffset);
+    dir_ent = dir_next(lock->fl_Key, fib->fib_DirOffset);
 
     if (dir_ent == NULL) {
 	global.Res1 = DOSFALSE;
 	global.Res2 = ERROR_NO_MORE_ENTRIES;
 	return;
     }
+    inum = DISK32(dir_ent->d_ino);
 
     /* kludge to skip . and ..  In a galaxy far far away (When all
        AmigaDOS programs become link smart), we might be able to put
        the dots back in. */
-#ifndef SHOWDOTDOT
-    if (fib->fib_DirOffset == 0) {
+    if ((fib->fib_DirOffset == 0) && (showdotdot == 0) &&
+	(pack->dp_Type != ACTION_EX_NEXT)) {
 	fib->fib_DirOffset += DISK16(dir_ent->d_reclen) +
 	                      DISK16(((struct direct *) ((char *) dir_ent +
-				   DISK16(dir_ent->d_reclen)))->d_reclen);
+				      DISK16(dir_ent->d_reclen)))->d_reclen);
 	PRINT(("skipped=%d\n", fib->fib_DirOffset));
 	goto getname;
     }
-#endif
 
     fib->fib_DirOffset += (int) DISK16(dir_ent->d_reclen);
 
     if (dir_ent->d_ino == 0) {
-	if (dir_ent->d_reclen == 0)		/* Skip to next dir block */
-	    fib->fib_DirOffset += DIRBLKSIZ - (fib->fib_DirOffset & (DIRBLKSIZ-1));
+	if (dir_ent->d_reclen == 0) {   /* Skip to start of next dir block */
+	    fib->fib_DirOffset |= (DIRBLKSIZ - 1);
+	    fib->fib_DirOffset++;
+	}
 	goto getname;
     }
 
@@ -327,7 +384,8 @@ getname:
 }
 
 
-void PFindInput()
+void
+PFindInput(void)
 {
     struct  FileHandle *fh;
     struct  BFFSLock *lock;
@@ -358,11 +416,14 @@ void PFindInput()
     }
 
     inode = inode_read(inum);
+#ifndef FAST
     if (inode == NULL) {
-	global.Res2 = ERROR_NO_FREE_STORE;
-	PRINT(("Unable to find inode %d for read\n", inum));
-	goto doserror;
+	PRINT2(("PFI: inode_read gave NULL\n"));
+	global.Res1 = DOSFALSE;
+	global.Res2 = ERROR_DISK_NOT_VALIDATED;
+	return;
     }
+#endif
 
     if ((DISK16(inode->ic_mode) & IFMT) != IFREG) {	/* dir or special */
 	PRINT1(("attempt to open special file %s for read\n", name));
@@ -377,7 +438,7 @@ void PFindInput()
 
     fileh = (struct BFFSfh *) AllocMem(sizeof(struct BFFSfh), MEMF_PUBLIC);
     if (fileh == NULL) {
-	PRINT(("FindInput: unable to allocate %d bytes!\n", sizeof(struct BFFSfh)));
+	PRINT2(("FindInput: unable to allocate %d bytes\n", sizeof(struct BFFSfh)));
 	global.Res2 = ERROR_NO_FREE_STORE;
 	goto doserror;
     }
@@ -405,7 +466,8 @@ void PFindInput()
 }
 
 
-void PFindOutput()
+void
+PFindOutput(void)
 {
 #ifdef RONLY
     global.Res1 = DOSFALSE;
@@ -436,7 +498,7 @@ void PFindOutput()
 
     fileh = (struct BFFSfh *) AllocMem(sizeof(struct BFFSfh), MEMF_PUBLIC);
     if (fileh == NULL) {
-	PRINT(("FindOutput: unable to allocate %d bytes!\n", sizeof(struct BFFSfh)));
+	PRINT2(("FindOutput: unable to allocate %d bytes\n", sizeof(struct BFFSfh)));
 	global.Res1 = DOSFALSE;
 	global.Res2 = ERROR_NO_FREE_STORE;
 	return;
@@ -460,7 +522,7 @@ void PFindOutput()
 	}
 #ifndef NOPERMCHECK
 	if (!is_writable(pinum)) {
-		PRINT(("FindOutput: parent dir not writable\n"));
+		PRINT(("PFO: parent dir not writable\n"));
 		global.Res2 = ERROR_WRITE_PROTECTED;
 		goto doserror;
 	}
@@ -476,7 +538,7 @@ void PFindOutput()
 	    fileh->lock = CreateLock(inum, ACCESS_WRITE, pinum, ioffset);
 
 	    if (fileh->lock == NULL) {
-		PRINT2(("INCON: FO: file created, but could not lock!\n"));
+		PRINT2(("INCON: FO: file created, but could not lock\n"));
 		inum_free(inum);
 		global.Res2 = ERROR_OBJECT_NOT_FOUND;
 		goto doserror;
@@ -487,13 +549,16 @@ void PFindOutput()
 	    PRINT(("Create failed for %s\n", name));
 	    inum_free(inum);
 	    global.Res2 = ERROR_DISK_FULL;
- 	    goto doserror;
-	}
-    } else {					/* file exists, open it */
-	if ((inode = inode_read(inum)) == NULL) {
-	    PRINT2(("Unable to find inode %d for write\n", inum));
 	    goto doserror;
 	}
+    } else {					/* file exists, open it */
+	inode = inode_read(inum);
+#ifndef FAST
+	if (inode == NULL) {
+	    PRINT2(("PFO: inode_read gave NULL for %u\n", inum));
+	    goto doserror;
+	}
+#endif
 
 	if ((DISK16(inode->ic_mode) & IFMT) != IFREG) {	/* dir or special */
 	    PRINT(("attempt to open special file %s for write\n", name));
@@ -536,7 +601,8 @@ void PFindOutput()
 }
 
 
-void PRead()
+void
+PRead(void)
 {
     struct BFFSfh *fileh;
     char	  *buf;
@@ -577,20 +643,18 @@ void PRead()
 }
 
 
-void PWrite()
+void
+PWrite(void)
 {
-    struct BFFSfh *fileh;
-    char	  *buf;
-    LONG	  size;
-
 #ifdef RONLY
     global.Res1 = DOSFALSE;
     global.Res2 = ERROR_DISK_WRITE_PROTECTED;
     return;
 #else
-    fileh = (struct BFFSfh *) ARG1;
-    buf   =	     (char *) ARG2;
-    size  =	       (LONG) ARG3;
+    struct BFFSfh *fileh = (struct BFFSfh *) ARG1;
+    char	  *buf   = (char *) ARG2;
+    LONG	   size  = (LONG) ARG3;
+
     UPSTAT(writes);
 
     if (superblock->fs_ronly) {
@@ -642,9 +706,10 @@ void PWrite()
 }
 
 
-void PSeek()
+void
+PSeek(void)
 {
-    ULONG 	   end;
+    ULONG	   end;
     struct icommon *inode;
     struct BFFSfh *fileh;
     LONG	   movement;
@@ -687,7 +752,8 @@ void PSeek()
 }
 
 
-void PEnd()
+void
+PEnd(void)
 {
 	struct BFFSfh *fileh;
 
@@ -713,10 +779,11 @@ void PEnd()
 }
 
 
-void PParent()
+void
+PParent(void)
 {
     ULONG	    pinum;
-    ULONG 	    ioffset;
+    ULONG	    ioffset;
     struct BFFSLock *lock;
 
     lock = (struct BFFSLock *) BTOC(ARG1);
@@ -737,7 +804,8 @@ void PParent()
 }
 
 
-void PDeviceInfo()
+void
+PDeviceInfo(void)
 {
 	extern int timing;
 	struct InfoData *infodata;
@@ -767,7 +835,8 @@ void PDeviceInfo()
 }
 
 
-void PDeleteObject()
+void
+PDeleteObject(void)
 {
 #ifdef RONLY
     global.Res1 = DOSFALSE;
@@ -840,6 +909,14 @@ void PDeleteObject()
 	}
 
 	inode = inode_modify(inum);
+#ifndef FAST
+	if (inode == NULL) {
+	    PRINT2(("PDel: inode_modify %u gave NULL\n", inum));
+	    global.Res1 = DOSFALSE;
+	    global.Res2 = ERROR_DISK_NOT_VALIDATED;
+	    return;
+	}
+#endif
 
 	PRINT(("delete %s, i=%d offset=%d nlink=%d\n",
 		name, inum, ioffset, DISK16(inode->ic_nlink)));
@@ -851,6 +928,14 @@ void PDeleteObject()
 #endif
 	if ((DISK16(inode->ic_mode) & IFMT) == IFDIR) { /* it's a dir */
 		pinode = inode_modify(pinum);
+#ifndef FAST
+		if (pinode == NULL) {
+		    PRINT2(("PDel: inode_modify %u gave NULL\n", pinum));
+		    global.Res1 = DOSFALSE;
+		    global.Res2 = ERROR_DISK_NOT_VALIDATED;
+		    return;
+		}
+#endif
 #ifdef INTEL
 		inode->ic_nlink = DISK16(DISK16(inode->ic_nlink) - 1);
 		pinode->ic_nlink = DISK16(DISK16(pinode->ic_nlink) - 1);
@@ -874,7 +959,8 @@ void PDeleteObject()
 }
 
 
-void PMoreCache()
+void
+PMoreCache(void)
 {
 	if (abs(ARG1) > 9999) {
 	    int sign;
@@ -904,8 +990,8 @@ void PMoreCache()
 	    PRINT(("morecache: cache=%d amount=%d ", cache_size, ARG1));
 	    cache_size += (ARG1 / NSPF(superblock));
 
-	    if (cache_size < 8)
-		cache_size = 8;
+	    if (cache_size < 4)
+		cache_size = 4;
 
 	    global.Res1 = cache_size * NSPF(superblock);
 
@@ -924,7 +1010,8 @@ void PMoreCache()
  *		If unsuccessful, deallocate new inode, return error
  *		If successful, set DIR attributes
  */
-void PCreateDir()
+void
+PCreateDir(void)
 {
 #ifdef RONLY
 	global.Res1 = DOSFALSE;
@@ -968,7 +1055,7 @@ void PCreateDir()
 	}
 
 	if (dir_name_search(pinum, sname)) {
-		PRINT(("file %s already exists!\n", name));
+		PRINT(("file %s already exists\n", name));
 		global.Res2 = ERROR_OBJECT_EXISTS;
 		goto doserror;
 	}
@@ -1017,7 +1104,8 @@ void PCreateDir()
  *	The routine will handle directory renames and other
  *	special cases.
  */
-void PRenameObject()
+void
+PRenameObject(void)
 {
 #ifdef RONLY
 	global.Res1 = DOSFALSE;
@@ -1131,7 +1219,8 @@ void PRenameObject()
  *	imposed by AmigaDOS in the last characters of the "last" mounted
  *	on field in the superblock.
  */
-void PRenameDisk()
+void
+PRenameDisk(void)
 {
 #ifdef RONLY
 	global.Res1 = DOSFALSE;
@@ -1149,34 +1238,32 @@ void PRenameDisk()
 	}
 
 	newname = ((char *) BTOC(ARG1)) + 1;
-/*	PRINT(("rename: New name=%.*s\n", *(newname - 1), newname)); */
+/*	PRINT(("renamedisk: New name=%.*s\n", *(newname - 1), newname)); */
 	if (VolNode == NULL) {
-		PRINT(("rename called with NULL Volnode!!\n"));
+		PRINT2(("rename called with NULL Volnode\n"));
 		global.Res1 = DOSFALSE;
 		global.Res2 = 0;
 		return;
 	}
 
-	newlen = *(newname - 1) + 1;
-	if (newlen >= MAXMNTLEN)
-		newlen = MAXMNTLEN - 1;
+	newlen = *(newname - 1);
+	if (newlen >= MAXMNTLEN - 2)
+		newlen = MAXMNTLEN - 2;
 
+	strncpy(superblock->fs_fsmnt + 1, newname, MAXMNTLEN);
 	superblock->fs_fsmnt[0] = '/';
-
-	strncpy(superblock->fs_fsmnt + MAXMNTLEN - newlen, newname, newlen);
-	superblock->fs_fsmnt[MAXMNTLEN - 1] = '\0';
-	superblock->fs_fsmnt[MAXMNTLEN - newlen - 1] = '\0';
+	superblock->fs_fsmnt[newlen + 1] = '\0';
 	superblock->fs_fmod++;
 
 	temp = (char *) AllocMem(MAXMNTLEN, MEMF_PUBLIC);
 	if (temp == NULL) {
-		PRINT(("RenameDisk: unable to allocate %d bytes!\n",
-			newlen + 1));
+		PRINT2(("RenameDisk: unable to allocate %u bytes\n",
+			MAXMNTLEN));
 		global.Res1 = DOSFALSE;
 		return;
 	}
 
-	strcpy(temp + 1, superblock->fs_fsmnt + MAXMNTLEN - newlen);
+	strcpy(temp + 1, superblock->fs_fsmnt + 1);
 	temp[0] = (char) strlen(temp + 1);
 
 	VolNode->dl_Name = CTOB(temp);
@@ -1190,7 +1277,8 @@ void PRenameDisk()
  *	This packet sets permissions on the specified file,
  *	given a lock and a path relative to that lock.
  */
-void PSetProtect()
+void
+PSetProtect(void)
 {
 #ifdef RONLY
 	global.Res1 = DOSFALSE;
@@ -1213,15 +1301,16 @@ void PSetProtect()
 
 	if (inum && (inode = inode_modify(inum))) {
 		temp = DISK16(inode->ic_mode);
-		temp &= ~ (ICHG | ISUID | ISVTX | 0777);
+		temp &= ~(ISUID | ISGID | ISVTX | 0777);
 
-		temp |= (mask & FIBF_ARCHIVE) ? 0 : (IEXEC >> 3);
-		temp |= (mask & FIBF_SCRIPT)  ? ISUID : 0;
-		temp |= (mask & FIBF_PURE)    ? ISVTX : 0;
-		temp |= (mask & FIBF_READ)    ? 0 : IREAD;
-		temp |= (mask & FIBF_WRITE)   ? 0 : IWRITE;
-		temp |= (mask & FIBF_DELETE)  ? 0 : IWRITE;
-		temp |= (mask & FIBF_EXECUTE) ? 0 : IEXEC;
+		/* temp |= (mask & FIBF_ARCHIVE)     ? 0 : (IEXEC >> 3); */
+		temp |= (mask & FIBF_SCRIPT)      ? ISUID : 0;
+		temp |= (mask & FIBF_HIDDEN)      ? ISGID : 0;
+		temp |= (mask & FIBF_PURE)        ? ISVTX : 0;
+		temp |= (mask & FIBF_READ)        ? 0 : IREAD;
+		temp |= (mask & FIBF_WRITE)       ? 0 : IWRITE;
+		temp |= (mask & FIBF_DELETE)      ? 0 : IWRITE;
+		temp |= (mask & FIBF_EXECUTE)     ? 0 : IEXEC;
 		temp |= (mask & FIBF_GRP_READ)    ? 0 : (IREAD  >> 3);
 		temp |= (mask & FIBF_GRP_WRITE)   ? 0 : (IWRITE >> 3);
 		temp |= (mask & FIBF_GRP_DELETE)  ? 0 : (IWRITE >> 3);
@@ -1230,6 +1319,10 @@ void PSetProtect()
 		temp |= (mask & FIBF_OTR_WRITE)   ? 0 : (IWRITE >> 6);
 		temp |= (mask & FIBF_OTR_DELETE)  ? 0 : (IWRITE >> 6);
 		temp |= (mask & FIBF_OTR_EXECUTE) ? 0 : (IEXEC  >> 6);
+		if (og_perm_invert)
+		    temp ^= (((IREAD | IWRITE | IEXEC) >> 3) |
+		             ((IREAD | IWRITE | IEXEC) >> 6));
+
 		inode->ic_mode = DISK16(temp);
 	} else {
 		global.Res1 = DOSFALSE;
@@ -1243,7 +1336,8 @@ void PSetProtect()
  *	This packet sets full UNIX permissions on the specified
  *	file, given a lock and a path relative to that lock.
  */
-void PSetPerms()
+void
+PSetPerms(void)
 {
 #ifdef RONLY
 	global.Res1 = DOSFALSE;
@@ -1274,10 +1368,11 @@ void PSetPerms()
 
 
 /* GetPerms()
- *	This packet sets full UNIX permissions on the specified
+ *	This packet gets full UNIX permissions on the specified
  *	file, given a lock and a path relative to that lock.
  */
-void PGetPerms()
+void
+PGetPerms(void)
 {
 #ifdef RONLY
 	global.Res1 = DOSFALSE;
@@ -1308,7 +1403,8 @@ void PGetPerms()
  *	This packet sets the owner and group of the specified
  *	file, given the name of the file.
  */
-void PSetOwner()
+void
+PSetOwner(void)
 {
 #ifdef RONLY
 	global.Res1 = DOSFALSE;
@@ -1353,10 +1449,11 @@ void PSetOwner()
  *	This packet gets the current volume node which is active
  *	for the filesystem.
  */
-void PCurrentVolume()
+void
+PCurrentVolume(void)
 {
 	if (VolNode == NULL) {
-		PRINT(("CurrentVolume called with NULL Volnode!\n"));
+		PRINT2(("CurrentVolume called with NULL Volnode\n"));
 		NewVolNode();
 	}
 	global.Res1 = CTOB(VolNode);
@@ -1367,7 +1464,8 @@ void PCurrentVolume()
  *	This packet is used to create a second shared lock on an
  *	object identical to the first.
  */
-void PCopyDir()
+void
+PCopyDir(void)
 {
 	struct BFFSLock *lock;
 
@@ -1388,15 +1486,16 @@ PInhibit(void)
     LONG do_inhibit = ARG1;
 
     if (do_inhibit) {
-	PRINT(("INHIBIT\n"));
-	if (inhibited++ == 0) {
+	PRINT(("->INHIBIT %d\n", inhibited));
+	if (inhibited == 0) {
 	    close_files();
 	    close_filesystem();
 	}
+	inhibited++;  /* Must be incremented after close happens above */
     } else {
-	PRINT(("UNINHIBIT\n"));
+	PRINT(("->UNINHIBIT %d\n", inhibited));
 	if (inhibited == 0) {
-	    PRINT(("Already uninhibited!\n"));
+	    PRINT(("Already uninhibited\n"));
 	    global.Res1 = DOSFALSE;
 	    global.Res2 = 0;
 	} else if (--inhibited == 0) {
@@ -1412,12 +1511,15 @@ PInhibit(void)
  *	fsck of the media where fsck modified some data.
  *	Any dirty buffers still in the cache are destroyed!
  */
-void PDiskChange()
+void
+PDiskChange(void)
 {
 	extern int cache_item_dirty;
 
 	if (cache_item_dirty) {
-		PRINT(("WARNING!  Loss of %d dirty frags still in cache!\n"));
+		/* XXX: This should really pop up a requester (corrupted fs) */
+		PRINT1(("WARNING: Loss of %d dirty frags still in cache\n",
+			cache_item_dirty));
 	}
 
 	cache_full_invalidate();
@@ -1431,7 +1533,8 @@ void PDiskChange()
  *	This packet is not implemented, as newfs is required to
  *	lay out new filesystem information.
  */
-void PFormat()
+void
+PFormat(void)
 {
 #ifdef RONLY
 	global.Res1 = DOSFALSE;
@@ -1461,7 +1564,8 @@ void PFormat()
  *	This packet is sent by the dos C:Lock command to protect/
  *	unprotect the media.
  */
-void PWriteProtect()
+void
+PWriteProtect(void)
 {
 #ifdef RONLY
 	global.Res1 = DOSFALSE;
@@ -1482,7 +1586,8 @@ void PWriteProtect()
 /* IsFilesystem()
  *	Always answer yes, unless we failed to open the device.
  */
-void PIsFilesystem()
+void
+PIsFilesystem(void)
 {
 	if (dev_openfail) {
 		global.Res1 = DOSFALSE;
@@ -1494,7 +1599,8 @@ void PIsFilesystem()
 /* Die()
  *	Go away and stop processing packets.
  */
-void PDie()
+void
+PDie(void)
 {
 	close_files();
 	close_filesystem();
@@ -1507,7 +1613,8 @@ void PDie()
 /* Flush()
  *	Manually write the contents of the cache out to disk.
  */
-void PFlush()
+void
+PFlush(void)
 {
 #ifndef RONLY
 	if (!superblock)
@@ -1519,52 +1626,69 @@ void PFlush()
 #endif
 }
 
-
-void PSameLock()
+void
+PSameLock(void)
 {
-	ULONG maxi;
-	struct BFFSLock *lock1;
-	struct BFFSLock *lock2;
+	struct BFFSLock *lock1 = (struct BFFSLock *) BTOC(ARG1);
+	struct BFFSLock *lock2; lock2 = (struct BFFSLock *) BTOC(ARG2);
 
-	lock1 = (struct BFFSLock *) BTOC(ARG1);
-	lock2 = (struct BFFSLock *) BTOC(ARG2);
+	ULONG           key1;
+	ULONG           key2;
+	BPTR            volume1;
+	BPTR            volume2;
+	struct MsgPort *task1;
+	struct MsgPort *task2;
 
-	PRINT(("same_lock: comparing %d and %d\n", lock1->fl_Key, lock2->fl_Key));
+	/* NULL may correspond to root volume */
+	if (lock1 == NULL) {
+	    key1    = ROOTINO;
+	    volume1 = CTOB(VolNode);
+	    task1   = DosPort;
+	} else {
+	    key1    = lock1->fl_Key;
+	    volume1 = lock1->fl_Volume;
+	    task1   = lock1->fl_Task;
+	}
 
-	/* Something (ie: WorkBench) is hosed.  This should not be hardcoded! */
-global.Res1 = LOCK_SAME;
-return;
+	if (lock2 == NULL) {
+	    key2    = ROOTINO;
+	    volume2 = CTOB(VolNode);
+	    task2   = DosPort;
+	} else {
+	    key2    = lock2->fl_Key;
+	    volume2 = lock2->fl_Volume;
+	    task2   = lock2->fl_Task;
+	}
 
-	maxi = DISK32(superblock->fs_ipg) * DISK32(superblock->fs_ncg);
+	PRINT(("same_lock: comparing inode %d and inode %d\n", key1, key2));
 
-	if ((lock1->fl_Key == lock2->fl_Key) &&
-	    (lock1->fl_Access == lock2->fl_Access))
-		global.Res1 = LOCK_SAME;
-	else if (((lock1->fl_Pinum > 1) && (lock1->fl_Pinum < maxi)) &&
-		((lock2->fl_Pinum > 1) && (lock2->fl_Pinum <= maxi)))
-		global.Res1 = LOCK_SAME_HANDLER;
-	else
-		global.Res1 = LOCK_DIFFERENT;
+	if ((volume1 != volume2) || (task1 != task2)) {
+	    /* Different message port or Volume */
+	    global.Res1 = DOSFALSE;
+	    global.Res2 = LOCK_DIFFERENT;
+	} else if (key1 != key2) {
+	    /* Same volume, different inode */
+	    global.Res1 = DOSFALSE;
+	    global.Res2 = LOCK_SAME_HANDLER;  /* LOCK_SAME_VOLUME */
+	} else {
+	    /* Same inode */
+	    global.Res1 = DOSTRUE;
+	    global.Res2 = LOCK_SAME;
+	}
 }
 
-void PFilesysStats()
+void
+PFilesysStats(void)
 {
 	extern struct	cache_set *cache_stack_tail;
 	extern struct	cache_set *hashtable[];
-	extern int	cache_cg_size;
-	extern int	cache_item_dirty;
 	extern int	cache_alloced;
-	extern ULONG	pmax;
-	extern int	case_independent;
 	extern int	unix_paths;
 	extern int	cache_used;
 	extern int	timer_secs;
 	extern int	timer_loops;
 	extern int	link_comments;
 	extern int	inode_comments;
-	extern int	GMT;
-	extern int	og_perm_invert;
-	extern ULONG	poffset;
 
 	stat->superblock	= (ULONG) superblock;
 	stat->cache_head	= (ULONG) &cache_stack_tail;
@@ -1573,8 +1697,8 @@ void PFilesysStats()
 	stat->cache_cg_size	= (ULONG *) &cache_cg_size;
 	stat->cache_item_dirty	= (ULONG *) &cache_item_dirty;
 	stat->cache_alloced	= (ULONG *) &cache_alloced;
-	stat->disk_poffset	= (ULONG *) &poffset;
-	stat->disk_pmax		= (ULONG *) &pmax;
+	stat->disk_poffset	= (ULONG *) &psectoffset;
+	stat->disk_pmax		= (ULONG *) &psectmax;
 	stat->unix_paths	= (ULONG *) &unix_paths;
 	stat->resolve_symlinks	= (ULONG *) &resolve_symlinks;
 	stat->case_independent	= (ULONG *) &case_independent;
@@ -1590,7 +1714,8 @@ void PFilesysStats()
 	global.Res2		= (ULONG) stat;
 }
 
-void PCreateObject()
+void
+PCreateObject(void)
 {
 #ifdef RONLY
 	global.Res1 = DOSFALSE;
@@ -1639,7 +1764,7 @@ void PCreateObject()
 			dir_type = DT_WHT;
 			break;
 		default:
-			PRINT(("bad file type %d for '%s'\n", st_type, name));
+			PRINT1(("bad file type %d for '%s'\n", st_type, name));
 			global.Res2 = ERROR_BAD_NUMBER;
 			goto doserror;
 	}
@@ -1718,7 +1843,8 @@ void PCreateObject()
 #endif
 }
 
-void PMakeLink()
+void
+PMakeLink(void)
 {
 #ifdef RONLY
 	global.Res1 = DOSFALSE;
@@ -1841,7 +1967,8 @@ void PMakeLink()
 #endif
 }
 
-void PReadLink()
+void
+PReadLink(void)
 {
 	int	len;
 	ULONG	inum;
@@ -1851,7 +1978,7 @@ void PReadLink()
 
 	lock = (struct BFFSLock *) BTOC(ARG1);
 	read_link = 1;
-	inum = path_parse(lock, ARG2);
+	inum = path_parse(lock, (char *)ARG2);
 	read_link = 0;
 
 /*
@@ -1871,14 +1998,14 @@ void PReadLink()
 
 	if (linkname) {
 	    len = strlen(linkname);
-	    if (len > ARG4) {
+	    if (len >= ARG4) {
 		global.Res1 = -2;
 		global.Res2 = ERROR_OBJECT_TOO_LARGE;
 		return;
 	    }
 	    global.Res1 = len + 1;
 	    strcpy((char *) ARG3, linkname);
-	    PRINT1(("return name is %s %x\n", ARG3, ARG3));
+	    PRINT(("link name of %s is %s\n", ARG2, linkname));
 	    FreeMem(linkname, len + 2);
 	    return;
 	}
@@ -1887,12 +2014,14 @@ void PReadLink()
 	global.Res2 = ERROR_OBJECT_NOT_FOUND;
 }
 
-void PNil()
+void
+PNil(void)
 {
 }
 
 
-void PSetFileSize()
+void
+PSetFileSize(void)
 {
 #ifdef RONLY
 	global.Res1 = DOSFALSE;
@@ -1911,7 +2040,8 @@ void PSetFileSize()
 }
 
 
-void PSetDate()
+void
+PSetDate(void)
 {
 #ifdef RONLY
 	global.Res1 = DOSFALSE;
@@ -1948,11 +2078,9 @@ void PSetDate()
 
 
 	if (inum) {
-		return;
 		inode = inode_modify(inum);
-		inode->ic_mtime = DISK32((datestamp->ds_Days + 2922) * 86400 +
-				         (datestamp->ds_Minute * 60) - GMT * 3600 +
-				         datestamp->ds_Tick / TICKS_PER_SECOND);
+		inode->ic_mtime = DISK32(amiga_ds_to_unix_time(datestamp));
+		return;
 	}
 
 	global.Res1 = DOSFALSE;
@@ -1960,7 +2088,8 @@ void PSetDate()
 #endif
 }
 
-void PSetDates()
+void
+PSetDates(void)
 {
 #ifdef RONLY
 	global.Res1 = DOSFALSE;
@@ -1968,87 +2097,70 @@ void PSetDates()
 	return;
 #else
 	ULONG	inum;
-	ULONG	ttime;
 	char	*name;
 	struct	BFFSLock *lock;
 	struct	icommon *inode;
 	struct	DateStamp *datestamp;
 
 	if (superblock->fs_ronly) {
-		global.Res1 = DOSFALSE;
-		global.Res2 = ERROR_DISK_WRITE_PROTECTED;
-		return;
+	    global.Res1 = DOSFALSE;
+	    global.Res2 = ERROR_DISK_WRITE_PROTECTED;
+	    return;
 	}
 
 	lock	  =  (struct BFFSLock *) BTOC(ARG2);
-	name	  = 	       ((char *) BTOC(ARG3)) + 1;
+	name	  =	       ((char *) BTOC(ARG3)) + 1;
 	datestamp = (struct DateStamp *) ARG4;
 	inum = path_parse(lock, name);
 
 	if (inum == 0) {
+	    global.Res1 = DOSFALSE;
+	    global.Res2 = ERROR_OBJECT_NOT_FOUND;
+	    return;
+	}
+
+	switch (ARG1) {
+	    case 0:  /* set modify date stamp */
+		inode = inode_modify(inum);
+		inode->ic_mtime = DISK32(amiga_ds_to_unix_time(datestamp));
+		break;
+	    case 1:  /* get modify date stamp */
+		inode = inode_read(inum);
+		unix_time_to_amiga_ds(DISK32(inode->ic_mtime), datestamp);
+		break;
+	    case 2:  /* set change date stamp */
+		inode = inode_modify(inum);
+		inode->ic_ctime = DISK32(amiga_ds_to_unix_time(datestamp));
+		break;
+	    case 3:  /* get change date stamp */
+		inode = inode_read(inum);
+		unix_time_to_amiga_ds(DISK32(inode->ic_ctime), datestamp);
+		break;
+	    case 4:  /* set access date stamp */
+		inode = inode_modify(inum);
+		inode->ic_atime = DISK32(amiga_ds_to_unix_time(datestamp));
+		break;
+	    case 5:  /* get access date stamp */
+		inode = inode_read(inum);
+		unix_time_to_amiga_ds(DISK32(inode->ic_atime), datestamp);
+		break;
+	    default:
 		global.Res1 = DOSFALSE;
-		global.Res2 = ERROR_OBJECT_NOT_FOUND;
-		return;
+		global.Res2 = ERROR_ACTION_NOT_KNOWN;
 	}
 
-	PRINT(("SetDates: %d:%s %d  OPER=%d\n", lock, name, inum, ARG1));
-	PRINT(("day=%d min=%d tick=%d\n", datestamp->ds_Days,
-		datestamp->ds_Minute, datestamp->ds_Tick));
-
-
-	if (inum) {
-	    switch (ARG1) {
-		case 0: /*    set modify date stamp */
-		    inode = inode_modify(inum);
-		    inode->ic_mtime =
-			DISK32((datestamp->ds_Days + 2922) * 86400 +
-			       (datestamp->ds_Minute * 60) - GMT * 3600 +
-			       datestamp->ds_Tick / TICKS_PER_SECOND);
-		    break;
-		case 1: /* return modify date stamp */
-		    ttime = DISK32(inode->ic_mtime) + GMT * 3600;
-		    datestamp->ds_Days = ttime / 86400 - 2922;
-		    datestamp->ds_Minute = (ttime % 86400) / 60;
-		    datestamp->ds_Tick = (ttime % 60) * TICKS_PER_SECOND;
-		    break;
-		case 2: /*    set change date stamp */
-		    inode = inode_modify(inum);
-		    inode->ic_ctime =
-			DISK32((datestamp->ds_Days + 2922) * 86400 +
-			       (datestamp->ds_Minute * 60) - GMT * 3600 +
-			       datestamp->ds_Tick / TICKS_PER_SECOND);
-		    break;
-		case 3: /* return change date stamp */
-		    ttime = DISK32(inode->ic_ctime) + GMT * 3600;
-		    datestamp->ds_Days = ttime / 86400 - 2922;
-		    datestamp->ds_Minute = (ttime % 86400) / 60;
-		    datestamp->ds_Tick = (ttime % 60) * TICKS_PER_SECOND;
-		    break;
-		case 4: /*    set access date stamp */
-		    inode = inode_modify(inum);
-		    inode->ic_atime =
-			DISK32((datestamp->ds_Days + 2922) * 86400 +
-			       (datestamp->ds_Minute * 60) - GMT * 3600 +
-			       datestamp->ds_Tick / TICKS_PER_SECOND);
-		    break;
-		case 5: /* return access date stamp */
-		    ttime = DISK32(inode->ic_atime) + GMT * 3600;
-		    datestamp->ds_Days = ttime / 86400 - 2922;
-		    datestamp->ds_Minute = (ttime % 86400) / 60;
-		    datestamp->ds_Tick = (ttime % 60) * TICKS_PER_SECOND;
-		    break;
-		default:
-		    global.Res1 = DOSFALSE;
-		    global.Res2 = ERROR_ACTION_NOT_KNOWN;
-	    }
-	}
+	PRINT(("%cetDates: %d:%s %d  OP=%d day=%d min=%d tick=%d\n",
+	       (ARG1 & 1) ? 'G' : 'S', lock, name, inum, ARG1,
+	       datestamp->ds_Days, datestamp->ds_Minute, datestamp->ds_Tick));
 #endif
 }
 
 
-/* Nearly identical to PSetDates, but does so with UNIX Date
-   as parameter (does not convert at all) */
-void PSetTimes()
+/* PSetTimes() is nearly identical to PSetDates, but does so with UNIX
+ * time as parameter (does not convert, but does adjust for timezone)
+ */
+void
+PSetTimes(void)
 {
 #ifdef RONLY
 	global.Res1 = DOSFALSE;
@@ -2062,176 +2174,140 @@ void PSetTimes()
 	struct	icommon *inode;
 
 	if (superblock->fs_ronly) {
-		global.Res1 = DOSFALSE;
-		global.Res2 = ERROR_DISK_WRITE_PROTECTED;
-		return;
+	    global.Res1 = DOSFALSE;
+	    global.Res2 = ERROR_DISK_WRITE_PROTECTED;
+	    return;
 	}
 
-	lock	=  (struct BFFSLock *) BTOC(ARG2);
-	name	= 	       ((char *) BTOC(ARG3)) + 1;
-	ttime	=  (ULONG *) ARG4;
+	lock	= (struct BFFSLock *) BTOC(ARG2);
+	name	= ((char *) BTOC(ARG3)) + 1;
+	ttime	= (ULONG *) ARG4;
 	inum	= path_parse(lock, name);
 
 	if (inum == 0) {
+	    global.Res1 = DOSFALSE;
+	    global.Res2 = ERROR_OBJECT_NOT_FOUND;
+	    return;
+	}
+
+	switch (ARG1) {
+	    case 0:  /* set modify date stamp */
+		inode = inode_modify(inum);
+		inode->ic_mtime    = DISK32(ttime[0] - GMT * 3600);
+		inode->ic_mtime_ns = DISK32(ttime[1]);
+		break;
+	    case 1:  /* get modify date stamp */
+		inode = inode_read(inum);
+		ttime[0] = DISK32(inode->ic_mtime) + GMT * 3600;
+		ttime[1] = DISK32(inode->ic_mtime_ns);
+		break;
+	    case 2:  /* set change date stamp */
+		inode = inode_modify(inum);
+		inode->ic_ctime    = DISK32(ttime[0] - GMT * 3600);
+		inode->ic_ctime_ns = DISK32(ttime[1]);
+		break;
+	    case 3:  /* get change date stamp */
+		inode = inode_read(inum);
+		ttime[0] = DISK32(inode->ic_ctime) + GMT * 3600;
+		ttime[1] = DISK32(inode->ic_ctime_ns);
+		break;
+	    case 4:  /* set access date stamp */
+		inode = inode_modify(inum);
+		inode->ic_atime    = DISK32(ttime[0] - GMT * 3600);
+		inode->ic_atime_ns = DISK32(ttime[1]);
+		break;
+	    case 5:  /* get access date stamp */
+		inode = inode_read(inum);
+		ttime[0] = DISK32(inode->ic_atime) + GMT * 3600;
+		ttime[1] = DISK32(inode->ic_atime_ns);
+		break;
+	    default:
 		global.Res1 = DOSFALSE;
-		global.Res2 = ERROR_OBJECT_NOT_FOUND;
-		return;
+		global.Res2 = ERROR_ACTION_NOT_KNOWN;
 	}
+	PRINT(("%cetTimes: %d:%s %d  OP=%d t=%d:%d\n",
+		(ARG1 & 1) ? 'G' : 'S',
+		lock, name, inum, ARG1, ttime[0], ttime[1]));
 
-	PRINT2(("SetTimes: %d:%s %d  OPER=%d t=%x t=%d:%d\n",
-		lock, name, inum, ARG1, ttime, ttime[0], ttime[1]));
-
-
-	if (inum) {
-	    switch (ARG1) {
-		case 0: /*    set modify date stamp */
-		    inode = inode_modify(inum);
-		    inode->ic_mtime	= DISK32(ttime[0]) - GMT * 3600;
-		    inode->ic_mtime_ns	= DISK32(ttime[1]);
-		    break;
-		case 1: /* return modify date stamp */
-		    inode = inode_read(inum);
-		    ttime[0] = DISK32(inode->ic_mtime) + GMT * 3600;
-		    ttime[1] = DISK32(inode->ic_mtime_ns);
-		    break;
-		case 2: /*    set change date stamp */
-		    inode = inode_modify(inum);
-		    inode->ic_ctime	= DISK32(ttime[0]) - GMT * 3600;
-		    inode->ic_ctime_ns	= DISK32(ttime[1]);
-		    break;
-		case 3: /* return change date stamp */
-		    inode = inode_read(inum);
-		    ttime[0] = DISK32(inode->ic_ctime) + GMT * 3600;
-		    ttime[1] = DISK32(inode->ic_ctime_ns);
-		    break;
-		case 4: /*    set access date stamp */
-		    inode = inode_modify(inum);
-		    inode->ic_atime	= DISK32(ttime[0]) - GMT * 3600;
-		    inode->ic_atime_ns	= DISK32(ttime[1]);
-		    break;
-		case 5: /* return access date stamp */
-		    inode = inode_read(inum);
-		    ttime[0] = DISK32(inode->ic_atime) + GMT * 3600;
-		    ttime[1] = DISK32(inode->ic_atime_ns);
-		    break;
-		default:
-		    global.Res1 = DOSFALSE;
-		    global.Res2 = ERROR_ACTION_NOT_KNOWN;
-	    }
-	}
 #endif
 }
 
 
 /*
- *  This code is mainly identical to that of PExamine()
+ * Return file information on the specified file handle.
+ * See also: PExamineObject()
  */
-void PExamineFh()
+void
+PExamineFh(void)
 {
-    struct BFFSfh *fileh;
-    ULONG  inum;
-    char   *buf;
-    ULONG  filesize;
-    struct BFFSLock	 *lock;
-    struct FileInfoBlock *fib;
-    struct direct	 *dir_ent = NULL;
-    struct icommon	 *inode;
+    struct BFFSfh     *fileh = (struct BFFSfh *) ARG1;
+    struct BFFSLock   *lock  = (struct BFFSLock *) fileh->lock;
+    FileInfoBlock_3_t *fib   = (FileInfoBlock_3_t *) BTOC(ARG2);
 
-    PRINT(("ExamineFh\n"));
-
-    fileh = (struct BFFSfh *) ARG1;
-    lock = (struct BFFSLock *) fileh->lock;
-    fib  = (struct FileInfoBlock *) BTOC(ARG2);
-
-    UPSTAT(examines);
-    inum = lock->fl_Key;
-    fib->fib_DirOffset = MSb;
-
-    inode = inode_read(inum);
-
-    if (inum != ROOTINO)
-	if ((DISK16(inode->ic_mode) & IFMT) == IFLNK)
-	    if (resolve_symlinks) {
-		filesize = IC_SIZE(inode);
-		buf = (char *) AllocMem(filesize, MEMF_PUBLIC);
-		file_read(inum, 0, filesize, buf);
-		inum = file_find(lock->fl_Pinum, buf);
-		FreeMem(buf, filesize);
-		if (inum) {
-		    dir_ent = dir_next(inode_read(global.Pinum), global.Poffset);
-		    PRINT(("resolved link: %d to %d (%s)\n", lock->fl_Key,
-			   inum, dir_ent->d_name));
-		    inode = inode_read(inum);
-		    lock->fl_Key     = inum;
-		    lock->fl_Pinum   = global.Pinum;
-		    lock->fl_Poffset = global.Poffset;
-		} else {
-		    global.Res1 = DOSFALSE;
-		    global.Res2 = ERROR_OBJECT_NOT_FOUND;
-		    return;
-		}
-	    } else {
-		global.Res1 = DOSFALSE;
-		global.Res2 = ERROR_IS_SOFT_LINK;
-		return;
-	    }
-	else
-	    dir_ent = dir_next(inode_read(lock->fl_Pinum), lock->fl_Poffset);
-
-    FillInfoBlock(fib, lock, inode, dir_ent);
+    examine_common(lock, fib, NULL);
 }
 
 /* These below are commented out because they are not implemented yet.
-void PDiskType() {
+void
+PDiskType(void) {
 	PRINT(("DiskType\n"));
 	global.Res1 = DOSFALSE;
 	global.Res2 = ERROR_ACTION_NOT_KNOWN;
 }
 
-void PFhFromLock() {
+void
+PFhFromLock(void) {
 	PRINT(("FhFromLock\n"));
 	global.Res1 = DOSFALSE;
 	global.Res2 = ERROR_ACTION_NOT_KNOWN;
 }
 
-void PCopyDirFh() {
+void
+PCopyDirFh(void) {
 	PRINT(("CopyDirFh\n"));
 	global.Res1 = DOSFALSE;
 	global.Res2 = ERROR_ACTION_NOT_KNOWN;
 }
 
-void PParentFh() {
+void
+PParentFh(void) {
 	PRINT(("ParentFh\n"));
 	global.Res1 = DOSFALSE;
 	global.Res2 = ERROR_ACTION_NOT_KNOWN;
 }
 
-void PExamineAll() {
+void
+PExamineAll(void) {
 	PRINT(("ExamineAll\n"));
 	global.Res1 = DOSFALSE;
 	global.Res2 = ERROR_ACTION_NOT_KNOWN;
 }
 
-void PAddNotify() {
+void
+PAddNotify(void) {
 	PRINT(("AddNotify\n"));
 	global.Res1 = DOSFALSE;
 	global.Res2 = ERROR_ACTION_NOT_KNOWN;
 }
 
-void PRemoveNotify() {
+void
+PRemoveNotify(void) {
 	PRINT(("RemoveNotify\n"));
 	global.Res1 = DOSFALSE;
 	global.Res2 = ERROR_ACTION_NOT_KNOWN;
 }
 */
 
-void PGetDiskFSSM()
+void
+PGetDiskFSSM(void)
 {
 	PRINT(("Get the FFSM\n"));
-	global.Res1 = BTOC(DevNode->dn_Startup);
+	global.Res1 = (ULONG) BTOC(DevNode->dn_Startup);
 }
 
-void PFreeDiskFSSM()
+void
+PFreeDiskFSSM(void)
 {
 	PRINT(("Free the FFSM\n"));
+	/* Nothing to do, since the FSSM was not allocated per caller */
 }

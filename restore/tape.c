@@ -142,6 +142,7 @@ setinput(source)
 	} else
 #endif
 	if (strcmp(source, "-") == 0) {
+#ifndef AMIGA
 		/*
 		 * Since input is coming from a pipe we must establish
 		 * our own connection to the terminal.
@@ -157,6 +158,7 @@ setinput(source)
 				exit(1);
 			}
 		}
+#endif
 		pipein++;
 	}
 #ifndef AMIGA
@@ -534,7 +536,11 @@ extractfile(name)
 {
 	int flags;
 	mode_t mode;
+#ifdef AMIGA
+	unix_timeval_t timep[2];
+#else
 	struct timeval timep[2];
+#endif
 	struct entry *ep;
 
 	curfile.name = name;
@@ -736,7 +742,7 @@ getfile(fill, skip)
 	char buf[MAXBSIZE / TP_BSIZE][TP_BSIZE];
 	char junk[TP_BSIZE];
 
-	size = QUAD(spcl.c_dinode.di_size);
+	size = spcl.c_dinode.di_size;
 
 	if (spcl.c_type == TS_END)
 		panic("ran off end of tape\n");
@@ -1159,7 +1165,7 @@ gethead(buf)
 
 good:
 #ifdef cdh
-	if ((QUAD(buf->c_dinode.di_size) == 0) &&
+	if ((buf->c_dinode.di_size == 0) &&
 #else
 	if ((buf->c_dinode.di_size == 0 || buf->c_dinode.di_size > 0xfffffff) &&
 #endif
@@ -1186,7 +1192,7 @@ good:
 		 * Have to patch up missing information in bit map headers
 		 */
 		buf->c_inumber = 0;
-		QUAD(buf->c_dinode.di_size) = buf->c_count * TP_BSIZE;
+		buf->c_dinode.di_size = buf->c_count * TP_BSIZE;
 		for (i = 0; i < buf->c_count; i++)
 			buf->c_addr[i]++;
 		break;

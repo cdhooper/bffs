@@ -68,11 +68,19 @@ ckinode(dp, idesc)
 	if (idesc->id_fix != IGNORE)
 		idesc->id_fix = DONTKNOW;
 	idesc->id_entryno = 0;
+#ifdef cdh
+	idesc->id_filesize = dp->di_qsize;
+#else
 	idesc->id_filesize.val[0] = dp->di_size.val[0];
 	idesc->id_filesize.val[1] = dp->di_size.val[1];
+#endif
 	mode = dp->di_mode & IFMT;
 	if (mode == IFBLK || mode == IFCHR || (mode == IFLNK &&
+#ifdef cdh
+	    (dp->di_size < sblock.fs_maxsymlinklen ||
+#else
 	    (dp->di_size.val[1] < sblock.fs_maxsymlinklen ||
+#endif
 	     (sblock.fs_maxsymlinklen == 0 && dp->di_blocks == 0))))
 		return (KEEPON);
 
@@ -83,10 +91,10 @@ ckinode(dp, idesc)
 /*	dino = *dp; */
 	bcopy(dp, dino, sizeof(struct dinode));
 
-	ndb = howmany(S32(dino->di_size), sblock.fs_bsize);
+	ndb = howmany(dino->di_size, sblock.fs_bsize);
 	for (ap = &dino->di_db[0]; ap < &dino->di_db[NDADDR]; ap++) {
 		if ((--ndb == 0) &&
-		    ((offset = blkoff(&sblock, S32(dino->di_size))) != 0))
+		    ((offset = blkoff(&sblock, dino->di_size)) != 0))
 			idesc->id_numfrags =
 				numfrags(&sblock, fragroundup(&sblock, offset));
 		else
@@ -104,7 +112,7 @@ ckinode(dp, idesc)
 		}
 	}
 	idesc->id_numfrags = sblock.fs_frag;
-	remsize = S32(dino->di_size) - sblock.fs_bsize * NDADDR;
+	remsize = dino->di_size - sblock.fs_bsize * NDADDR;
 	sizepb = sblock.fs_bsize;
 	for (ap = &dino->di_ib[0], n = 1; n <= NIADDR; ap++, n++) {
 		if (*ap) {
@@ -324,6 +332,9 @@ freeinodebuf()
  *
  * Enter inodes into the cache.
  */
+#ifdef cdh
+void
+#endif
 cacheino(dp, inumber)
 	register struct dinode *dp;
 	ino_t inumber;
@@ -332,7 +343,7 @@ cacheino(dp, inumber)
 	struct inoinfo **inpp;
 	unsigned int blks;
 
-	blks = howmany(S32(dp->di_size), sblock.fs_bsize);
+	blks = howmany(dp->di_size, sblock.fs_bsize);
 	if (blks > NDADDR)
 		blks = NDADDR + NIADDR;
 	inp = (struct inoinfo *)
@@ -345,7 +356,7 @@ cacheino(dp, inumber)
 	inp->i_parent = (ino_t)0;
 	inp->i_dotdot = (ino_t)0;
 	inp->i_number = inumber;
-	inp->i_isize = S32(dp->di_size);
+	inp->i_isize = dp->di_size;
 	inp->i_numblks = blks * sizeof(daddr_t);
 	bcopy((char *)&dp->di_db[0], (char *)&inp->i_blks[0],
 	    (size_t)inp->i_numblks);
@@ -380,6 +391,7 @@ getinoinfo(inumber)
 /*
  * Clean up all the inode cache structure.
  */
+int
 inocleanup()
 {
 	register struct inoinfo **inpp;
@@ -475,7 +487,7 @@ pinode(ino)
 	if (preen)
 		printf("%s: ", cdevname);
 #ifdef cdh
-	printf("SIZE=%d ", S32(dp->di_size));
+	printf("SIZE=%u ", dp->di_size);
 #else
 	printf("SIZE=%qu ", dp->di_size);
 #endif
@@ -551,7 +563,7 @@ allocino(request, type)
 	dp->di_mode = type;
 	(void)time(&dp->di_atime.ts_sec);
 	dp->di_mtime = dp->di_ctime = dp->di_atime;
-	S32(dp->di_size) = sblock.fs_fsize;
+	dp->di_size = sblock.fs_fsize;
 	dp->di_blocks = btodb(sblock.fs_fsize);
 	n_files++;
 	inodirty();

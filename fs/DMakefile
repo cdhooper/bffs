@@ -1,72 +1,51 @@
-PROG=/bin/dbprint
-FS=/fs/bffs
-CC=dcc
-#CFLAGS=-ms -r -proto
-CFLAGS=-ms -r
-ASM=das
-RM = -delete force >NIL:
+#
+# Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted so long as any redistribution retains the
+# above copyright notice, this condition, and the below disclaimer.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
 
-OD=obj/
-OBJS=$(OD)stack.o $(OD)handler.o $(OD)debug.o $(OD)packets.o $(OD)ufs.o $(OD)system.o $(OD)fread.o $(OD)fwrite.o $(OD)file.o $(OD)inode.o $(OD)cache.o $(OD)dir.o $(OD)table.o $(OD)alloc.o $(OD)config.o $(OD)request.o $(OD)inthand.o
+LDIR=/l
 
-all:  $(FS) $(PROG)
+all: bffs bffs.debug bffs.ro bffs.rofast bffs.rointel
 
-$(FS): $(OBJS)
-	$(CC) $(CFLAGS) %(right:*.o) -o %(left)
+bffs.debug:
+	@set CFLAGS_ADD=-DDEBUG
+	@dmake -q -f DMakefile.3 -DOBJ obj.debug -DFS $(LDIR)/BFFSFilesystem.debug
 
-$(PROG): dbprint.c
-	$(CC) $(CFLAGS) %(right:*.c) -o %(left)
+bffs:
+	@set CFLAGS_ADD=""
+	@dmake -q -f DMakefile.3 -DOBJ obj -DFS $(LDIR)/BFFSFilesystem
 
-$(OD)ufs.o: ufs.c config.h handler.h superblock.h ufs.h fsmacros.h file.h stat.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+bffs.ro:
+	@set CFLAGS_ADD=-DRONLY
+	@dmake -q -f DMakefile.3 -DOBJ obj.ro -DFS $(LDIR)/BFFSFilesystem.ro
 
-$(OD)handler.o: handler.c config.h handler.h packets.h table.h stat.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
+bffs.rofast:
+	@set CFLAGS_ADD=-DRONLY -DFAST
+	@dmake -q -f DMakefile.3 -DOBJ obj.rofast -DFS $(LDIR)/BFFSFilesystem.rofast
 
-$(OD)debug.o: debug.c config.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
-
-$(OD)packets.o: packets.c config.h superblock.h fsmacros.h packets.h system.h handler.h file.h cache.h stat.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
-
-$(OD)system.o: system.c config.h handler.h superblock.h ufs.h fsmacros.h packets.h system.h stat.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
-
-$(OD)fread.o: fread.c config.h ufs.h superblock.h fsmacros.h file.h handler.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
-
-$(OD)fwrite.o: fwrite.c config.h fsmacros.h file.h alloc.h cache.h handler.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
-
-$(OD)file.o: file.c config.h handler.h ufs.h file.h cache.h alloc.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
-
-$(OD)inode.o: inode.c config.h superblock.h file.h cache.h alloc.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
-
-$(OD)cache.o: cache.c config.h superblock.h ufs.h fsmacros.h cache.h file.h handler.h stat.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
-
-$(OD)dir.o: dir.c config.h ufs.h file.h handler.h cache.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
-
-$(OD)table.o: table.c config.h table.h packets.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
-
-$(OD)request.o: request.c config.h request.h config.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
-
-$(OD)alloc.o: alloc.c config.h superblock.h alloc.h fsmacros.h cache.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
-
-$(OD)config.o: config.c alloc.h
-	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
-
-$(OD)inthand.o: inthand.asm
-	$(ASM) %(right:*.asm) -o %(left)
-
-$(OD)stack.o: stack.asm
-	$(ASM) %(right:*.asm) -o %(left)
+bffs.rointel:
+	@set CFLAGS_ADD=-DRONLY -DINTEL
+	@dmake -q -f DMakefile.3 -DOBJ obj.rointel -DFS $(LDIR)/BFFSFilesystem.rointel
 
 clean:
-	$(RM) $(OBJS) $(PROG) $(FS)
+	@set CFLAGS_ADD=""
+	@dmake clean -q -f DMakefile.3 -DOBJ obj -DFS $(LDIR)/BFFSFilesystem
+	@dmake clean -q -f DMakefile.3 -DOBJ obj.debug -DFS $(LDIR)/BFFSFilesystem.debug
+	@dmake clean -q -f DMakefile.3 -DOBJ obj.ro -DFS $(LDIR)/BFFSFilesystem.ro
+	@dmake clean -q -f DMakefile.3 -DOBJ obj.rofast -DFS $(LDIR)/BFFSFilesystem.rofast
+	@dmake clean -q -f DMakefile.3 -DOBJ obj.rointel -DFS $(LDIR)/BFFSFilesystem.rointel

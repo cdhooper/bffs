@@ -1,0 +1,7 @@
+dump utility seems to skip some files in the dump image, which are then
+reported as errors by restore as:
+    expected next file xxxx, got yyy0
+    expected next file xxxx, got yyy1
+    expected next file xxxx, got yyy2
+    expected next file xxxx, got yyy3
+    ...

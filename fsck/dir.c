@@ -75,8 +75,8 @@ void
 dirblk_setup(void)
 {
 	emptydir.dot_reclen = DIRBLKSIZ;
-	dirhead.dotdot_namlen = DIRBLKSIZ - 12;
-	odirhead.dotdot_namlen = DIRBLKSIZ - 12;
+	dirhead.dotdot_reclen = DIRBLKSIZ - 12;
+	odirhead.dotdot_reclen = DIRBLKSIZ - 12;
 }
 #endif
 
@@ -433,7 +433,7 @@ linkup(orphan, parentdir)
 	lostdir = (dp->di_mode & IFMT) == IFDIR;
 	pwarn("UNREF %s ", lostdir ? "DIR" : "FILE");
 	pinode(orphan);
-	if (preen && S32(dp->di_size) == 0)
+	if (preen && dp->di_size == 0)
 		return (0);
 	if (preen)
 		printf(" (RECONNECTED)\n");
@@ -588,8 +588,8 @@ makeentry(parent, ino, name)
 	idesc.id_fix = DONTKNOW;
 	idesc.id_name = name;
 	dp = ginode(parent);
-	if (S32(dp->di_size) % DIRBLKSIZ) {
-		S32(dp->di_size) = roundup(S32(dp->di_size), DIRBLKSIZ);
+	if (dp->di_size % DIRBLKSIZ) {
+		dp->di_size = roundup(dp->di_size, DIRBLKSIZ);
 		inodirty();
 	}
 	if ((ckinode(dp, &idesc) & ALTERED) != 0) {
@@ -616,14 +616,14 @@ expanddir(dp, name)
 	char *cp;
 	char *firstblk;
 
-	lastbn = lblkno(&sblock, S32(dp->di_size));
-	if (lastbn >= NDADDR - 1 || dp->di_db[lastbn] == 0 || S32(dp->di_size) == 0)
+	lastbn = lblkno(&sblock, dp->di_size);
+	if (lastbn >= NDADDR - 1 || dp->di_db[lastbn] == 0 || dp->di_size == 0)
 		return (0);
 	if ((newblk = allocblk(sblock.fs_frag)) == 0)
 		return (0);
 	dp->di_db[lastbn + 1] = dp->di_db[lastbn];
 	dp->di_db[lastbn] = newblk;
-	S32(dp->di_size) += sblock.fs_bsize;
+	dp->di_size += sblock.fs_bsize;
 	dp->di_blocks += btodb(sblock.fs_bsize);
 	bp = getdirblk(dp->di_db[lastbn + 1],
 		(long)dblksize(&sblock, dp, lastbn + 1));
@@ -662,7 +662,7 @@ expanddir(dp, name)
 bad:
 	dp->di_db[lastbn] = dp->di_db[lastbn + 1];
 	dp->di_db[lastbn + 1] = 0;
-	S32(dp->di_size) -= sblock.fs_bsize;
+	dp->di_size -= sblock.fs_bsize;
 	dp->di_blocks -= btodb(sblock.fs_bsize);
 	freeblk(newblk, sblock.fs_frag);
 	return (0);

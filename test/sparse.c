@@ -1,4 +1,6 @@
 /*
+ * fs_sparse
+ *
  * This program test creates many sparse files in the filesystem
  * by writing a random amount at the start, then seeking a random
  * offset and writing another random amount.
@@ -7,12 +9,18 @@
  * as well.  Neither of these filesystems support sparse files.
  * BFFS could be enhanced to support them in the future.
  */
+
+const char *version = "\0$VER: fs_sparse 1.9 (19-Jan-2018) © Chris Hooper";
+
 #include <stdio.h>
 #include <fcntl.h>
-#ifndef AMIGA
 #include <stdlib.h>
-#include <unistd.h>
 #include <time.h>
+#ifdef AMIGA
+#define MKDIR(x,y) mkdir(x)
+#else
+#define MKDIR(x,y) mkdir(x,y)
+#include <unistd.h>
 #include <signal.h>
 #include <sys/stat.h>
 #endif
@@ -151,10 +159,11 @@ printstats(void)
 	printf(" ops/sec]\n");
 }
 
-void
 #ifdef AMIGA
+int
 break_abort(void)
 #else
+void
 break_abort(int sig)
 #endif
 {
@@ -180,7 +189,7 @@ main(int argc, char *argv[])
 		exit(1);
 	}
 
-	mkdir(path, 0755);
+	MKDIR(path, 0755);
 
 	for (index = 0; index < BUFMAX; index++)
 		wbuffer[index] = rand() & 0xff;

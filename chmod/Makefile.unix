@@ -1,0 +1,24 @@
+DOTDOT=..
+PROG=$(DOTDOT)/bin/chmod
+CC=gcc
+RM=rm -rf
+CFLAGS=-Dcdh -O2
+OBJ=obj.unix
+OBJS=$(OBJ)/chmod.o
+
+all: $(PROG)
+	@true
+
+$(PROG): $(OBJS)
+	$(CC) $(CFLAGS) -o $(PROG) $(OBJS)
+
+$(OBJS): | $(OBJ)
+
+$(OBJ):
+	mkdir $@
+
+$(OBJ)/chmod.o: chmod.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	$(RM) $(OBJ) $(PROG)

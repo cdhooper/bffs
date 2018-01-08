@@ -1,4 +1,27 @@
-/* Dos lock with extensions of parent inum and parent offset */
+/*
+ * Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted so long as any redistribution retains the
+ * above copyright notice, this condition, and the below disclaimer.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#ifndef _PACKETS_H
+#define _PACKETS_H
+
+/* DOS lock with extensions of parent inum and parent offset */
 struct BFFSLock  {
 	BPTR	fl_Link;	  /* next Dos Lock */
 	LONG	fl_Key;		  /* inode number */
@@ -10,7 +33,7 @@ struct BFFSLock  {
 	struct	BFFSfh *fl_Fileh; /* filehandle (if exists) for this lock */
 };
 
-/* file handle, used for file IO */
+/* File handle, used for file IO */
 struct BFFSfh  {
 	struct	BFFSLock *lock;	  /* pointer to lock defining filehandle */
 	ULONG	current_position; /* current file byte to be accessed */
@@ -22,59 +45,58 @@ struct BFFSfh  {
 
 
 /* Packet routines - specified by table code */
-void PUnimplemented();
-void PLocateObject();
-
+void PUnimplemented(void);
+void PLocateObject(void);
 void PExamineObject(void);
 void PExamineNext(void);
-void PFindInput();
-void PFindOutput();
-void PRead();
-void PWrite();
-void PSeek();
-void PEnd();
-void PParent();
-void PDeviceInfo();
-void PDeleteObject();
-void PMoreCache();
-void PRenameDisk();
-void PSetProtect();
-void PGetPerms();
-void PSetPerms();
-void PCurrentVolume();
-void PCopyDir();
-void PInhibit();
-void PDiskChange();
-void PFormat();
-void PWriteProtect();
-void PIsFilesystem();
-void PDie();
-void PFlush();
-void PSameLock();
-void PRenameObject();
-void PCreateDir();
-void PFilesysStats();
-void PCreateObject();
-void PMakeLink();
-void PReadLink();
-void PSetFileSize();
-void PSetDate();
-void PSetDates();
-void PSetTimes();
-void PSetOwner();
-void PDiskType();
-void PFhFromLock();
-void PCopyDirFh();
-void PParentFh();
-void PExamineFh();
-void PExamineAll();
-void PAddNotify();
-void PRemoveNotify();
-void PNil();
-void PFileSysStats();
-void PFreeLock();
-void PGetDiskFSSM();
-void PFreeDiskFSSM();
+void PFindInput(void);
+void PFindOutput(void);
+void PRead(void);
+void PWrite(void);
+void PSeek(void);
+void PEnd(void);
+void PParent(void);
+void PDeviceInfo(void);
+void PDeleteObject(void);
+void PMoreCache(void);
+void PRenameDisk(void);
+void PSetProtect(void);
+void PGetPerms(void);
+void PSetPerms(void);
+void PCurrentVolume(void);
+void PCopyDir(void);
+void PInhibit(void);
+void PDiskChange(void);
+void PFormat(void);
+void PWriteProtect(void);
+void PIsFilesystem(void);
+void PDie(void);
+void PFlush(void);
+void PSameLock(void);
+void PRenameObject(void);
+void PCreateDir(void);
+void PFilesysStats(void);
+void PCreateObject(void);
+void PMakeLink(void);
+void PReadLink(void);
+void PSetFileSize(void);
+void PSetDate(void);
+void PSetDates(void);
+void PSetTimes(void);
+void PSetOwner(void);
+void PDiskType(void);
+void PFhFromLock(void);
+void PCopyDirFh(void);
+void PParentFh(void);
+void PExamineFh(void);
+void PExamineAll(void);
+void PAddNotify(void);
+void PRemoveNotify(void);
+void PNil(void);
+void PFileSysStats(void);
+void PFreeLock(void);
+void PGetDiskFSSM(void);
+void PFreeDiskFSSM(void);
 
 /* key is or'd with MSb on first examine */
 #define MSb 1<<31
@@ -89,7 +111,7 @@ void PFreeDiskFSSM();
 #ifdef BTOC
 #undef BTOC
 #endif
-#define BTOC(x) (((unsigned long) x)<<2)
+#define BTOC(x) ((void *)(((unsigned long) x)<<2))
 
 /* access modes */
 #define MODE_READ	0
@@ -98,3 +120,7 @@ void PFreeDiskFSSM();
 /* truncate modes */
 #define MODE_UPDATE	0
 #define MODE_TRUNCATE	1
+
+void FreeLock(struct BFFSLock *lock);
+
+#endif /* _PACKETS_H */

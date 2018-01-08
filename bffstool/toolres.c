@@ -1,5 +1,5 @@
-/* toolres.c version 1.5  (BFFStool)
- *      This program is copyright (1993 - 1996) Chris Hooper.  All code
+/* toolres.c version (BFFStool)
+ *      This program is copyright (1993 - 2018) Chris Hooper.  All code
  *      herein is freeware.  No portion of this code may be sold for profit.
  */
 
@@ -16,7 +16,7 @@ struct NewWindow window_ops =
 	ACTIVATE | WINDOWDRAG | WINDOWDEPTH | WINDOWCLOSE | SIMPLE_REFRESH,
 	NULL,
 	NULL,
-	"Berkeley Fast Filesystem (BFFS) status tool V1.5",
+	"Berkeley Fast Filesystem (BFFS) status tool V1.6",
 	NULL,
 	NULL,
 	0, 0, 0, 0,
