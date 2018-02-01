@@ -1,5 +1,5 @@
-tdev:
-    FileSystem = bffssrc:fs/BFFSFileSystem
+fms21:
+    FileSystem = fs:BFFSFileSystem
     Device = fmsdisk.device
     Sectorsize = 512
     Unit = 21
@@ -9,11 +9,11 @@ tdev:
     Priority = -1
     GlobVec = -1
     LowCyl = 0
-    HighCyl = 1
+    HighCyl = 10
     Surfaces = 64
     BlocksPerTrack = 32
     Buffers = 64
     Reserved = 0;
-    PreAlloc = 0x701;
+    PreAlloc = 0xf800
     DosType = 0x42464653   /* BFFS */
 #

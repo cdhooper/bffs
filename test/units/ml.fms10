@@ -1,0 +1,18 @@
+fms10:
+    FileSystem = fs:BFFSFileSystem.ro
+    Device = fmsdisk.device
+    Unit = 10
+    Flags = 0
+    Mount = 1
+    Stacksize = 512
+    BlocksPerTrack = 18
+    Surfaces = 2
+    LowCyl   = 0
+    HighCyl  = 79
+    Priority = -1
+    GlobVec  = -1
+    Buffers  = 32
+    Reserved = -1
+    PreAlloc = 0
+    DosType  = 0x42464653 /* BFFS */
+

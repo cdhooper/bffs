@@ -1,0 +1,16 @@
+fms7:
+    FileSystem = l:BFFSFileSystem.both
+    Device = fmsdisk.device
+    Unit = 7
+    Flags = 0
+    Mount = 1
+    Stacksize = 512
+    Priority = 0
+    GlobVec = -1
+    LowCyl = 0
+    HighCyl = 7
+    Surfaces = 10
+    BlocksPerTrack = 22
+    Buffers = 32
+    Reserved = 0;  /* Unix partition */
+#

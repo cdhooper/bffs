@@ -22,7 +22,7 @@ PROG=/bin/rdb
 
 RM=-delete force >NIL:
 CC=dcc
-CFLAGS=-O2 -r -proto -ms
+CFLAGS=-O2 -ms -r -proto -ms
 
 $(PROG): rdb.c
 	$(CC) $(CFLAGS) %(right) -o %(left)

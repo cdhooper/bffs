@@ -1,0 +1,22 @@
+Autosizing file label:  [count=4352] cyl=32 trk=4 sec=34
+# units/Unit17:
+type: SCSI
+disk: SCSI
+label: 
+flags:
+bytes/sector: 512
+sectors/track: 34
+tracks/cylinder: 4
+sectors/cylinder: 136
+cylinders: 32
+rpm: 3600
+interleave: 1
+trackskew: 0
+cylinderskew: 0
+headswitch: 0		# milliseconds
+track-to-track seek: 0	# milliseconds
+drivedata: 0 
+
+1 partitions:
+#        size   offset    fstype   [fsize bsize   cpg]
+  a:     4352        0    unused        0     0       	# (Cyl.    0 - 31)

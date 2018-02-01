@@ -46,6 +46,9 @@ static char *rcsid = "$Id: utilities.c,v 1.9 1994/06/08 19:00:33 mycroft Exp $";
 #include <string.h>
 #include <ctype.h>
 #include "fsck.h"
+#ifdef cdh
+#include <stdarg.h>
+#endif
 
 long	diskreads, totalreads;	/* Disk cache statistics */
 
@@ -193,7 +196,9 @@ flush(fd, bp)
 	int fd;
 	register struct bufarea *bp;
 {
+#ifdef OLD_CS
 	register int i, j;
+#endif
 
 	if (!bp->b_dirty)
 		return;
@@ -206,12 +211,17 @@ flush(fd, bp)
 	bwrite(bp->b_un.b_buf, bp->b_bno, (long)bp->b_size);
 	if (bp != &sblk)
 		return;
+#ifdef OLD_CS
 	for (i = 0, j = 0; i < sblock.fs_cssize; i += sblock.fs_bsize, j++) {
 		bwrite((char *)sblock.fs_csp[j],
 		    fsbtodb(&sblock, sblock.fs_csaddr + j * sblock.fs_frag),
 		    sblock.fs_cssize - i < sblock.fs_bsize ?
 		    sblock.fs_cssize - i : sblock.fs_bsize);
 	}
+#else
+	bwrite((char *)sblock.fs_csp, fsbtodb(&sblock, sblock.fs_csaddr),
+	    sblock.fs_cssize);
+#endif
 }
 
 rwerror(mesg, blk)
@@ -535,10 +545,14 @@ panic(s)
 #endif
 /* VARARGS1 */
 void
-errexit(s1, s2, s3, s4)
-	char *s1;
+errexit(const char *fmt, ...)
 {
-	printf(s1, s2, s3, s4);
+	va_list va;
+	va_start(va, fmt);
+	vfprintf(stderr, fmt, va);
+	va_end(va);
+	fprintf(stderr, "\n");
+
 #ifdef AMIGA
 	dio_inhibit(0);
 	dio_close();

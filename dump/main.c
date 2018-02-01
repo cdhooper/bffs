@@ -87,7 +87,7 @@ static char rcsid[] = "$NetBSD: main.c,v 1.6 1995/03/18 14:55:02 cgd Exp $";
 #include "pathnames.h"
 
 #ifndef SBOFF
-#define SBOFF (SBLOCK * DEV_BSIZE)
+#define SBOFF (SBLOCK * 512)
 #endif
 
 #ifdef AMIGA
@@ -374,6 +374,8 @@ main(argc, argv)
 	sync();
 	sblock = (struct fs *)sblock_buf;
 #ifdef AMIGA
+	dev_bsize = DEV_BSIZE;
+	dev_bshift = ffs(dev_bsize) - 1;
 	bread(SBOFF / DEV_BSIZE, (char *) sblock, SBSIZE);
 #else
 	bread(SBOFF, (char *) sblock, SBSIZE);
@@ -382,6 +384,9 @@ main(argc, argv)
 		quit("bad sblock magic number\n");
 	dev_bsize = sblock->fs_fsize / fsbtodb(sblock, 1);
 	dev_bshift = ffs(dev_bsize) - 1;
+#ifdef AMIGA
+	dio_assign_bsize(dev_bsize);
+#endif
 	if (dev_bsize != (1 << dev_bshift))
 		quit("dev_bsize (%d) is not a power of 2", dev_bsize);
 	tp_bshift = ffs(TP_BSIZE) - 1;

@@ -1,5 +1,6 @@
 #ifndef _AMIGA_DEVICE_H
 int dio_open(char *name);
+void dio_assign_bsize(int bsize);
 int dio_close(void);
 int dio_checkstack(int minimum);
 int dio_inhibit(int inhibit);

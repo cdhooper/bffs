@@ -8,7 +8,11 @@
 #include <sys/dirent.h>
 
 /* definitions for library routines operating on directories. */
+#ifdef cdh
+#define DIRBLKSIZ	DEV_BSIZE
+#else
 #define	DIRBLKSIZ	1024
+#endif
 
 /* structure describing an open directory. */
 typedef struct _dirdesc {

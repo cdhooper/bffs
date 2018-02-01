@@ -12,7 +12,8 @@ struct sun_label {
     u_long  bb_reserved1;      /* Dunno                                 */
     u_short bb_rpm;            /* Disk rotational speed per minute      */
     u_short bb_ncyl;           /* Total disk cylinders                  */
-    u_long  bb_reserved2;      /* Dunno                                 */
+    u_short bb_alt_per_cyl;    /* Alt sectors per cylinder              */
+    u_short bb_reserved2;      /* Dunno                                 */
     u_long  bb_hw_interleave;  /* Hardware sector interleave            */
     u_short bb_nfscyl;         /* Cylinders usable for filesystems      */
     u_short bb_ncylres;        /* Number of reserved cylinders          */

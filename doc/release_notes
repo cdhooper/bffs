@@ -1,5 +1,5 @@
 1.6 Release [ Jan 19, 2018 ]  changes over 1.5beta:
-	Added preliminary support of sectors != 512 bytes
+	Added support of greater than 512 byte sectors (1k, 2k, 4k, 8k)
 	Added -I flag for edumpfs to invert meaning of displayed bits
 	Improved invalid FS handling for newfs and fsck
 	Improved failure code display for eln command
@@ -11,8 +11,8 @@
 	Added ls code to show UNIX block/char device major/minor numbers
 	Added ls code to display full date and time (with -T option)
 	Changed ls sorted filename display to be per column instead of per row
-	The ls utility can now use passwd and group files for symbolic names
-	Added unmount command
+	ls and chown can now use passwd and group files for symbolic names
+	Added unmount, sync, and cmp commands
 	Fixed sign bug in block free search which confused the frag allocator 
 	    (file writes) when it knew a specific block must be available
 	Improved block free search for 1:8 ratio frag:block filesystems
@@ -24,6 +24,8 @@
 	Lock on "" and "." should now work the same
 	Fixed bug in BSD44 label search code for command line tools
 	Added port of BSD 4.4 filesystem dump utility
+	Added version of BFFS which dynamically handles big or little endian FS
+	Added TD64 support to BFFS and CLI utils for large device access
 
 1.5beta Release  [ Aug 21, 1996 ]  changes over 1.4beta0:
 	Fixed problem where fs allowed deletion of locked file

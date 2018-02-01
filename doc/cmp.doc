@@ -1,0 +1,25 @@
+------------------------------------------------------------------------
+Version 1.0 of cmp
+------------------------------------------------------------------------
+
+cmp - perform a binary comparison of two files
+
+
+This is a very simplified version of the UNIX cmp program.
+
+
+Usage:
+	cmp <file1> <file2>
+
+Exit status
+	If the files are identical, no output will be generated,
+	and the program will exit with normal (0) status.
+	If the files differ in length or content, a "files differ"
+        message will be displayed and a non-zero exit status will
+        be generated.
+
+------------------------------------------------------------------------
+
+
+This program was created by Chris Hooper (amiga@cdh.eebugs.com)
+------------------------------------------------------------------------

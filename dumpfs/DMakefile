@@ -25,7 +25,7 @@ SRCS=dumpfs.c dump_other.c getopt.c amiga_device.c
 OBJS=$(SRCS:*.*:"$(OBJ)/%1.o")
 
 CC=dcc
-CFLAGS=-O2 -I/ucbinclude -I/fs -I/unix_support -Dcdh -mD
+CFLAGS=-O2 -ms -I/ucbinclude -I/fs -I/unix_support -Dcdh -mD
 RM = -delete force >NIL:
 
 $(PROG): $(OBJ) $(OBJS)

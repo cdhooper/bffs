@@ -74,7 +74,6 @@ struct disklabel *label;
 	printf("sectors=%d tracks=%d cyl=%d\n", envec->de_BlocksPerTrack,
 		envec->de_Surfaces, envec->de_HighCyl - envec->de_LowCyl + 1);
 
-
 	label->d_magic		= DISKMAGIC;
 	if (!strcmp("trackdisk.device", disk_device) ||
 	    !strcmp("mfm.device", disk_device) ||
@@ -116,6 +115,7 @@ struct disklabel *label;
                 fprintf(stderr, "Warning: physical sector size %d ignored\n",
                         tempsize);
         }
+
 	label->d_nsectors	= envec->de_BlocksPerTrack;
 	label->d_ntracks	= envec->de_Surfaces;
 	label->d_ncylinders	= envec->de_HighCyl - envec->de_LowCyl + 1;

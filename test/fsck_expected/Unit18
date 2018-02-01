@@ -1,0 +1,9 @@
+** units/Unit18
+No disk label.
+** Last Mounted on /mod
+** Phase 1 - Check Blocks and Sizes
+** Phase 2 - Check Pathnames
+** Phase 3 - Check Connectivity
+** Phase 4 - Check Reference Counts
+** Phase 5 - Check Cyl groups
+168 files, 830 used, 209 free (5 frags, 51 blocks, 0.5% fragmentation)

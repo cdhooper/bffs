@@ -1,0 +1,149 @@
+FSCK(8)                   BSD System Manager's Manual                  FSCK(8)
+
+NAME
+     fsck -- filesystem consistency check and interactive repair
+
+SYNOPSIS
+     fsck -p [-m mode]
+     fsck [-b block#] [-c level] [-l maxparallel] [-y] [-n] [-m mode]
+          [filesystem] ...
+
+DESCRIPTION
+     The first form of fsck preens a standard set of filesystems or the speci-
+     fied filesystems.  It is normally used in the script /etc/rc during auto-
+     matic reboot.  Here fsck reads the table /etc/fstab to determine which
+     filesystems to check.  Only partitions in fstab that are mounted ``rw,''
+     ``rq'' or ``ro'' and that have non-zero pass number are checked.
+     Filesystems with pass number 1 (normally just the root filesystem) are
+     checked one at a time.  When pass 1 completes, all remaining filesystems
+     are checked, running one process per disk drive.  The disk drive contain-
+     ing each filesystem is inferred from the longest prefix of the device
+     name that ends in a digit; the remaining characters are assumed to be the
+     partition designator.
+
+     The kernel takes care that only a restricted class of innocuous filesys-
+     tem inconsistencies can happen unless hardware or software failures
+     intervene.  These are limited to the following:
+         Unreferenced inodes
+         Link counts in inodes too large
+         Missing blocks in the free map
+         Blocks in the free map also in files
+         Counts in the super-block wrong
+
+     These are the only inconsistencies that fsck with the -p option will cor-
+     rect; if it encounters other inconsistencies, it exits with an abnormal
+     return status and an automatic reboot will then fail.  For each corrected
+     inconsistency one or more lines will be printed identifying the filesys-
+     tem on which the correction will take place, and the nature of the cor-
+     rection.  After successfully correcting a filesystem, fsck will print the
+     number of files on that filesystem, the number of used and free blocks,
+     and the percentage of fragmentation.
+
+     If sent a QUIT signal, fsck will finish the filesystem checks, then exit
+     with an abnormal return status that causes an automatic reboot to fail.
+     This is useful when you want to finish the filesystem checks during an
+     automatic reboot, but do not want the machine to come up multiuser after
+     the checks complete.
+
+     Without the -p option, fsck audits and interactively repairs inconsistent
+     conditions for filesystems.  If the filesystem is inconsistent the opera-
+     tor is prompted for concurrence before each correction is attempted.  It
+     should be noted that some of the corrective actions which are not cor-
+     rectable under the -p option will result in some loss of data.  The
+     amount and severity of data lost may be determined from the diagnostic
+     output.  The default action for each consistency correction is to wait
+     for the operator to respond yes or no.  If the operator does not have
+     write permission on the filesystem fsck will default to a -n action.
+
+     Fsck has more consistency checks than its predecessors check, dcheck,
+     fcheck, and icheck combined.
+
+     The following flags are interpreted by fsck.
+
+     -b      Use the block specified immediately after the flag as the super
+             block for the filesystem.  Block 32 is usually an alternate super
+             block.
+
+     -l      Limit the number of parallel checks to the number specified in
+             the following argument.  By default, the limit is the number of
+             disks, running one process per disk.  If a smaller limit is
+             given, the disks are checked round-robin, one filesystem at a
+             time.
+
+     -m      Use the mode specified in octal immediately after the flag as the
+             permission bits to use when creating the lost+found directory
+             rather than the default 1777.  In particular, systems that do not
+             wish to have lost files accessible by all users on the system
+             should use a more restrictive set of permissions such as 700.
+
+     -y      Assume a yes response to all questions asked by fsck; this should
+             be used with great caution as this is a free license to continue
+             after essentially unlimited trouble has been encountered.
+
+     -n      Assume a no response to all questions asked by fsck except for
+             `CONTINUE?', which is assumed to be affirmative; do not open the
+             filesystem for writing.
+
+     -c      Convert the filesystem to the specified level.  Note that the
+             level of a filesystem can only be raised.
+             There are currently three levels defined:
+
+             0       The filesystem is in the old (static table) format.
+
+             1       The filesystem is in the new (dynamic table) format.
+
+             2       The filesystem supports 32-bit uid's and gid's, short
+                     symbolic links are stored in the inode, and directories
+                     have an added field showing the file type.
+
+             In interactive mode, fsck will list the conversion to be made and
+             ask whether the conversion should be done.  If a negative answer
+             is given, no further operations are done on the filesystem.  In
+             preen mode, the conversion is listed and done if possible without
+             user interaction.  Conversion in preen mode is best used when all
+             the filesystems are being converted at once.  The format of a
+             filesystem can be determined from the first line of output from
+             dumpfs(8).
+
+     If no filesystems are given to fsck then a default list of filesystems is
+     read from the file /etc/fstab.
+
+     Inconsistencies checked are as follows:
+     1.   Blocks claimed by more than one inode or the free map.
+     2.   Blocks claimed by an inode outside the range of the filesystem.
+     3.   Incorrect link counts.
+     4.   Size checks:
+          Directory size not a multiple of DIRBLKSIZ.
+          Partially truncated file.
+     5.   Bad inode format.
+     6.   Blocks not accounted for anywhere.
+     7.   Directory checks:
+          File pointing to unallocated inode.
+          Inode number out of range.
+          Dot or dot-dot not the first two entries of a directory or having
+          the wrong inode number.
+     8.   Super Block checks:
+          More blocks for inodes than there are in the filesystem.
+          Bad free block map format.
+          Total free block and/or free inode count incorrect.
+
+     Orphaned files and directories (allocated but unreferenced) are, with the
+     operator's concurrence, reconnected by placing them in the lost+found
+     directory.  The name assigned is the inode number.  If the lost+found
+     directory does not exist, it is created.  If there is insufficient space
+     its size is increased.
+
+     Because of inconsistencies between the block device and the buffer cache,
+     the raw device should always be used.
+
+FILES
+     /etc/fstab  contains default list of filesystems to check.
+
+DIAGNOSTICS
+     The diagnostics produced by fsck are fully enumerated and explained in
+     Appendix A of Fsck - The UNIX File System Check Program.
+
+SEE ALSO
+     fstab(5), fs(5), fsdb(8), newfs(8), mkfs(8), reboot(8)
+
+4th Berkeley Distribution      December 11, 1993     4th Berkeley Distribution

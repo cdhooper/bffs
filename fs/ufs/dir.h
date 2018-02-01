@@ -29,20 +29,21 @@
 #ifndef _UFS_DIR_H
 #define	_UFS_DIR_H
 
-#define DIRBLKSIZ	phys_sectorsize
+#define DIRBLKSIZ	512
 
 #define	MAXNAMLEN	255
 
+/*
+ * On-disk format of directory entry.  Note that for big endian, this
+ * structure is exactly compatible with the old directory format.
+ * For little endian (x86), additional work needs to be done to accommodate
+ * the fact that d_type does not exist for the older filesystem format.
+ */
 struct	direct {
 	u_long	d_ino;			/* inode number of entry */
 	u_short	d_reclen;		/* length of this record */
-#ifdef INTEL
-	u_char	d_namlen;		/* length of string in d_name */
-	u_char	d_type;			/* file type, see below */
-#else
 	u_char	d_type;			/* file type, see below */
 	u_char	d_namlen;		/* length of string in d_name */
-#endif
 	char	d_name[MAXNAMLEN + 1];	/* name must be no longer than this */
 };
 
@@ -68,14 +69,19 @@ struct	odirect {
 #define DT_WHT		16
 
 /*
- * The DIRSIZ macro gives the minimum record length which will hold
+ * The UFS_DIRSIZ macro gives the minimum record length which will hold
  * the directory entry.  This requires the amount of space in struct direct
  * without the d_name field, plus enough space for the name with a terminating
  * null byte (dp->d_namlen+1), rounded up to a 4 byte boundary.
+ *
+ * The below two macros were taken from NetBSD 7.1 ufs/dir.h header file.
+ * No endian swapping is needed because d_type and d_namelen are each one byte.
  */
-#undef DIRSIZ
-#define	DIRSIZ(dp) \
-	((sizeof (struct direct) - (MAXNAMLEN+1)) + \
-	((DISK16((dp)->d_namlen)+1 + 3) &~ 3))
+#define UFS_DIRECTSIZ(namlen) \
+        ((sizeof(struct direct) - (MAXNAMLEN+1)) + (((namlen)+1 + 3) &~ 3))
+
+#define UFS_DIRSIZ(oldfmt, dp, needswap)   \
+    (((oldfmt) && (needswap)) ?                 \
+    UFS_DIRECTSIZ((dp)->d_type) : UFS_DIRECTSIZ((dp)->d_namlen))
 
 #endif /* _UFS_DIR_H_ */

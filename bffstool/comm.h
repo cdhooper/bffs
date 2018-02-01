@@ -1,7 +1,7 @@
 struct stat {
 	ULONG	magic;			/* 'BFF\0' for BFFS FileSystem R0 */
 	ULONG	size;			/* structure size (in longs)	  */
-	ULONG	unused;			/* checksum - not used		  */
+	ULONG	phys_sectorsize;	/* physical device sector size */
 	ULONG   superblock;		/* updated only on packet request */
 	ULONG   cache_head;		/* updated only on packet request */
 	ULONG   cache_hash;		/* updated only on packet request */
@@ -13,7 +13,7 @@ struct stat {
 	ULONG   *disk_pmax;		/* updated only on packet request */
 	ULONG   *unix_paths;		/* updated only on packet request */
 	ULONG   *resolve_symlinks;      /* updated only on packet request */
-	ULONG   *case_independent;      /* updated only on packet request */
+	ULONG   *case_dependent;        /* updated only on packet request */
 	ULONG   *link_comments;		/* updated only on packet request */
 	ULONG   *inode_comments;	/* updated only on packet request */
 	ULONG   *cache_used;		/* updated only on packet request */
@@ -66,11 +66,15 @@ struct cache_set {
 	struct cache_set *next;
 };
 
+/* Cach Hashtable */
+#define HASH_SIZE       16      /* lines */
+
 #define BTOC(x) ((x)<<2)
 
 extern struct stat *stat;
 extern struct MsgPort *fs;
 extern struct cache_set *cache_stack;
+extern struct cache_set **cache_hash;
 
 int open_handler(char *name);
 void close_handler(void);

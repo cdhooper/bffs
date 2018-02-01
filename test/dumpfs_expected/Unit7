@@ -1,0 +1,114 @@
+magic	11954	time	Tue Jan 23 01:04:15 2018
+UFS V1
+cylgrp	static	inodes	4.2/4.3BSD
+nbfree	58	ndir	6	nifree	273	nffree	44
+ncg	1	ncyl	11	size	880	blocks	807
+bsize	8192	shift	13	mask	0xffffe000
+fsize	1024	shift	10	mask	0xfffffc00
+frag	8	shift	3	fsbtodb	1
+cpg	16	bpg	162	fpg	1296	ipg	320
+minfree	10%	optim	time	maxcontig 1	maxbpg	256
+rotdelay 4ms	headswitch 0us	trackseek 0us	rps	60
+ntrak	9	nsect	18	npsect	18	spc	162
+symlinklen -1	trackskew 0	interleave 1	contigsumsize -1
+nindir	2048	inopb	64	nspf	2
+sblkno	16	cblkno	24	iblkno	32	dblkno	72
+sbsize	2048	cgsize	2048	cgoffset 16	cgmask	0xfffffff0
+csaddr	72	cssize	1024	shift	9	mask	0xfffffe00
+cgrotor	0	fmod	0	ronly	0
+blocks available in each of 8 rotational positions
+cylinder number 0:
+   position 0:	    0    8    9
+   position 1:	    7
+   position 2:	    6
+   position 3:	    5
+   position 4:	    4
+   position 5:	    3
+   position 6:	    2
+   position 7:	    1   10
+cylinder number 1:
+   position 0:	   17   18
+   position 1:	   16
+   position 2:	   15
+   position 3:	   14
+   position 4:	   13
+   position 5:	   12
+   position 6:	   11   20
+   position 7:	   19
+cylinder number 2:
+   position 0:	   26   27
+   position 1:	   25
+   position 2:	   24
+   position 3:	   23
+   position 4:	   22
+   position 5:	   21   30
+   position 6:	   29
+   position 7:	   28
+cylinder number 3:
+   position 0:	   35   36
+   position 1:	   34
+   position 2:	   33
+   position 3:	   32
+   position 4:	   31   40
+   position 5:	   39
+   position 6:	   38
+   position 7:	   37
+cylinder number 4:
+   position 0:	   44   45
+   position 1:	   43
+   position 2:	   42
+   position 3:	   41   50
+   position 4:	   49
+   position 5:	   48
+   position 6:	   47
+   position 7:	   46
+cylinder number 5:
+   position 0:	   53   54
+   position 1:	   52
+   position 2:	   51   60
+   position 3:	   59
+   position 4:	   58
+   position 5:	   57
+   position 6:	   56
+   position 7:	   55
+cylinder number 6:
+   position 0:	   62   63
+   position 1:	   61   70
+   position 2:	   69
+   position 3:	   68
+   position 4:	   67
+   position 5:	   66
+   position 6:	   65
+   position 7:	   64
+cylinder number 7:
+   position 0:	   71   72   80
+   position 1:	   79
+   position 2:	   78
+   position 3:	   77
+   position 4:	   76
+   position 5:	   75
+   position 6:	   74
+   position 7:	   73
+cs[].cs_(nbfree,ndir,nifree,nffree):
+	(58,6,273,44) 
+cylinders in last group 11
+blocks in last group 111
+
+
+cg 0:
+magic	90255	tell	49	time	Mon Feb 27 22:03:22 1995
+cgx	0	ncyl	11	niblk	320	ndblk	880
+nbfree	58	ndir	6	nifree	273	nffree	44
+rotor	392	irotor	46	frotor	376
+frsum	1	1	2	2	3	2	0
+sum of frsum: 44
+iused:	0-46
+free:	216-221, 275-279, 292-295, 314-319, 331-335, 342-343,
+	349-351, 371-375, 383, 404-407, 413-879
+b:
+   c5:	(9)	 2 1 1 1 1 1 1 1
+   c6:	(10)	 2 2 1 1 1 1 1 1
+   c7:	(10)	 3 1 1 1 1 1 1 1
+   c8:	(11)	 3 1 1 1 1 1 1 2
+   c9:	(10)	 2 1 1 1 1 1 2 1
+   c10:	(8)	 2 1 1 1 1 1 0 1

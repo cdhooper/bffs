@@ -63,6 +63,22 @@ ULONG fblkmask   = 3;
 
 static ULONG prev_frag_addr(ULONG file_frag_num, ULONG inum);
 
+#ifdef BOTHENDIAN
+/* Functions used only for version supporting both big and little endian FS */
+void
+adjust_ic_blks(struct icommon *inode, int adjust)
+{
+	inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + adjust);
+}
+
+void
+adjust_ic_size(struct icommon *inode, int adjust)
+{
+	inode->ic_size.val[is_big_endian] =
+	    DISK32(DISK32(inode->ic_size.val[is_big_endian]) + adjust);
+}
+#endif
+
 /* ridisk_frag()
  *	This routine will return the frag address of a block in a fs given
  *	the file block number (frag address) and inode pointer.  It will not
@@ -184,7 +200,6 @@ cidisk_frag(ULONG file_frag_num, ULONG inum, ULONG newblk)
 	ULONG	frac;
 	ULONG   fragno[NIADDR];
 	ULONG   ptrnum[NIADDR];
-	ULONG	*temp;
 	struct	icommon *inode = inode_read(inum);
 #ifndef FAST
 	if (inode == NULL) {
@@ -206,7 +221,7 @@ cidisk_frag(ULONG file_frag_num, ULONG inum, ULONG newblk)
 	    }
 #endif
 
-	    PRINT(("cidisk: d=%d from %d to %d\n",
+	    PRINT(("cidisk: i=%u d=%d from %d to %d\n", inum,
 		    file_blk_num, DISK32(inode->ic_db[file_blk_num]), newblk));
 
 	    inode->ic_db[file_blk_num] = DISK32(newblk);
@@ -243,10 +258,11 @@ cidisk_frag(ULONG file_frag_num, ULONG inum, ULONG newblk)
 	    }
 #endif
 	    inode->ic_ib[level - 1] = DISK32(curblk);
-	    inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NDSPB);
+	    ADJUST_IC_BLKS(inode, NDSPB);
 	}
 
 	do {
+	    ULONG *temp;
 	    level--;
 	    if (level) {
 		ocurblk = curblk;
@@ -257,7 +273,7 @@ cidisk_frag(ULONG file_frag_num, ULONG inum, ULONG newblk)
 		    return(1);
 		}
 #endif
-		curblk = temp[ptrnum[level]];
+		curblk = DISK32(temp[ptrnum[level]]);
 		if (curblk == 0) {
 /*
 		    PRINT(("cidisk: alloc index at %d\n", ocurblk));
@@ -279,7 +295,7 @@ cidisk_frag(ULONG file_frag_num, ULONG inum, ULONG newblk)
 			return (1);
 		    }
 #endif
-		    inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NDSPB);
+		    ADJUST_IC_BLKS(inode, NDSPB);
 
 		    /* update parent index block pointer */
 		    temp = (ULONG *) cache_frag_write(ocurblk + fragno[level], 1);
@@ -364,7 +380,7 @@ widisk_frag(ULONG file_frag_num, ULONG inum)
 		    return (1);
 		}
 #endif
-		inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NDSPB);
+		ADJUST_IC_BLKS(inode, NDSPB);
 		inode->ic_db[file_blk_num] = DISK32(curblk);
 	    }
 	    return(curblk + frac);
@@ -395,7 +411,7 @@ widisk_frag(ULONG file_frag_num, ULONG inum)
 		return (1);
 	    }
 #endif
-	    inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NDSPB);
+	    ADJUST_IC_BLKS(inode, NDSPB);
 	    inode->ic_ib[level - 1] = DISK32(curblk);
 	    block_erase(curblk);
 	}
@@ -451,7 +467,7 @@ widisk_frag(ULONG file_frag_num, ULONG inum)
 		    return (1);
 		}
 #endif
-		inode->ic_blocks = DISK32(DISK32(inode->ic_blocks) + NDSPB);
+		ADJUST_IC_BLKS(inode, NDSPB);
 
 		if (level)
 		    block_erase(curblk);
@@ -506,23 +522,73 @@ inode_read(int inum)
 struct icommon *
 inode_modify(int inum)
 {
-	struct icommon *buf;
+    struct icommon *buf;
 
-	if (inum == 0)
-		inum = 2;
+    if (inum == 0)
+	inum = 2;
 
-	buf = (struct icommon *)
-		cache_frag_write(itod(superblock, inum) + itodo(superblock,inum), 1);
+    buf = (struct icommon *)
+	cache_frag_write(itod(superblock, inum) + itodo(superblock,inum), 1);
 #ifndef FAST
-	if (buf == NULL) {
-		PRINT2(("inode_modify: cache_write gave NULL for inum %d\n",
-			inum));
-		return (NULL);
-	}
+    if (buf == NULL) {
+	PRINT2(("inode_modify: cache_write gave NULL for inum %d\n",
+		inum));
+	return (NULL);
+    }
 #endif
-	return(buf + itofo(superblock, inum));
+    return(buf + itofo(superblock, inum));
 }
 
+static void
+adjust_nifree(struct cg *mycg, ULONG cgx, long adjust)
+{
+#ifdef BOTHENDIAN
+    mycg->cg_cs.cs_nifree = DISK32(DISK32(mycg->cg_cs.cs_nifree) + adjust);
+    superblock->fs_cs(superblock, cgx).cs_nifree =
+	DISK32(DISK32(superblock->fs_cs(superblock, cgx).cs_nifree) +
+	adjust);
+
+    superblock->fs_cstotal.cs_nifree =
+	DISK32(DISK32(superblock->fs_cstotal.cs_nifree) + adjust);
+    if (superblock->fs_flags & FS_FLAGS_UPDATED) {
+	superblock->fs_new_cstotal.cs_nifree[is_big_endian] =
+	    DISK32(DISK32(superblock->fs_new_cstotal.cs_nifree[is_big_endian]) +
+	    adjust);
+    }
+#else
+    mycg->cg_cs.cs_nifree += adjust;
+    superblock->fs_cs(superblock, cgx).cs_nifree += adjust;
+
+    superblock->fs_cstotal.cs_nifree += adjust;
+    if (superblock->fs_flags & FS_FLAGS_UPDATED)
+	superblock->fs_new_cstotal.cs_nifree[1] += adjust;
+#endif
+    superblock->fs_fmod++;
+}
+
+static void
+adjust_ndir(struct cg *mycg, ULONG cgx, long adjust)
+{
+#ifdef BOTHENDIAN
+    mycg->cg_cs.cs_ndir = DISK32(DISK32(mycg->cg_cs.cs_ndir) + adjust);
+    superblock->fs_cs(superblock, cgx).cs_ndir =
+	DISK32(DISK32(superblock->fs_cs(superblock, cgx).cs_ndir) + adjust);
+
+    superblock->fs_cstotal.cs_ndir =
+	DISK32(DISK32(superblock->fs_cstotal.cs_ndir) + adjust);
+    if (superblock->fs_flags & FS_FLAGS_UPDATED) {
+	superblock->fs_new_cstotal.cs_ndir[is_big_endian] =
+	    DISK32(DISK32(superblock->fs_new_cstotal.cs_ndir[is_big_endian]) +
+	    adjust);
+    }
+#else
+    mycg->cg_cs.cs_ndir += adjust;
+    superblock->fs_cs(superblock, cgx).cs_ndir += adjust;
+    superblock->fs_cstotal.cs_ndir += adjust;
+    if (superblock->fs_flags & FS_FLAGS_UPDATED)
+	superblock->fs_new_cstotal.cs_ndir[1] += adjust;
+#endif
+}
 
 /* inum_new()
  *	This routine will allocate a new inode on the disk.
@@ -572,7 +638,7 @@ inum_new(int parent, int type)
 	if (type == I_DIR) {
 	    ifree = 0;
 	    for (index = 0; index < DISK32(superblock->fs_ncg); index++)
-		if ((long) (DISK32(superblock->fs_cs(superblock,index).cs_nifree) > ifree) &&
+		if ((DISK32(superblock->fs_cs(superblock,index).cs_nifree) > ifree) &&
 		    (DISK32(superblock->fs_cs(superblock, index).cs_nbfree) ||
 		     DISK32(superblock->fs_cs(superblock, index).cs_nffree))) {
 		    ifree = DISK32(superblock->fs_cs(superblock, index).cs_nifree);
@@ -581,21 +647,24 @@ inum_new(int parent, int type)
 
 	    if (ifree == 0) {
 		PRINT2(("INCON: No inodes available in filesystem\n"));
+		superblock->fs_ronly = 1;
 		return(0);
 	    }
 
 	    mycg = cache_cg(cgx);
 	} else if (mycg->cg_cs.cs_nifree == 0) {
 	    for (index = cgx; index < DISK32(superblock->fs_ncg); index++)
-		if (superblock->fs_cs(superblock, index).cs_nifree)
+		if (superblock->fs_cs(superblock, index).cs_nifree != 0)
 		    break;
+
 	    if (index == DISK32(superblock->fs_ncg))
 		for (index = cgx - 1; index >= 0; index--)
-		    if (superblock->fs_cs(superblock, index).cs_nifree)
+		    if (superblock->fs_cs(superblock, index).cs_nifree != 0)
 			break;
 
 	    if (index < 0) {
 		PRINT2(("INCON: No inodes available in filesystem\n"));
+		superblock->fs_ronly = 1;
 		return(0);
 	    }
 
@@ -622,7 +691,8 @@ inum_new(int parent, int type)
 		if (bit_chk(cg_inosused(mycg), inum) == 0)
 			goto found_clear;
 
-	PRINT2(("INCON: Unable to find free inode - SUMMARY LIED\n"));
+	PRINT2(("INCON: Unable to find free inode - SUMMARY BAD\n"));
+	superblock->fs_ronly = 1;
 	return(0);
 
 	found_clear:
@@ -637,34 +707,10 @@ inum_new(int parent, int type)
 	mycg->cg_irotor = DISK32(inum);
 	bit_set(cg_inosused(mycg), inum);
 
-#ifdef INTEL
-	mycg->cg_cs.cs_nifree = DISK32(DISK32(mycg->cg_cs.cs_nifree) - 1);
-	superblock->fs_cstotal.cs_nifree =
-			DISK32(DISK32(superblock->fs_cstotal.cs_nifree) - 1);
-	superblock->fs_cs(superblock, cgx).cs_nifree =
-		DISK32(DISK32(superblock->fs_cs(superblock, cgx).cs_nifree) - 1);
-	superblock->fs_fmod = DISK32(DISK32(superblock->fs_fmod) + 1);
-#else
-	mycg->cg_cs.cs_nifree--;
-	superblock->fs_cstotal.cs_nifree--;
-	superblock->fs_cs(superblock, cgx).cs_nifree--;
-	superblock->fs_fmod++;
-#endif
+	adjust_nifree(mycg, cgx, -1);
 
-	if (type == I_DIR) {
-#ifdef INTEL
-		mycg->cg_cs.cs_ndir = DISK32(DISK32(mycg->cg_cs.cs_ndir) + 1);
-		superblock->fs_cstotal.cs_ndir =
-			DISK32(DISK32(superblock->fs_cstotal.cs_ndir) + 1);
-		superblock->fs_cs(superblock, cgx).cs_ndir =
-			DISK32(DISK32(superblock->fs_cs(superblock,
-							cgx).cs_ndir) + 1);
-#else
-		mycg->cg_cs.cs_ndir++;
-		superblock->fs_cstotal.cs_ndir++;
-		superblock->fs_cs(superblock, cgx).cs_ndir++;
-#endif
-	}
+	if (type == I_DIR)
+	    adjust_ndir(mycg, cgx, 1);
 
 	PRINT(("inew: %d\n", inum + cgx * DISK32(superblock->fs_ipg)));
 	return(inum + cgx * DISK32(superblock->fs_ipg));
@@ -723,13 +769,10 @@ inum_sane(ULONG inum, int type)
 void
 inum_free(ULONG inum)
 {
-	struct	icommon *inode;
-	int	index;
-	ULONG	cgx;
-	struct	cg *mycg;
-#ifdef INTEL
-	ULONG	temp;
-#endif
+	struct icommon *inode;
+	struct cg      *mycg;
+	ULONG           cgx;
+	long            gen;
 
 	inode = inode_modify(inum);
 #ifndef FAST
@@ -749,64 +792,16 @@ inum_free(ULONG inum)
 #endif
 
 	mycg->cg_irotor = DISK32(inum % DISK32(superblock->fs_ipg));
-
-#ifdef INTEL
-	mycg->cg_cs.cs_nifree = DISK32(DISK32(mycg->cg_cs.cs_nifree) + 1);
-#else
-	mycg->cg_cs.cs_nifree++;
-#endif
-
 	bit_clr(cg_inosused(mycg), DISK32(mycg->cg_irotor));
 
-#ifdef INTEL
-	temp = DISK32(superblock->fs_cstotal.cs_nifree) + 1;
-	superblock->fs_cstotal.cs_nifree = DISK32(temp);
-	temp = DISK32(superblock->fs_cs(superblock, cgx).cs_nifree) + 1;
-	superblock->fs_cs(superblock, cgx).cs_nifree = DISK32(temp);
-	temp = DISK32(superblock->fs_fmod) + 1;
-	superblock->fs_fmod = DISK32(temp);
+	adjust_nifree(mycg, cgx, 1);
+	if ((DISK16(inode->ic_mode) & IFMT) == IFDIR)
+	    adjust_ndir(mycg, cgx, -1);
 
-	if ((DISK16(inode->ic_mode) & IFMT) == IFDIR) {
-		temp = DISK32(mycg->cg_cs.cs_ndir) - 1;
-		mycg->cg_cs.cs_ndir = DISK32(temp);
-		temp = DISK32(superblock->fs_cstotal.cs_ndir) - 1;
-		superblock->fs_cstotal.cs_ndir = DISK32(temp);
-		temp = DISK32(superblock->fs_cs(superblock, cgx).cs_ndir) - 1;
-		superblock->fs_cs(superblock, cgx).cs_ndir = DISK32(temp);
-	}
-#else
-	superblock->fs_cstotal.cs_nifree++;
-	superblock->fs_cs(superblock, cgx).cs_nifree++;
-	superblock->fs_fmod++;
-
-	if ((DISK16(inode->ic_mode) & IFMT) == IFDIR) {
-		mycg->cg_cs.cs_ndir--;
-		superblock->fs_cstotal.cs_ndir--;
-		superblock->fs_cs(superblock, cgx).cs_ndir--;
-	}
-#endif
-
-	inode->ic_mode		= 0;
-	inode->ic_nlink		= 0;
-	inode->ic_ouid		= 0;
-	inode->ic_ogid		= 0;
-	inode->ic_nuid		= 0;
-	inode->ic_ngid		= 0;
-	inode->ic_blocks	= 0;
-	inode->ic_size.val[0]	= 0;
-	inode->ic_size.val[1]	= 0;
-	inode->ic_mtime         = 0;
-	inode->ic_mtime_ns      = 0;
-	inode->ic_atime         = 0;
-	inode->ic_atime_ns      = 0;
-	inode->ic_ctime         = 0;
-	inode->ic_ctime_ns      = 0;
-
-	for (index = 0; index < NDADDR; index++)
-		inode->ic_db[index] = 0;
-
-	for (index = 0; index < NIADDR; index++)
-		inode->ic_ib[index] = 0;
+	/* Wipe inode, preserving generation number */
+	gen = inode->ic_gen;
+	memset(inode, 0, sizeof (*inode));
+	inode->ic_gen = gen;
 }
 
 int

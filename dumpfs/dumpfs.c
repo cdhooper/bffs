@@ -136,10 +136,13 @@ int
 dumpfs(name)
 	char *name;
 {
+#ifdef OLD_CS
 	int fd, c, i, j, k, size;
+#else
+	int fd, c, i, j, k;
+#endif
 
 #ifdef AMIGA
-	int odev_bsize = DEV_BSIZE;
 	if (dio_open(name) == 0) {
 		fd = -1;
 		dio_inhibit(1);
@@ -148,10 +151,8 @@ dumpfs(name)
 	} else {
 		fsi = fd;
 	}
-	DEV_BSIZE = 1;
-	if (bread(&afs, SBOFF, SBSIZE))
+	if (bread(&afs, SBOFF / DEV_BSIZE, SBSIZE))
 		goto err;
-	DEV_BSIZE = odev_bsize;
 #else
 	if ((fd = open(name, O_RDONLY, 0)) < 0)
 		goto err;
@@ -164,8 +165,30 @@ dumpfs(name)
 	if (afs.fs_postblformat == FS_42POSTBLFMT)
 		afs.fs_nrpos = 8;
 	dev_bsize = afs.fs_fsize / fsbtodb(&afs, 1);
+#ifdef AMIGA
+	dio_assign_bsize(dev_bsize);
+#endif
 	printf("magic\t%x\ttime\t%s", afs.fs_magic,
 	    ctime(&afs.fs_time));
+#ifdef cdh
+	switch (afs.fs_magic) {
+	    case FS_UFS1_MAGIC:
+		printf("UFS V1\n");
+		break;
+	    case FS_UFS2_MAGIC:
+		printf("UFS V2\n");
+		break;
+	    case FS_UFS1_MAGSWAP:
+		printf("UFS V1 little endian (can't display this format)\n");
+		goto err;
+	    case FS_UFS2_MAGSWAP:
+		printf("UFS V2 little endian (can't display this format)\n");
+		goto err;
+	    default:
+		printf("Bad magic %08x\n", afs.fs_magic);
+		goto err;
+	}
+#endif
 	printf("cylgrp\t%s\tinodes\t%s\n",
 	    afs.fs_postblformat == FS_42POSTBLFMT ? "static" : "dynamic",
 	    afs.fs_inodefmt < FS_44INODEFMT ? "4.2/4.3BSD" : "4.4BSD");
@@ -209,6 +232,13 @@ dumpfs(name)
 		printf("insufficient space to maintain rotational tables\n");
 	for (c = 0; c < afs.fs_cpc; c++) {
 		printf("\ncylinder number %d:", c);
+#ifdef cdh
+		if (afs.fs_nrpos > 128) {
+		    printf("Invalid nrpos %d\n", afs.fs_nrpos);
+		    afs.fs_nrpos = 8;
+		    break;
+		}
+#endif
 		for (i = 0; i < afs.fs_nrpos; i++) {
 			if (fs_postbl(&afs, c)[i] == -1)
 				continue;
@@ -224,6 +254,7 @@ dumpfs(name)
 		}
 	}
 	printf("\ncs[].cs_(nbfree,ndir,nifree,nffree):\n\t");
+#ifdef OLD_CS
 	for (i = 0, j = 0; i < afs.fs_cssize; i += afs.fs_bsize, j++) {
 		size = afs.fs_cssize - i < afs.fs_bsize ?
 		    afs.fs_cssize - i : afs.fs_bsize;
@@ -241,6 +272,20 @@ dumpfs(name)
 			goto err;
 #endif
 	}
+#else
+	afs.fs_csp = calloc(1, afs.fs_cssize);
+#ifdef AMIGA
+	if (bread(afs.fs_csp, fsbtodb(&afs, afs.fs_csaddr), afs.fs_cssize))
+		goto err;
+#else
+	if (lseek(fd,
+	    (off_t)(fsbtodb(&afs, afs.fs_csaddr) * dev_bsize),
+	    SEEK_SET) == (off_t)-1)
+		goto err;
+	if (read(fd, afs.fs_csp, afs.fs_cssize) != size)
+		goto err;
+#endif
+#endif
 	for (i = 0; i < afs.fs_ncg; i++) {
 		struct csum *cs = &afs.fs_cs(&afs, i);
 		if (i && i % 4 == 0)

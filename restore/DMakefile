@@ -24,12 +24,11 @@ OBJ=obj
 SRCS=restore_main.c interactive.c restore.c dirs.c symtab.c tape.c restore_utilities.c strsep.c glob.c restore_other.c getopt.c amiga_unix.c err.c
 OBJS=$(SRCS:*.*:"$(OBJ)/%1.o")
 
-#CFLAGS=-I../ucbinclude -I/unix_support -DRRESTORE
-#CFLAGS=-O2 -I./ucbinclude
 #CC=cc
+#CFLAGS=-O2 -I../ucbinclude -I/unix_support -DRRESTORE
 
 CC=dcc
-CFLAGS=-O2 -r -Dcdh -I/ucbinclude -I/unix_support -I.
+CFLAGS=-O2 -ms -r -Dcdh -I/ucbinclude -I/unix_support -I.
 RM = -delete force >NIL:
 
 $(PROG): $(OBJ) $(OBJS)

@@ -13,6 +13,6 @@ BLA:
     BlocksPerTrack = 9
     Buffers = 64
     Reserved = 0;  /* Unix partition */
-    PreAlloc = 0;  /* 8 for no dircomment, 16 for no symlink comment */
+    PreAlloc = 0;  /* 8 for dircomment, 16 for symlink comment */
     DosType = 0x42464653  /* BFFS */
 #

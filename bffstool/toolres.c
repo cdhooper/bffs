@@ -55,13 +55,16 @@ char *fieldnames[] =
 	"read groups", "write groups", "read bytes ", "write bytes ",
 	"locates", "examines", "examinenexts", "flushes",
 	"read opens ", "write opens ", "renames", "Version", "Disk Type",
-	"PreAlloc", "read Kbytes", "write Kbytes",
-/* superblock starts at 53  (dyn and static)	*/
+/* 52-54 */
+	"PreAlloc",
+	"read Kbytes", "write Kbytes",
+/* superblock starts at 55  (dyn and static)	*/
+	"inodes free", "blocks free", "frags free",
+	"num frags", "data frags",
         "num inodes",
-	"inodes free", "blocks free", "frags free", "num dirs",
-	"block size", "frag size", "data frags", "num frags",
-	"num cgs", "num cyl",
-	"sec/track", "track/cyl", "cyl/cg", "frags/cg", "inodes/cg",
+	"block size", "frag size",
+	"phys sector", "num cyl", "sec/track", "track/cyl",
+	"cyl/cg", "num cgs", "inodes/cg", "frags/cg",
 	"minfree", "modified", "clean",
 	NULL
 };

@@ -1,4 +1,4 @@
-ffs:
+fms6:
     FileSystem = l:FastFileSystem
     Device = fmsdisk.device
     Unit = 6

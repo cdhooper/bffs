@@ -1,71 +1,63 @@
-when fs block filled, clrbit cg_clustersfree(newcg), frag/fs->fs_frag
-if contigsumsize > 0    when freed, setbit same
-ref fsck:pass5.c:267
+Cache
+    Integrate cg caching with main block caching?
+	NO - different block sizes between frag and cg block
+    Cache cgs the same as regular blocks?
+	Or add cgs with addbuffers +-10000 and value to documentation
 
-2048 byte sector size - change TD_SECTOR and DEV_BSIZE to variable
-	watch out for:	superblock offset
-			inode file block size (fwrite etc)
+    Cache speedup with write-behind
+	Add async nature to blocks in cache - cache should wait if async
+	pending.  If previous block already in cache, then sync request
+	current block and async request next block.
 
-eliminate the conversion to TD_SECTOR buffers in the code, go
-strictly by the number of buffers the user really wants
+    Add async reads and writes, but only allow one at a time.
+	Read or write must be complete before packet return from handler;
+	may not be possible because how system uses cache code.  May only
+	be useful for direct file reads and writes.
 
-rename cache.c to cache_frag.c and create new cache_block.c which
-uses similar policies, but works on whole filesystem blocks.  May
-need call into cache code now for external routines (packets.c),
-maybe not.
-integrate cg caching with main block caching?
-    NO - different block sizes between frag and cg block
-Cache cgs the same as regular blocks?
-    Or add cgs with addbuffers +-10000 and value to documentation
+    Make cache_append() to be called when adding blk zero'd cache blocks
+	into the cache - so they don't look like they've just been used.
 
 Note in doc file that if using csh and UnixPaths turned on, that ..
-will take user to root (csh converts .. to /)
+    will take user to root (csh converts .. to /)
 
-make els show destination name of symlink (Readlink)
+Change version info such that sd1a is no longer printed
+    only if partition is other than 'a', then give slice number
+    after :
 
-change version info such that sd1a is no longer printed
-only if partition is other than 'a', then give slice number
-after :
+Allocation
+    Work on allocation policy of block_fragblock_find() - seems just a
+	little too greedy for new filesystem blocks
 
-implement immutable file?
-implement whiteout entries?
+    Use cg_rotor for last used block
+    Use cg_frotor for last used frag
 
-----------------------------------------------------------------------
+Performance
+    Optimize operations which do / and % for the macros
 
-cache speedup?
-    add async nature to blocks in cache - cache should wait if async pending
-    if previous block already in cache, then sync request current block
-	and async request next block
+Errors
+    Add requester notification of disk read and write errors - allow for
+    retry on the IO operation (in data_read and data_write routines)
 
-add async reads and writes, but only allow one at a time.
-read or write must be complete before packet return
-from handler; may not be possible because how system uses
-cache code.  May only be useful for direct file reads
-and writes.
+    When disk changed, have data_read and data_write routines request the
+    same disk be returned - set up superblock id structure that can be
+    used to identify the correct disk (update the in memory structure
+    only when the superblock is read from or written to the disk)
 
-add action notify stuff for files/directory locks
-	easy to do files, tough to do directories
+New features
+    Implement ACTION_SET_FILE_SIZE
+    Implement immutable file?
+    Implement whiteout entries?
+
+    Add action notify stuff for files/directory locks
+	Easy to do files, tough to do directories
 	- add another field in the lock structure
-	at action end (for write) go through all locks looking
+	At action end (for write) go through all locks looking
 		for lock on current file or parent directory.
 		if notify set for those, notify the requester
 
+----------------------------------------------------------------------
 
-add requester notification of disk read and write errors - allow for
-retry on the IO operation (in data_read and data_write routines)
-maybe also, if the trackdisk IO error was disk change, demand that the
-disk be returned to the drive
-
-when disk changed, have data_read and data_write routines request the
-same disk be returned - set up superblock id structure that can be
-used to identify the correct disk (update the in memory structure
-only when the superblock is read from or written to the disk)
-
-work on allocation policy of block_fragblock_find - seems just a little
-too greedy for new filesystem blocks
-
-use cg_rotor for last used block
-use cg_frotor for last used frag
+More possible features below
 
 Allow for "pipes" - files that cause programs to be run to
     intercept reads and writes - store filename and parms in device file
@@ -78,29 +70,17 @@ Allow for "pipes" - files that cause programs to be run to
 
 Allow mounting of other filesystems at mount points
 
-add to env? RDBPartitionName, if possible
-	just require device name and partition name for AmigaDOS RDB disks
-	hm...how do I find the rdb names?
+Make BFFS just require device driver and partition name or number on RDB disks
+    Advantage is that user would not need to lookup mountlist parameters.
+    Add to env? RDBPartitionName, if possible
 
-optimize operations which do / and % for the macros
-
-make cache_append routine to be called when adding blk zero'd cache
-blocks into the cache - so they don't look like they've just been used
-
-write stripe.device
-write mirror.device
-
-for i386 write support
-work on superblock references everywhere
-work on bit manipulation routines?
-    bit_chk and others probably need new macros written
-    for little endian machines...maybe no change needed though
+Write stripe.device, mirror.device, or raid.device?
 
 From Todd Vierling
-  muFS style file protection?
-    add muFS stuff under #ifdef MUFS
+ -  muFS style file protection?
+    (add muFS stuff under #ifdef MUFS)
 
-  the ability to stale a file, deleting underneath a lock?
+ - The ability to stale a file, deleting underneath a lock?
 
 From Bernardo Innocenti
  - Please support Sun's UFS.  I have a SparcStation 4

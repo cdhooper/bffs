@@ -74,7 +74,10 @@ fsname(struct DosInfo *info, char *volumename)
     }
     PRINT(("fs last mounted as %s\n", superblock->fs_fsmnt));
 
-    name = fsmnt + strlen(fsmnt);
+    for (name = fsmnt; *name != '\0'; name++)
+	if ((name - fsmnt >= MAXMNTLEN) || (*name < ' '))
+	    goto invalid_last_mount;
+
     while ((*name == '/' || *name == '\0') && (name > fsmnt))
 	name--;
     while (name > fsmnt) {
@@ -88,23 +91,24 @@ fsname(struct DosInfo *info, char *volumename)
 
     strcpy(volumename + 1, name);
     if (*name == '\0') {
+invalid_last_mount:
 	strcpy(volumename + 1, "BFFS0");
 	volumename[strlen(volumename + 1)] = 'a' + fs_partition;
-    }
-    len = strlen(volumename + 1) + 1;
+	len = strlen(volumename + 1) + 1;
 
-    /* rename if already exists */
-    Forbid();
+	/* rename if already exists */
+	Forbid();
 search_again:
-	tmp = (struct DeviceList *) BTOC(info->di_DevInfo);
-	while (tmp != NULL)
-	    if (streqv(((char *) BTOC(tmp->dl_Name)) + 1, volumename + 1)) {
-		sprintf(volumename + len, "%u", count++);
-		goto search_again;
-	    } else {
-		tmp = (struct DeviceList *) BTOC(tmp->dl_Next);
-	    }
-    Permit();
+	    tmp = (struct DeviceList *) BTOC(info->di_DevInfo);
+	    while (tmp != NULL)
+		if (streqv(((char *) BTOC(tmp->dl_Name)) + 1, volumename + 1)) {
+		    sprintf(volumename + len, "%u", count++);
+		    goto search_again;
+		} else {
+		    tmp = (struct DeviceList *) BTOC(tmp->dl_Next);
+		}
+	Permit();
+    }
 
     volumename[0] = strlen(volumename + 1);
 }
@@ -147,9 +151,9 @@ NewVolNode(void)
     VolNode->dl_LockList = 0;
 
     /*
-     * Randell Jesup said (around 1991) that if we want WB to recognize BFFS,
-     * it might need to fake ID_DOS.  At least with OS 3.x, it seems content
-     * with BFFS.  Not sure about OS 2.x...
+     * Randell Jesup said (22-Dec-1991) that if we want Workbench to recognize
+     * BFFS, it might need to fake ID_DOS_DISK in response to ACTION_INFO.  It
+     * needs to be faked for ACTION_DISK_INFO, not here.
      */
     VolNode->dl_DiskType = ID_BFFS_DISK;
 
@@ -220,8 +224,8 @@ close_files(void)
     while (lock != NULL) {
 	if (lock->fl_Fileh && (lock->fl_Fileh->access_mode == MODE_WRITE)) {
 	    PRINT(("write closing i=%d\n", lock->fl_Key));
-	    if (lock->fl_Fileh->access_mode == MODE_WRITE)
-		truncate_file(lock->fl_Fileh);
+	    truncate_file(lock->fl_Fileh);
+	    lock->fl_Fileh->access_mode = MODE_READ;
 	}
 	lock = (struct BFFSLock *) BTOC(lock->fl_Link);
     }
@@ -237,14 +241,14 @@ truncate_file(struct BFFSfh *fileh)
 
     if (fileh->access_mode == MODE_WRITE) {
 	inode = inode_modify(fileh->real_inum);
+	inode->ic_mtime = DISK32(unix_time());
 	if (fileh->truncate_mode == MODE_TRUNCATE) {
 	    if (IC_SIZE(inode) > fileh->maximum_position) {
-		IC_SETSIZE(inode, fileh->maximum_position);
+		SET_IC_SIZE(inode, fileh->maximum_position);
 		file_blocks_deallocate(fileh->real_inum);
 	    }
 	    fileh->truncate_mode = MODE_UPDATE;
 	}
-	inode->ic_mtime = DISK32(unix_time());
 	file_block_retract(fileh->real_inum);
 	fileh->access_mode = MODE_READ;
     }
@@ -321,23 +325,6 @@ CreateLock(ULONG key, int mode, ULONG pinum, ULONG poffset)
     return(lock);
 }
 
-/* XXX: strnicmp() */
-static int
-strneqv(const char *str1, const char *str2, int length)
-{
-	while (length) {
-		if ((*str1 != *str2) && ((*str1 | 32) != (*str2 | 32)))
-			return(0);
-		if (*str1 == 0)
-			return(1);
-		str1++;
-		str2++;
-		length--;
-	}
-
-	return(1);
-}
-
 int
 ResolveColon(char *name)
 {
@@ -368,8 +355,8 @@ ResolveColon(char *name)
 	if (tmp->dl_Type == 1) {
 	    PRINT(("%.*s ", ((char *) BTOC(tmp->dl_Name))[0],
 		   ((char *) BTOC(tmp->dl_Name)) + 1));
-	    if (strneqv(((char *) BTOC(tmp->dl_Name)) + 1, name,
-			((char *) BTOC(tmp->dl_Name))[0])) {
+            if (strnicmp(((char *) BTOC(tmp->dl_Name)) + 1, name,
+                        ((char *) BTOC(tmp->dl_Name))[0]) == 0) {
 		PRINT(("<- "));
 		*pos = ':';
 		fl = (struct BFFSLock *) BTOC(tmp->dl_Lock);
@@ -464,23 +451,22 @@ FillInfoBlock(FileInfoBlock_3_t *fib, struct BFFSLock *lock,
     fmode = DISK16(finode->ic_mode);
     fib->fib_Comment[0] = 0;				/* zero length */
     fib->fib_Comment[1] = '\0';				/* NULL terminated */
-    fib->fib_Size	= (long) 0;
-    fib->fib_NumBlocks	= (long) 0;
 
     /* give file information in the comment field */
     if (inode_comments) {
-	if (bsd44fs)
-	    sprintf(fib->fib_Comment + 1,
-		    "i=%-4d p=%04o u=%-5d g=%-5d l=%-2d bl=%-4d",
-		    dir_ent ? DISK32(dir_ent->d_ino) : 0, fmode & 07777,
-		    DISK32(finode->ic_nuid), DISK32(finode->ic_ngid),
-		    DISK16(finode->ic_nlink), DISK32(finode->ic_blocks));
-	else
-	    sprintf(fib->fib_Comment + 1,
-		    "i=%-4d p=%04o u=%-5d g=%-5d l=%-2d bl=%-4d",
-		    dir_ent ? DISK32(dir_ent->d_ino) : 0, fmode & 07777,
-		    DISK16(finode->ic_ouid), DISK16(finode->ic_ogid),
-		    DISK16(finode->ic_nlink), DISK32(finode->ic_blocks));
+	ULONG uid;
+	ULONG gid;
+	if (bsd44fs) {
+	    uid = DISK32(finode->ic_nuid);
+	    gid = DISK32(finode->ic_ngid);
+	} else {
+	    uid = DISK32(finode->ic_ouid);
+	    gid = DISK32(finode->ic_ogid);
+	}
+	sprintf(fib->fib_Comment + 1,
+		"i=%-4u p=%04o u=%-5u g=%-5u l=%-2u bl=%-4u",
+		dir_ent ? DISK32(dir_ent->d_ino) : 0, fmode & 07777, uid, gid,
+		DISK16(finode->ic_nlink), DISK32(finode->ic_blocks));
 	fib->fib_Comment[0] = strlen(fib->fib_Comment + 1);
     }
 
@@ -488,7 +474,7 @@ FillInfoBlock(FileInfoBlock_3_t *fib, struct BFFSLock *lock,
     fib->fib_Size	= IC_SIZE(finode);	/* bytes */
     fib->fib_NumBlocks  = DISK32(finode->ic_blocks) / NDSPF;
 
-    if (DISK32(dir_ent->d_ino) == ROOTINO) {
+    if ((dir_ent == NULL) || DISK32(dir_ent->d_ino) == ROOTINO) {
 	fib->fib_DirEntryType = ST_ROOT;
     } else if ((fmode & IFMT) == IFREG) {
 	fib->fib_DirEntryType = ST_FILE;
@@ -558,7 +544,7 @@ FillInfoBlock(FileInfoBlock_3_t *fib, struct BFFSLock *lock,
     /*
      * Code here must stay in sync with code in PSetProtect().
      *
-     * Not enough UNIX bits to support FIBF_ARCHIVE
+     * There are not enough UNIX bits to support FIBF_ARCHIVE.
      * Could overlap group exec...
      *     fib->fib_Protection |= ((fmode & (IEXEC >> 3))? 0 : FIBF_ARCHIVE);
      */
@@ -618,16 +604,45 @@ FillInfoBlock(FileInfoBlock_3_t *fib, struct BFFSLock *lock,
 */
     if ((pack->dp_Type == ACTION_EX_OBJECT) ||
 	(pack->dp_Type == ACTION_EX_NEXT)) {
-	/* XXX: needed? */
-	fib->mode = fmode;
+	fib->mode = fmode;  /* XXX: needed? */
     }
 }
 
 void
 FillAttrBlock(fileattr_t *attr, struct icommon *finode)
 {
-    attr->fa_type      = 0;
-    attr->fa_mode      = DISK16(finode->ic_mode);  /* Same as UNIX disk mode */
+    UWORD type;
+    UWORD fmode = DISK16(finode->ic_mode);
+
+    switch (fmode & IFREG) {
+	default:
+	    type = NFNON;
+	    break;
+	case IFREG:
+	    type = NFREG;
+	    break;
+	case IFDIR:
+	    type = NFDIR;
+	    break;
+	case IFBLK:
+	    type = NFBLK;
+	    break;
+	case IFCHR:
+	    type = NFCHR;
+	    break;
+	case IFLNK:
+	    type = NFLNK;
+	    break;
+	case IFSOCK:
+	    type = NFSOCK;
+	    break;
+	case IFIFO:
+	    type = NFFIFO;
+	    break;
+    }
+
+    attr->fa_type      = type;
+    attr->fa_mode      = fmode;  /* Same as UNIX disk mode */
     attr->fa_nlink     = DISK16(finode->ic_nlink);
     attr->fa_uid       = DISK32(finode->ic_ouid);
     attr->fa_gid       = DISK32(finode->ic_ogid);
@@ -778,7 +793,7 @@ open_filesystem(void)
 	PRINT(("open filesystem\n"));
 
 	if (dev_openfail == 1)
-		dev_openfail = open_ufs();
+		dev_openfail = open_device();
 	if (dev_openfail != 1) {
 		PRINT(("reading superblock\n"));
 		dev_openfail = find_superblock();
@@ -812,7 +827,8 @@ close_filesystem(void)
 #ifndef RONLY
 		cache_flush();
 		cache_cg_flush();
-		superblock->fs_clean = 1;	/* unmounted clean */
+		superblock->fs_clean = 1;  /* unmounted clean */
+		superblock->fs_fmod++;
 		superblock_flush();
 #endif
 		close_cache();
@@ -821,36 +837,8 @@ close_filesystem(void)
 	}
 	if (motor_is_on)
 		motor_off();
-	close_ufs();
+	close_device();
 	dev_openfail = 1;
 
 	RemoveVolNode();
 }
-
-#ifdef INTEL
-
-unsigned short
-disk16(unsigned short x)
-{
-    /*
-     * This could be much faster in assembly as:
-     *     rol.w #8, d0
-     */
-    return(((x >> 8) & 255) | ((x & 255) << 8));
-}
-
-unsigned long
-disk32(unsigned long x)
-{
-    /*
-     * This could be much faster in assembly as:
-     *     rol.w #8, d0
-     *     swap d1
-     *     rol.w $8, d0
-     */
-    return((x >> 24) | (x << 24) |
-	   ((x << 8) & (255 << 16)) |
-	   ((x >> 8) & (255 << 8)));
-}
-
-#endif

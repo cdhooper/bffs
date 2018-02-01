@@ -1,4 +1,4 @@
-testdev:
+fms18:
     FileSystem = fs:BFFSFileSystem
     Device = fmsdisk.device
     Sectorsize = 
@@ -14,6 +14,6 @@ testdev:
     BlocksPerTrack = 136
     Buffers = 64
     Reserved = 0;
-    PreAlloc = 1285;
+    PreAlloc = 1285
     DosType = 0x42464653   /* BFFS */
 #

@@ -1,0 +1,42 @@
+** units/Unit16
+No disk label.
+** Last Mounted on 
+** Phase 1 - Check Blocks and Sizes
+** Phase 2 - Check Pathnames
+UNALLOCATED  I=551  OWNER=0 MODE=0
+SIZE=0 MTIME=Feb 06 06:28 2106 
+NAME=/sbin/mount
+
+REMOVE? no
+
+UNALLOCATED  I=552  OWNER=0 MODE=0
+SIZE=0 MTIME=Feb 06 06:28 2106 
+NAME=/sbin/intr
+
+REMOVE? no
+
+UNALLOCATED  I=553  OWNER=0 MODE=0
+SIZE=0 MTIME=Feb 06 06:28 2106 
+NAME=/sbin/sh
+
+REMOVE? no
+
+UNALLOCATED  I=554  OWNER=0 MODE=0
+SIZE=0 MTIME=Feb 06 06:28 2106 
+NAME=/sbin/hostconfig
+
+REMOVE? no
+
+** Phase 3 - Check Connectivity
+** Phase 4 - Check Reference Counts
+** Phase 5 - Check Cyl groups
+FREE BLK COUNT(S) WRONG IN SUPERBLK
+SALVAGE? no
+
+BLK(S) MISSING IN CG FRAG BIT MAPS
+SALVAGE? no
+
+CYL GROUP SUMMARY INFORMATION BAD
+SALVAGE? no
+
+388 files, 1648 used, 199 free (39 frags, 20 blocks, 1.5% fragmentation)

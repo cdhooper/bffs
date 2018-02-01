@@ -1,0 +1,84 @@
+.key blksize,fragsize,cylinders
+
+.DEF blksize 512
+.DEF fragsize 1024
+
+set fsck=bffssrc:bin/fsck
+set newfs=bffssrc:bin/newfs
+set dumpfs=bffssrc:bin/dumpfs
+set dcp=bffssrc:bin/dcp
+set cmp=bffssrc:bin/cmp
+set tfile=ram:test.out
+
+failat 65535
+
+. Default is to test as simulated floppy disk
+genml <blksize> 64 <cylinders>
+remount
+
+. Completely wipe test drive, so no disk label
+$dcp nil: tdev:
+
+Echo Testing BSD 4.4 FFS newfs/fsck/dumpfs
+$newfs -f <fragsize> tdev: >$tfile
+if warn
+    Echo "newfs failed:"
+    Type NUMBER $tfile
+    quit 1
+endif
+$fsck -n tdev: >$tfile
+if warn
+    Echo "fsck returned error with BSD 4.4 FFS"
+    Type NUMBER $tfile
+    quit 1
+endif
+Search QUIET $tfile PATTERN="(CORRECT|SALVAGE)" >NIL:
+if not warn
+    Echo "fsck detected problem with new BSD 4.4 filesystem"
+    Type NUMBER $tfile
+    quit 1
+endif
+$dumpfs tdev: >$tfile
+Search QUIET $tfile "4.4BSD" >NIL:
+if warn
+    Echo "dumpfs did not find 4.4BSD filesystem"
+    Type NUMBER $tfile
+    quit 1
+endif
+
+Echo Testing BSD 4.3 FFS newfs/fsck/dumpfs
+$newfs -f <fragsize> -O tdev: >$tfile
+if warn
+    Echo "newfs failed:"
+    Type NUMBER $tfile
+    quit 1
+endif
+$fsck -n tdev: >$tfile
+if warn
+    Echo "fsck returned error with BSD 4.3 FFS"
+    Type NUMBER $tfile
+    quit 1
+endif
+Search QUIET $tfile PATTERN="(CORRECT|SALVAGE)" >NIL:
+if not warn
+    Echo "fsck detected problem with new BSD 4.3 filesystem"
+    Type NUMBER $tfile
+    quit 1
+endif
+$dumpfs tdev: >$tfile
+Search QUIET $tfile "4.3BSD" >NIL:
+if warn
+    Echo "dumpfs did not find 4.3BSD filesystem"
+    Type NUMBER $tfile
+    quit 1
+endif
+
+Echo Testing fsck on zeroed device
+$dcp NIL: tdev:
+$fsck -n tdev: >$tfile
+Search QUIET $tfile "BAD SUPER BLOCK" >NIL:
+if warn
+    Echo "fsck failed to detect problem with zeroed device"
+    Type NUMBER $tfile
+    quit 1
+endif

@@ -1,0 +1,100 @@
+magic	11954	time	Thu Jul 04 05:21:36 1996
+UFS V1
+cylgrp	dynamic	inodes	4.4BSD
+nbfree	16	ndir	34	nifree	0	nffree	0
+ncg	5	ncyl	160	size	360	blocks	342
+bsize	8192	shift	13	mask	0xffffe000
+fsize	8192	shift	13	mask	0xffffe000
+frag	1	shift	0	fsbtodb	4
+cpg	32	bpg	72	fpg	72	ipg	64
+minfree	5%	optim	time	maxcontig 1	maxbpg	2048
+rotdelay 2ms	headswitch 0us	trackseek 0us	rps	60
+ntrak	2	nsect	18	npsect	18	spc	36
+symlinklen 60	trackskew 0	interleave 1	contigsumsize 0
+nindir	2048	inopb	64	nspf	16
+sblkno	2	cblkno	3	iblkno	4	dblkno	5
+sbsize	8192	cgsize	8192	cgoffset 2	cgmask	0xfffffffe
+csaddr	5	cssize	8192	shift	9	mask	0xfffffe00
+cgrotor	0	fmod	0	ronly	0
+blocks available in each of 8 rotational positions
+cylinder number 0:
+   position 0:	    0
+   position 6:	    2
+   position 7:	    1
+cylinder number 1:
+   position 4:	    4
+   position 5:	    3
+cylinder number 2:
+   position 2:	    6
+   position 3:	    5
+cylinder number 3:
+   position 0:	    8
+   position 1:	    7
+cs[].cs_(nbfree,ndir,nifree,nffree):
+	(0,7,0,0) (0,9,0,0) (5,5,0,0) (5,4,0,0) 
+	(6,9,0,0) 
+
+
+cg 0:
+magic	90255	tell	7	time	Sat Aug 13 11:06:44 2106
+cgx	0	ncyl	32	niblk	64	ndblk	72
+nbfree	0	ndir	7	nifree	0	nffree	0
+rotor	0	irotor	63	frotor	0
+frsum
+sum of frsum: 0
+iused:	0-63
+free:	
+b:
+
+cg 1:
+magic	90255	tell	7	time	Sat Aug 13 11:06:44 2106
+cgx	1	ncyl	32	niblk	64	ndblk	72
+nbfree	0	ndir	9	nifree	0	nffree	0
+rotor	0	irotor	63	frotor	0
+frsum
+sum of frsum: 0
+iused:	0-63
+free:	
+b:
+
+cg 2:
+magic	90255	tell	7	time	Sat Aug 13 11:06:44 2106
+cgx	2	ncyl	32	niblk	64	ndblk	72
+nbfree	5	ndir	5	nifree	0	nffree	0
+rotor	0	irotor	46	frotor	0
+frsum
+sum of frsum: 0
+iused:	0-63
+free:	67-71
+b:
+   c29:	(1)	 1 0
+   c30:	(2)	 1 1
+   c31:	(2)	 1 1
+
+cg 3:
+magic	90255	tell	7	time	Sat Aug 13 11:06:44 2106
+cgx	3	ncyl	32	niblk	64	ndblk	72
+nbfree	5	ndir	4	nifree	0	nffree	0
+rotor	0	irotor	63	frotor	0
+frsum
+sum of frsum: 0
+iused:	0-63
+free:	67-71
+b:
+   c29:	(1)	 1 0
+   c30:	(2)	 1 1
+   c31:	(2)	 1 1
+
+cg 4:
+magic	90255	tell	7	time	Sat Aug 13 11:06:44 2106
+cgx	4	ncyl	0	niblk	64	ndblk	72
+nbfree	6	ndir	9	nifree	0	nffree	0
+rotor	0	irotor	63	frotor	0
+frsum
+sum of frsum: 0
+iused:	0-63
+free:	66-71
+b:
+   c29:	(2)	 1 1
+   c30:	(2)	 1 1
+   c31:	(2)	 1 1

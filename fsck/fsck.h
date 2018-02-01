@@ -222,14 +222,11 @@ int findino();
 extern int DEV_BSIZE;
 extern int DEV_BSHIFT;
 
-/* #define S32(x) (x.val[1]) */
-#define btodb(bytes)                    /* calculates (bytes / DEV_BSIZE) */ \
-        ((unsigned)(bytes) >> DEV_BSHIFT)
-#define dbtob(db)                       /* calculates (db * DEV_BSIZE) */ \
-        ((unsigned)(db) << DEV_BSHIFT)
-
 #ifdef cdh
-void errexit();
+extern long totalreads;
+#define btodb(bytes) ((unsigned)(bytes) >> 9)   /* calculates (bytes / 512) */
+
+void errexit(const char *fmt, ...);
 int checkfstab();
 int pass1();
 int pass1b();
@@ -243,6 +240,12 @@ int inocleanup();
 void pwarn();
 void pfatal();
 void cacheino();
+#else
+#define btodb(bytes)                    /* calculates (bytes / DEV_BSIZE) */ \
+        ((unsigned)(bytes) >> DEV_BSHIFT)
+#define dbtob(db)                       /* calculates (db * DEV_BSIZE) */ \
+        ((unsigned)(db) << DEV_BSHIFT)
+
 #endif
 
 #ifdef AMIGA

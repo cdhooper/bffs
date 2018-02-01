@@ -284,6 +284,7 @@ getsb(fs, file)
 {
 
 #ifdef AMIGA
+	extern int DEV_BSIZE;
 	if (dio_open(file) == 0) {
 		onbreak(break_abort);
 		dio_inhibit(1);
@@ -293,16 +294,22 @@ getsb(fs, file)
 		if (fi < 0)
 			err(3, "cannot open %s", file);
 	}
+	dev_bsize = DEV_BSIZE;
+	if (bread((char *) fs, (daddr_t)SBOFF / dev_bsize, SBSIZE))
+		err(4, "%s: bad super block", file);
 #else
 	fi = open(file, 2);
 	if (fi < 0)
 		err(3, "cannot open %s", file);
-#endif
 	if (bread((char *) fs, (daddr_t)SBOFF, SBSIZE))
 		err(4, "%s: bad super block", file);
+#endif
 	if (fs->fs_magic != FS_MAGIC)
 		err(5, "%s: bad magic number", file);
 	dev_bsize = fs->fs_fsize / fsbtodb(fs, 1);
+#ifdef AMIGA
+	dio_assign_bsize(dev_bsize);
+#endif
 }
 
 #ifdef AMIGA

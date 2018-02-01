@@ -2,33 +2,28 @@
      An AmigaDOS FileSystem handler for the 4.4 BSD UNIX fast filesystem
                    (©) 1991 - 2018 by Chris Hooper
 
+        *** This guide is NOT complete and probably never will be ***
 
-*** This guide is NOT complete and probably never will be.
-    Page and line numbers have not been recomputed.
 
                          U S E R   M A N U A L
 
 
-                      Documentation Index
-Section       Line #   Page #   Description
-------------------------------------------------
-Index            9        1     This index
-Introduction    29        2     Preliminary Information
-Compatibility   62        3     Other systems with which BFFS is compatible
-MountList      111        4     Building a MountList entry
-HDToolBox      139        5     Using HDToolBox to mount your partitions
-Utilities      220        7     Programs to maintain and modify filesystems
-Quick Setup    309        9     Steps for experts to get running quickly
-Credits        327       10     Who helped with this project
-Known Bugs     353       11     Known problems which still exist with BFFS
-Appendix A:    371       12     MountList.BFFS information
-Appendix B:    446       14     Implementation Information
-Appendix C:    502       15     The BSD 4.2 File System
-Appendix D:    562       17     Differences between BFFS and the standard FFS
-Appendix F:    599       18     Information useful to programmers
-Appendix F:    651       19     Troubleshooting Suggestions
-
-
+     Line #   Page #   Section
+   ----------------------------------------
+       28        2     Introduction
+       58        3     Compatibility
+      139        5     Building a MountList entry
+      167        6     Using HDToolBox to automatically mount partitions
+      249        8     Maintenance Utilities
+      398       11     Expert Setup
+      416       12     Credits and Acknowledgements
+      443       13     Known Bugs
+      459       14     Appendix A: MountList.BFFS information
+      540       16     Appendix B: Implementation Information
+      601       17     Appendix C: The BSD 4.2 File System
+      662       19     Appendix D: Differences between BFFS and Amiga FFS
+      699       20     Appendix E: Information useful to programmers
+      760       21     Appendix F: Troubleshooting Suggestions
 INTRODUCTION:
 
     First, a definition is in order.  The major portion of this
@@ -94,20 +89,48 @@ filesystem types follow:
         why it happily trashed newer BSD 4.4 filesystems.  This version
         is still compatible with BSD 4.3 filesystems, but...
     BSD 4.4 filesystems
-        BFFS can now autodetect BSD 4.3 and BSD 4.4 filesystems and
-        knows how to deal with the differing structures in each.
+        BFFS can autodetect BSD 4.3 and BSD 4.4 filesystems and knows
+        how to deal with the differing structures in each.
         newfs and fsck included in this distribution are now ports
         of the Berkeley utilities dated 20-Jul-94 and 8-Jun-94
         respectively.  fsck has been used extensively throughout the
         testing process of BFFS.  Since the above filesystems (with
         some exceptions) seem compliant to fsck, I would assume that
         BSD 4.3 and BSD 4.4 FFS should not have a problem reading
-        BFFS-written and writing filesystems.
+        BFFS-written filesystems.
+    BSD UFS V1
+	Newer versions of BSD, including NetBSD circa 1994 introduced
+	changes in the filesystem called V1.  These include structural
+	changes in the superblock and cylinder group areas to add 64-bit
+        support for summary information.  The BFFS 1.6 FileSystem has been
+        enhanced to detect and update these fields on a newer filesystem.
+        Most of the command tools (newfs, dump, etc), do not know how to
+        deal with the changes.  The only exception is fsck, which was
+	modified to be able to use the proper summary information if the
+	filesystem is UFS V1.  Since the newfs shipped with BFFS does not
+	support this version, it will still create filesystems prior to
+	the V1 format.  Newer versions of NetBSD's UFS and fsck can
+	up-convert filesystems to the V1 format.  On current NetBSD, use
+	the following arguments when creating a filesystem for best
+	performance with BFFS:
+	    newfs -B be -O 1 <device>
+	When creating a multiple-GB filesystem, you may also want to add
+        the "-n <inode-count>" option to limit the number of inodes.
+
+    BSD UFS V2
+	BFFS can detect this version and will force the filesystem to
+	read-only mode.
 
-    x86 NOTE:  Use the BFFSFilesystem.rointel to read x86 BSD filesystems.
-        It automatically handles the swapped byte orders of these
-        filesystems, but it is read-only, as I have no way to validate
-        correctness of the filesystem on writes.
+    ENDIAN NOTES:  Use BFFSFilesystem to read and write both 68k and x86
+        BSD Fast filesystems.  This version automatically handles detecting
+        and swapping byte orders of these filesystems.  There is also a
+        read-only version of this filesystem called BFFSFilesystem.ro.  If
+        you do not require x86 support, then the BFFSFilesystem.be version
+        (supporting only big endian) is smaller and faster.
+
+        The command line tools (newfs, fsck, dumpfs, etc) do not understand
+        little endian filesystems.  A new port of the current version of
+        these utilities would enable that support.
 
     See Appendix A for information on selecting an Amiga device driver
     and appropriate filesystem handler.
@@ -140,7 +163,7 @@ the following fields:
 
 Please see Appendix A for descriptions of the MountList fields.
 
-USING HDTOOLBOX TO AUTOMATICALLY MOUNT YOUR PARTITIONS:
+USING HDTOOLBOX TO AUTOMATICALLY MOUNT PARTITIONS:
 
     Before you follow the below procedure, I recommend you first
 try mounting the filesystem using a MountList entry.  A filesystem
@@ -237,8 +260,8 @@ o  bffstool
         change filesystem buffers, modify the write sync timers,
         clear statistics, and change operating flags (auto symlink,
         ignore case, dir comments, unix paths. and read only).
-	The program is not very friendly to modern Amiga resolutions
-	and user interfaces.
+        The program is not very friendly to modern Amiga resolutions
+        and user interfaces.
 
 o  chmod
         Change file (user / group / other) permissions
@@ -247,11 +270,15 @@ o  chown
         Change ownership (user id / group id) of a file per the
         AmigaDOS 3.0 packet.
 
+o  cmp
+        A simple utility to perform a binary comparison between two files
+        on disk.
+
 o  dbprint
         Display BFFS debug messages (note this program requires a
-	CLI window, and will take over the window).  It may be safely
-	aborted at any time by pressing control-C.  You must be running
-	the debug version of the filesystem to see any output.
+        CLI window, and will take over the window).  It may be safely
+        aborted at any time by pressing control-C.  You must be running
+        the debug version of the filesystem to see any output.
 
 o  dcp
         Dcp is a program that can copy to/from devices and files.
@@ -268,22 +295,21 @@ o  disklabel
         partitions are not compatible with the way NetBSD partitions
         were implemented on the Amiga.  This might have changed at
         some point, but I doubt it.  This program is a port of the
-	4.4 BSD program of the same name.  See the disklabel.8 and
-	disklabel.5.5 manual pages for more information.
+        4.4 BSD program of the same name.  See the disklabel.8 and
+        disklabel.5.5 manual pages for more information.
 
 o  dump
         This program can be used to make a backup image of files in
-	the filesystem.  It is a port of the 4.4 BSD program of the
-	same name.  See the dump.8 manual page for more information.
-	See also the restore command below.
-
+        the filesystem.  It is a port of the 4.4 BSD program of the
+        same name.  See the dump.8 manual page for more information.
+        See also the restore command below.
+
 o  dumpfs
         Most users will probably never need to use this program.
-	It is a port of the BSD 4.4 program of the same name, and
-	similar to edumpfs will print out information from the
-	superblock of the filesystem.
+        It is a port of the BSD 4.4 program of the same name, and
+        similar to edumpfs will print out information from the
+        superblock of the filesystem.
 
-
 o  edumpfs
         Most users will probably never need to use this program.
         It prints out information on the disk label and superblock,
@@ -291,18 +317,18 @@ o  edumpfs
 
 o  fs_thrash
         A simple program to blindly create/delete/read/write files in
-	a filesystem.  Running multiple copies at the same time were
-	used to test BFFS's filesystem metadata management.  It is
-	probably not useful for anyone but me.
+        a filesystem.  Running multiple copies at the same time were
+        used to test BFFS's filesystem metadata management.  It is
+        probably not useful for anyone but me.
 
 o  fsck
         This program will check your filesystem for inconsistencies.
         It is a port of the 4.4 BSD program of the same name.
         NOTE: This program doesn't like SunOS filesystems as much as it
-	does BSD filesystems.  If fsck tells you the disk requires a label
-	for a SunOS disk, supply the location of the superblock:
-	    fsck -b 16 <DEVICE:>
-	Otherwise, you should be able to just type: "fsck <DEVICE:>"
+        does BSD filesystems.  If fsck tells you the disk requires a label
+        for a SunOS disk, supply the location of the superblock:
+            fsck -b 16 <DEVICE:>
+        Otherwise, you should be able to just type: "fsck <DEVICE:>"
         See the fsck.8 manual page for more information.
 
 o  ln
@@ -315,56 +341,60 @@ o  ln
 
 o  ls
         Quick directory lister showing extended AmigaDOS 3.0 permissions
-	and file owner/group.  Can also show true UNIX permissions, file
-	size in blocks, and file inode number on a UNIX filesystem.  The
-	goal for this utility is to be as similar as possible to the UNIX
-	ls command.
+        and file owner/group.  Can also show true UNIX permissions, file
+        size in blocks, and file inode number on a UNIX filesystem.  The
+        goal for this utility is to be as similar as possible to the UNIX
+        ls command.
 
 o  mknod
         Create Unix device nodes (block and character special) using
         a mounted BFFS filesystem.  This program uses a new packet assigned
-	by Randell Jesup (ACTION_CREATE_OBJECT), which may be used to
-	create an arbitrary file type.
+        by Randell Jesup (ACTION_CREATE_OBJECT), which may be used to
+        create an arbitrary file type.
 
 o  newfs
         This program will create a new filesystem on the specified device.
-	If disklabel was not first run on the partition, the size of the
-	entire partition will be used for the filesystem.  Warning: This
-	program unmercifully writes over an existing filesystem if you
-	specify the wrong device.  There is no confirmation prompt -- it
-	will immediately start writing the device.  This is a port of the
-	4.4 BSD program of the same name.  See the newfs.8 manual page for
-	more information.
-
+        If disklabel was not first run on the partition, the size of the
+        entire partition will be used for the filesystem.  Warning: This
+        program unmercifully writes over an existing filesystem if you
+        specify the wrong device.  There is no confirmation prompt -- it
+        will immediately start writing the device.  This is a port of the
+        4.4 BSD program of the same name.  See the newfs.8 manual page for
+        more information.
+
 o  rdb
         Edit the RDB area of most disk devices.  This is a crude
-	command-line program, but can do most things HDToolBox can do (and
-	a few it won't).  I wrote it because my IVS Trumpcard wouldn't talk
-	to HDToolBox and I wanted to have more than *one* automount partition.
-
+        command-line program, but can do most things HDToolBox can do (and
+        a few it won't).  I wrote it because my IVS Trumpcard wouldn't talk
+        to HDToolBox and I wanted to have more than *one* automount partition.
+
 o  restore
         This program will restore a BSD format dump file to a BFFS
-	filesystem.  It is a port of the BSD 4.4 restore command.
-	Creation of UNIX special files are supported.  See the
-	restore.8 manual page for more information.  See also the dump
-	command above.
+        filesystem.  It is a port of the BSD 4.4 restore command.
+        Creation of UNIX special files are supported.  See the
+        restore.8 manual page for more information.  See also the dump
+        command above.
+
+o  sync
+        Command to force filesystems to flush dirty data to disk.  This
+        is similar to the UNIX command of the same name.
 
 o  touch
         Command to set file time(s) for BFFS filesystems, with SYSV syntax.
 
 o  tunefs
         This program can be used to make minor parameter changes to the
-	superblock of a filesystem.  It is a port of the BSD 4.4 program
-	of the same name.  Note that BFFS ignores most parameters which
-	can be set by tunefs.  See the tunefs.8 manual page for more
-	information.
+        superblock of a filesystem.  It is a port of the BSD 4.4 program
+        of the same name.  Note that BFFS ignores most parameters which
+        can be set by tunefs.  See the tunefs.8 manual page for more
+        information.
 
 o  umount
         This program may be used to "unmount" an Amiga device.  It works
-	by sending the "ACTION_DIE" packet to the device and then removing
-	the device from the DOS LockList (similar to "assign dismount <dev>").
+        by sending the "ACTION_DIE" packet to the device and then removing
+        the device from the DOS LockList (similar to "assign dismount <dev>").
 
-QUICK SETUP
+EXPERT SETUP
 
 For those with previous experience with setting up BFFS or other
 AmigaDOS filesystems, here are the things you need to do:
@@ -382,11 +412,11 @@ o   If all went well, you should be able to CD to the filesystem,
         hopefully your Amiga did not crash.  Consult the Appendices
         to ensure you've configured everything correctly.
 
-CREDITS
+CREDITS AND ACKNOWLEDGEMENTS
 
     Chris Hooper       Main Author, program concept and development
     Bill Moore         Original DOS interface Author, program concept, and
-		       main motivator of the need for filesystem.
+                       main motivator of the need for filesystem.
     Ken Dyke           Assembly Author (stack and diskchange), always
                        the quickest reference for my needs!!  :)
     Randell Jesup      Gave AmigaDOS filesystem insight, helpful hits,
@@ -438,7 +468,7 @@ APPENDIX A:  MountList.BFFS information
         Quick notes:
             IVS SCSI addresses begin at 1, not 0
             2090(A) SCSI addresses begin at 3; MFM is at 1 and 2
-	    2091 and A3000 SCSI addresses are the same as the Unit.
+            2091 and A3000 SCSI addresses are the same as the Unit.
     Mount entry should be set to your preference, with 0 meaning mount
         at first access and 1 meaning mount immediately.
     StackSize should be left at 512.  BFFS allocates stack at runtime.
@@ -463,9 +493,11 @@ APPENDIX A:  MountList.BFFS information
     BlocksPerTrack should be set per your drive's geometry [may be
         specified as sectors per track]. This information may be
         acquired from HDToolBox.
-    Buffers should be set to the number of 512-byte blocks of system
-        memory you want to devote to the cache.  A minimum of eight is
-        required for proper operation of the filesystem.
+    Buffers should be set to the number of blocks of system memory you
+        you want to devote to the cache.  Each block is the size of a
+        filesystem fragment block, which is nominally 1024 bytes unless
+        specified differently to newfs.  A minimum of eight is enforced
+        for proper operation of the filesystem.
 
     Reserved is the Unix partition on the media you want to access.
         It can also specify that no disk label is present:
@@ -484,20 +516,23 @@ APPENDIX A:  MountList.BFFS information
            to achieve a combination of parameters.
     PreAlloc is used to modify the startup defaults for the filesystem
         0x01 = Turn on automatic symlink resolution
-        0x02 = Turn on case independence.  If you are familiar with the
-             Amiga filesystem, you probably want to turn this on.
+        0x02 = Turn off case independence.  If you are familiar with the
+               Amiga filesystem, you probably want to leave this on.
         0x04 = Make filesystem respect UNIX paths (/, ..) and not AmigaDOS paths
         0x08 = Turn on directory comments (symlink destinations)
         0x10 = Turn on directory comments (inode, perms, user, grp, etc)
         0x20 = Invert the definition of the other/group permission bits
         0x40 = Report space free relative to minfree (instead of actual)
+
         Bits 8-15 represent a signed byte which is the GMT offset for
             the filesystem when dealing with file times.  I recommended
             you use BFFSTool to get the settings you want, then put the
             PreAlloc number it gives you into your MountList.
-	    Examples: USA PDT (Pacific daylight savings time) = 0xf900
-	              USA PST (Pacific std time)              = 0xf800
+            Examples: USA PDT (Pacific daylight savings time) = 0xf900
+                      USA PST (Pacific std time)              = 0xf800
         You may combine any of the above to alter multiple parameters.
+        Note that HDToolBox will require this field (known as "end" there)
+        to be specified as an unsigned decimal.
     DosType should be left as 0x42464653 ("BFFS"), unless you have a
         specific need for a different DosType (such as NetBSD partition).
 
@@ -623,7 +658,7 @@ or cylinder loss could jeopardize all data on the disk.
     The above additions make for a much more complex implementation,
 consuming fast CPU time in place of slow disk time.
 
-APPENDIX D: Differences between BFFS and the standard Amiga FFS
+APPENDIX D: Differences between BFFS and Amiga FFS
 
     When executing directory listings, you should notice less disk
 head movement with BFFS than with the Amiga FFS.  This is mainly due
@@ -728,15 +763,15 @@ Situation:  You went against my advice of testing with a MountList
             "Software Failure".  In other words, the machine crashes on
             boot, with no escape.
 Suggestion: Obviously you don't want the machine to try to automount the
-	    disk.  Your hard drive controller may have a jumper that you
-	    can remove or insert to disable autoboot.  If so, do this.
-	    If not, you might try unplugging your drive from the bus on
-	    powerup, then back in after the machine has booted (off floppy,
-	    or if you're lucky another drive).  Then use your handy dandy
-	    disk partitioner thing (HDToolBox for Commodore controllers)
-	    to remove that partition.  If that doesn't work, you might try
-	    using my rdb editor to manually remove the entry for that
-	    partition from the RDB.
+            disk.  Your hard drive controller may have a jumper that you
+            can remove or insert to disable autoboot.  If so, do this.
+            If not, you might try unplugging your drive from the bus on
+            powerup, then back in after the machine has booted (off floppy,
+            or if you're lucky another drive).  Then use your handy dandy
+            disk partitioner thing (HDToolBox for Commodore controllers)
+            to remove that partition.  If that doesn't work, you might try
+            using my rdb editor to manually remove the entry for that
+            partition from the RDB.
 
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -750,7 +785,8 @@ Possible Problem: You are using an old version of mfm.device.  Get
 
 Possible Problem: The floppy has an incompatible superblock.  If it's
            a 386BSD floppy (or any other floppy written with an Intel
-           processor), make sure you use the BFFSFileSystem.i handler.
+           processor), make sure you use the BFFSFileSystem or similar
+           handler and not BFFSFileSystem.be or similar.
 
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 

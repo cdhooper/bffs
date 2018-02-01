@@ -37,9 +37,9 @@ const char *version = "\0$VER: bffstool 1.6 (19-Jan-2018) © Chris Hooper";
 #define ID_UDGAD    20
 #define ID_QUIT    250
 
-#define MAX_GADGETS    100
+#define MAX_GADGETS    157
 #define MAX_BFFSs	50
-#define MAX_HASHITEMS	40
+#define MAX_CACHEITEMS	40
 #define CACHE_CG_MAX	16
 
 struct Screen *screen	= NULL;
@@ -65,33 +65,50 @@ struct Gadget *gad	= NULL;
 struct Gadget *preallocgad = NULL;
 struct NewGadget ng;
 ULONG	      *stats	= NULL;
+int	      dflag = 0;
+int	      is_big_endian = 1;
 int	      sb_mod = 0;
 int	      sb_clean = 0;
 int	      prealloc = 0;
 int           rkbytes = 0;
 int           wkbytes = 0;
-int	      stat_start 	= 23;
+int	      stat_start	= 23;
 int           prealloc_pos	= 52;
 int           rkbytes_pos	= 53;
 int           wkbytes_pos	= 54;
-int           super_max_inodes	= 55;
-int	      super_start	= 56;
-/* int	      hashlist_start; */
+int	      super_start	= 55;
 int	      total_gadgets = 0;
 int	      *gad_addresses[MAX_GADGETS];
 struct fs     *superblock;
+struct fs     sb;  /* local copy of endian-converted superblock */
 char	      handler_name[128];
 struct cache_set *temp;
 int	      zero = 0;
+int	      negative_one = -1;
 char	      *filesystems[MAX_BFFSs] = { NULL };
 char	      *handler_label[2] = { NULL, NULL };
 ULONG         max_inodes = 0;
 int	      ypos = 0;
 int	      xpos = 0;
 char	      prealloc_str[32];
+int	      cachelist_start;
+int	      hashlist_start;
+int	      hashlist_counts[HASH_SIZE];
 
 static void calc_prealloc(void);
 static void refresh_prealloc(void);
+
+static void
+hashlist_update_counts(void)
+{
+    int index;
+    for (index = 0; index < HASH_SIZE; index++) {
+	    int count = 0;
+	    for (temp = cache_hash[index]; temp != NULL; temp = temp->hash_down)
+		count++;
+	    hashlist_counts[index] = count;
+    }
+}
 
 static void
 cleanup(void)
@@ -137,27 +154,138 @@ static void
 assign_superblock_addresses(void)
 {
     int current = super_start;
+    max_inodes = sb.fs_ipg * sb.fs_ncg;
 
-    gad_addresses[current++] = &superblock->fs_cstotal.cs_nifree; /* inodes free */
-    gad_addresses[current++] = &superblock->fs_cstotal.cs_nbfree; /* blocks free */
-    gad_addresses[current++] = &superblock->fs_cstotal.cs_nffree; /* frags free */
-    gad_addresses[current++] = &superblock->fs_cstotal.cs_ndir; /* num dirs */
-    gad_addresses[current++] = &superblock->fs_bsize;       /* block size */
-    gad_addresses[current++] = &superblock->fs_fsize;       /* frag size */
-    gad_addresses[current++] = &superblock->fs_dsize;       /* data frags */
-    gad_addresses[current++] = &superblock->fs_size;        /* num frags */
-    gad_addresses[current++] = &superblock->fs_ncg;         /* num cgs */
-    gad_addresses[current++] = &superblock->fs_ncyl;        /* num cyl */
-    gad_addresses[current++] = &superblock->fs_nsect;       /* sec/track */
-    gad_addresses[current++] = &superblock->fs_ntrak;       /* track/cyl */
-    gad_addresses[current++] = &superblock->fs_cpg;         /* cyl/cg */
-    gad_addresses[current++] = &superblock->fs_fpg;         /* frags/cg */
-    gad_addresses[current++] = &superblock->fs_ipg;         /* inodes/cg */
-    gad_addresses[current++] = &superblock->fs_minfree;         /* minfree */
-    gad_addresses[current++] = &sb_mod;             /* modified */
-    gad_addresses[current++] = &sb_clean;               /* clean */
-/*  gad_addresses[current++] = &superblock->fs_fmod;         * modified */
-/*  gad_addresses[current++] = &superblock->fs_clean;        * clean */
+    gad_addresses[current++] = &sb.fs_cstotal.cs_nifree; /* inodes free */
+    gad_addresses[current++] = &sb.fs_cstotal.cs_nbfree; /* blocks free */
+    gad_addresses[current++] = &sb.fs_cstotal.cs_nffree; /* frags free */
+    gad_addresses[current++] = &sb.fs_size;              /* num frags */
+    gad_addresses[current++] = &sb.fs_dsize;             /* data frags */
+    gad_addresses[current++] = &max_inodes;              /* max inodes */
+    gad_addresses[current++] = &sb.fs_bsize;             /* block size */
+    gad_addresses[current++] = &sb.fs_fsize;             /* frag size */
+    gad_addresses[current++] = &stat->phys_sectorsize;   /* media sector size */
+    gad_addresses[current++] = &sb.fs_ncyl;              /* num cyl */
+    gad_addresses[current++] = &sb.fs_nsect;             /* sec/track */
+    gad_addresses[current++] = &sb.fs_ntrak;             /* track/cyl */
+    gad_addresses[current++] = &sb.fs_cpg;               /* cyl/cg */
+    gad_addresses[current++] = &sb.fs_ncg;               /* num cgs */
+    gad_addresses[current++] = &sb.fs_ipg;               /* inodes/cg */
+    gad_addresses[current++] = &sb.fs_fpg;               /* frags/cg */
+    gad_addresses[current++] = &sb.fs_minfree;           /* minfree */
+    gad_addresses[current++] = &sb_mod;                  /* modified */
+    gad_addresses[current++] = &sb_clean;                /* clean */
+/*  gad_addresses[current++] = &sb.fs_fmod;               * modified */
+/*  gad_addresses[current++] = &sb.fs_clean;              * clean */
+}
+
+static ULONG
+disk32(ULONG x)
+{
+    if (is_big_endian)
+        return (x);
+
+    /*
+     * This could be much faster in assembly as:
+     *     rol.w #8, d0
+     *     swap d1
+     *     rol.w $8, d0
+     */
+    return((x >> 24) | (x << 24) |
+           ((x << 8) & (255 << 16)) |
+           ((x >> 8) & (255 << 8)));
+}
+#define DISK32(x) disk32(x)
+
+static void
+conv_superblock(void)
+{
+    memcpy(&sb, superblock, sizeof (sb));
+    if ((DISK32(superblock->fs_magic) == FS_UFS1_MAGSWAP) ||
+        (DISK32(superblock->fs_magic) == FS_UFS2_MAGSWAP)) {
+	is_big_endian = !is_big_endian;
+    }
+    sb.fs_sblkno = DISK32(superblock->fs_sblkno);
+    sb.fs_cblkno = DISK32(superblock->fs_cblkno);
+    sb.fs_iblkno = DISK32(superblock->fs_iblkno);
+    sb.fs_dblkno = DISK32(superblock->fs_dblkno);
+    sb.fs_cgoffset = DISK32(superblock->fs_cgoffset);
+    sb.fs_cgmask = DISK32(superblock->fs_cgmask);
+    sb.fs_time = DISK32(superblock->fs_time);
+    sb.fs_size = DISK32(superblock->fs_size);
+    sb.fs_dsize = DISK32(superblock->fs_dsize);
+    sb.fs_ncg = DISK32(superblock->fs_ncg);
+    sb.fs_bsize = DISK32(superblock->fs_bsize);
+    sb.fs_fsize = DISK32(superblock->fs_fsize);
+    sb.fs_frag = DISK32(superblock->fs_frag);
+    sb.fs_minfree = DISK32(superblock->fs_minfree);
+    sb.fs_rotdelay = DISK32(superblock->fs_rotdelay);
+    sb.fs_rps = DISK32(superblock->fs_rps);
+    sb.fs_bmask = DISK32(superblock->fs_bmask);
+    sb.fs_fmask = DISK32(superblock->fs_fmask);
+    sb.fs_bshift = DISK32(superblock->fs_bshift);
+    sb.fs_fshift = DISK32(superblock->fs_fshift);
+    sb.fs_maxcontig = DISK32(superblock->fs_maxcontig);
+    sb.fs_maxbpg = DISK32(superblock->fs_maxbpg);
+    sb.fs_fragshift = DISK32(superblock->fs_fragshift);
+    sb.fs_fsbtodb = DISK32(superblock->fs_fsbtodb);
+    sb.fs_sbsize = DISK32(superblock->fs_sbsize);
+    sb.fs_csmask = DISK32(superblock->fs_csmask);
+    sb.fs_csshift = DISK32(superblock->fs_csshift);
+    sb.fs_nindir = DISK32(superblock->fs_nindir);
+    sb.fs_inopb = DISK32(superblock->fs_inopb);
+    sb.fs_nspf = DISK32(superblock->fs_nspf);
+    sb.fs_optim = DISK32(superblock->fs_optim);
+    sb.fs_npsect = DISK32(superblock->fs_npsect);
+    sb.fs_interleave = DISK32(superblock->fs_interleave);
+    sb.fs_trackskew = DISK32(superblock->fs_trackskew);
+    /* sb.fs_id[2] */
+    sb.fs_csaddr = DISK32(superblock->fs_csaddr);
+    sb.fs_cssize = DISK32(superblock->fs_cssize);
+    sb.fs_cgsize = DISK32(superblock->fs_cgsize);
+    sb.fs_ntrak = DISK32(superblock->fs_ntrak);
+    sb.fs_nsect = DISK32(superblock->fs_nsect);
+    sb.fs_spc = DISK32(superblock->fs_spc);
+    sb.fs_ncyl = DISK32(superblock->fs_ncyl);
+    sb.fs_cpg = DISK32(superblock->fs_cpg);
+    sb.fs_ipg = DISK32(superblock->fs_ipg);
+    sb.fs_fpg = DISK32(superblock->fs_fpg);
+    sb.fs_cstotal.cs_nifree = DISK32(superblock->fs_cstotal.cs_nifree);
+    sb.fs_cstotal.cs_nbfree = DISK32(superblock->fs_cstotal.cs_nbfree);
+    sb.fs_cstotal.cs_nffree = DISK32(superblock->fs_cstotal.cs_nffree);
+    sb.fs_cstotal.cs_ndir = DISK32(superblock->fs_cstotal.cs_ndir);
+    /* sb.fs_fmod = superblock->fs_fmod; */
+    /* sb.fs_clean = superblock->fs_clean; */
+    /* sb.fs_ronly = superblock->fs_ronly; */
+    /* sb.fs_flags = superblock->fs_flags; */
+    /* sb.fs_fsmnt[MAXMNTLEN] */
+    sb.fs_cgrotor = DISK32(superblock->fs_cgrotor);
+    /* sb.fs_ocsp[NOCSPTRS] */
+    /* sb.fs_contigdirs */
+    /* sb.fs_csp */
+    /* sb.fs_maxcluster */
+    /* sb.fs_active */
+    sb.fs_cpc = DISK32(superblock->fs_cpc);
+    /* sb.fs_opostbl[16][8] */
+    /* sb.fs_sparecon[50] */
+    sb.fs_contigsumsize = DISK32(superblock->fs_contigsumsize);
+    sb.fs_maxsymlinklen = DISK32(superblock->fs_maxsymlinklen);
+    sb.fs_inodefmt = DISK32(superblock->fs_inodefmt);
+    if (!is_big_endian) {
+	sb.fs_maxfilesize.val[0] = DISK32(superblock->fs_maxfilesize.val[1]);
+	sb.fs_maxfilesize.val[1] = DISK32(superblock->fs_maxfilesize.val[0]);
+	sb.fs_qbmask.val[0] = DISK32(superblock->fs_qbmask.val[1]);
+	sb.fs_qbmask.val[1] = DISK32(superblock->fs_qbmask.val[0]);
+	sb.fs_qfmask.val[0] = DISK32(superblock->fs_qfmask.val[1]);
+	sb.fs_qfmask.val[1] = DISK32(superblock->fs_qfmask.val[0]);
+    }
+    sb.fs_state = DISK32(superblock->fs_state);
+    sb.fs_postblformat = DISK32(superblock->fs_postblformat);
+    sb.fs_nrpos = DISK32(superblock->fs_nrpos);
+    sb.fs_postbloff = DISK32(superblock->fs_postbloff);
+    sb.fs_rotbloff = DISK32(superblock->fs_rotbloff);
+    sb.fs_magic = DISK32(superblock->fs_magic);
+    /* sb.fs_space[1] */
 }
 
 static void
@@ -178,7 +306,7 @@ horizontal_int(int num, int *addr)
 					  GTNM_Number, *addr,
 					  GTTX_Border, 1, TAG_DONE);
 	if (num > MAX_GADGETS)
-		printf("Too many gadgets %d\n", num);
+		fprintf(stderr, "Too many gadgets %d\n", num);
 	else
 		gad_addresses[num] = addr;
 	xpos += 7 * 8;
@@ -207,8 +335,7 @@ assign_stat_addresses(void)
 static void
 setup_gadgets(void)
 {
-	int	index;
-	int	current;
+	int current;
 
 	for (current = 0; current < MAX_GADGETS; current++) {
 		gad_addresses[current] = NULL;
@@ -247,10 +374,10 @@ setup_gadgets(void)
 			   *stat->resolve_symlinks, TAG_DONE);
 	ypos += 12;
 
-	do_ng(608, ypos, 20, 8, "Ignore Case", ID_CASE,
+	do_ng(608, ypos, 20, 8, "Respect Case", ID_CASE,
 	      NG_HIGHLABEL | PLACETEXT_LEFT);
 	cigad = gad = CreateGadget(CHECKBOX_KIND, gad, &ng, GTCB_Checked,
-			   *stat->case_independent, TAG_DONE);
+			   *stat->case_dependent, TAG_DONE);
 	ypos += 12;
 
 	do_ng(608, ypos, 20, 8, "Link Comments", ID_COMMENT,
@@ -274,7 +401,7 @@ setup_gadgets(void)
 	do_ng(608, ypos, 20, 8, "Read Only", ID_RONLY,
 	      NG_HIGHLABEL | PLACETEXT_LEFT);
 	rogad = gad = CreateGadget(CHECKBOX_KIND, gad, &ng, GTCB_Checked,
-			   superblock->fs_ronly, TAG_DONE);
+			   sb.fs_ronly, TAG_DONE);
 	ypos += 12;
 
 	do_ng(608, ypos, 20, 8, "Show Minfree", ID_MINFREE,
@@ -406,43 +533,69 @@ setup_gadgets(void)
 	ypos = window->BorderTop;
 	xpos += 160;
 
-	max_inodes = superblock->fs_ipg * superblock->fs_ncg;
-	gad_addresses[super_max_inodes] = &max_inodes;	    /* num inodes */
-
 	current = super_start;
-	for (index = 0; index < 6; index++, current++)
-		vertical_int(current);
-	vertical_int(super_max_inodes);
 	for (; gad_addresses[current] != NULL; current++)
 		vertical_int(current);
 
+	if (dflag) {
+	    /* Offset for cachelist and hashlist */
+	    ypos += 10;
 
-/* below displays detailed cache LRU information
-	hashlist_start = current;
-	xpos = 182;
-	ypos += 8;
-	do_ng(xpos - 8, ypos, 0, 9, "Cache LRU block list", 0,
-	      NG_HIGHLABEL | PLACETEXT_RIGHT);
-	gad = CreateGadget(TEXT_KIND, gad, &ng, TAG_DONE);
-	ypos += 8;
+	    /* Show cachelist */
+	    cachelist_start = current;
+	    xpos = 10;
+	    ypos += 10;
+	    do_ng(xpos - 8, ypos, 0, 9, "Cache LRU block list", 0,
+		  NG_HIGHLABEL | PLACETEXT_RIGHT);
+	    gad = CreateGadget(TEXT_KIND, gad, &ng, TAG_DONE);
+	    ypos += 8;
 
-	for (temp = cache_stack; temp != NULL; temp = temp->stack_up) {
-		horizontal_int(current++, &temp->blk);
-		if (xpos > 620) {
-			xpos = 182;
+	    temp = cache_stack;
+	    for (; current < cachelist_start + MAX_CACHEITEMS; current++) {
+		if (current >= MAX_GADGETS)
+		    break;
+		if (xpos > 580) {
+			xpos = 10;
 			ypos += 8;
 		}
-		if (current >= hashlist_start + MAX_HASHITEMS)
-			break;
-	}
-	while (current < hashlist_start + MAX_HASHITEMS) {
-		horizontal_int(current++, &zero);
-		if (xpos > 620) {
-			xpos = 182;
+		if (temp == NULL) {
+		    horizontal_int(current, &negative_one);
+		} else {
+		    horizontal_int(current, &temp->blk);
+		    temp = temp->stack_up;
+		}
+		xpos += 22;
+	    }
+
+	    /* Show hashlist */
+	    hashlist_update_counts();
+	    hashlist_start = current;
+	    xpos = 10;
+	    ypos += 12;
+	    do_ng(xpos - 8, ypos, 0, 9, "Cache Hash Table", 0,
+		  NG_HIGHLABEL | PLACETEXT_RIGHT);
+	    gad = CreateGadget(TEXT_KIND, gad, &ng, TAG_DONE);
+	    ypos += 8;
+
+	    int pos;
+	    for (pos = 0; pos < HASH_SIZE; pos++) {
+		if (current >= MAX_GADGETS)
+		    break;
+		if (xpos > 580) {
+			xpos = 10;
 			ypos += 8;
 		}
+		temp = cache_hash[pos];
+		horizontal_int(current++, &hashlist_counts[pos]);
+		xpos -= 28;
+		if (temp == NULL) {
+		    horizontal_int(current++, &negative_one);
+		} else {
+		    horizontal_int(current++, &temp->blk);
+		}
+		xpos += 20;
+	    }
 	}
-*/
 
 	total_gadgets = current;
 	if (filesystems[0] == NULL)
@@ -455,8 +608,8 @@ setup_gadgets(void)
 
 	handler_label[0] = handler_name;
 	handler_label[1] = NULL;
-	hagad = gad = CreateGadget(CYCLE_KIND, gad, &ng, GTCY_Labels, handler_label,
-				   GTCY_Active, 0, TAG_DONE);
+	hagad = gad = CreateGadget(CYCLE_KIND, gad, &ng, GTCY_Labels,
+				   handler_label, GTCY_Active, 0, TAG_DONE);
 
 	if (!gad)
 		errorexit("Couldn't allocate the gadget list!\n");
@@ -471,42 +624,60 @@ refresh_information(void)
 {
 	int index;
 	struct stat	*tstat;
-	struct MsgPort	*ofs;
-	struct fs	*osb;
-
-	ofs = fs;
-	osb = superblock;
 
 	if (open_handler(handler_name))
-		printf("Error, %s has been unmounted\n", handler_name);
+		fprintf(stderr, "Error, %s has been unmounted\n", handler_name);
 	else {
 	    tstat = get_stat();
-	    if (!tstat)
-		printf("Error getting status information, %s is not responding.\n",
+	    if (!tstat) {
+		fprintf(stderr, "Error getting status information, "
+			"%s is not responding.\n",
 			handler_name);
-	    else {
+	    } else {
 		stat  = tstat;
 		stats = (ULONG *) stat;
-
+		conv_superblock();
 		assign_stat_addresses();
 		assign_superblock_addresses();
 	    }
 	}
 
-/* not printing hash any more
-	index = hashlist_start;
-	for (temp = cache_stack; ((temp != NULL) && (index < total_gadgets));
-	     temp = temp->stack_up, index++)
-		gad_addresses[index] = &temp->blk;
+	if (dflag) {
+	    /* cachelist */
+	    int pos = 0;
 
-	for (; index < total_gadgets; index++)
-		gad_addresses[index] = &zero;
-*/
+	    temp = cache_stack;
+	    index = cachelist_start;
+	    for (; index < cachelist_start + MAX_CACHEITEMS; index++) {
+		if (index >= MAX_GADGETS)
+		    break;
+		if (temp == NULL) {
+		    gad_addresses[index] = &negative_one;
+		} else {
+		    gad_addresses[index] = &temp->blk;
+		    temp = temp->stack_up;
+		}
+	    }
+
+	    /* hashlist */
+	    hashlist_update_counts();
+	    index = hashlist_start;
+	    for (pos = 0; pos < HASH_SIZE; pos++) {
+		temp = cache_hash[pos];
+		if (index >= MAX_GADGETS - 1)
+		    break;
+		index++;  /* hashlist_counts[index] */
+		if (temp == NULL)
+		    gad_addresses[index++] = &negative_one;
+		else
+		    gad_addresses[index++] = &temp->blk;
+	    }
+	}
 	GT_SetGadgetAttrs(asgad, window, NULL, GTCB_Checked,
 			  *stat->resolve_symlinks, TAG_DONE);
 
 	GT_SetGadgetAttrs(cigad, window, NULL, GTCB_Checked,
-			  *stat->case_independent, TAG_DONE);
+			  *stat->case_dependent, TAG_DONE);
 
 	GT_SetGadgetAttrs(dcgad, window, NULL, GTCB_Checked,
 			  *stat->link_comments, TAG_DONE);
@@ -518,7 +689,7 @@ refresh_information(void)
 			  *stat->unix_paths, TAG_DONE);
 
 	GT_SetGadgetAttrs(rogad, window, NULL, GTCB_Checked,
-			  superblock->fs_ronly, TAG_DONE);
+			  sb.fs_ronly, TAG_DONE);
 
 	GT_SetGadgetAttrs(mfgad, window, NULL, GTCB_Checked,
 			  *stat->minfree, TAG_DONE);
@@ -532,22 +703,15 @@ refresh_information(void)
 	GT_SetGadgetAttrs(dtgad, window, NULL, GTTX_Text,
 			  stat->disk_type, TAG_DONE);
 
-	sb_mod   = ((unsigned char) superblock->fs_fmod);
-	sb_clean = ((unsigned char) superblock->fs_clean);
+	sb_mod   = ((unsigned char) sb.fs_fmod);
+	sb_clean = ((unsigned char) sb.fs_clean);
 
-	prealloc = (*stat->resolve_symlinks ?  0 : 1 ) |
-		   (*stat->case_independent ?  0 : 2 ) |
-		   (*stat->unix_paths       ?  0 : 4 ) |
-		   (*stat->link_comments    ?  8 : 0 ) |
-		   (*stat->inode_comments   ? 16 : 0 ) |
-		   (*stat->og_perm_invert   ? 32 : 0 ) |
-		   (*stat->minfree          ? 64 : 0 ) |
-		   (((unsigned char) *stat->GMT) << 8);
+	calc_prealloc();
 
 	rkbytes = (stat->direct_read_bytes)  / 1024;
 	wkbytes = (stat->direct_write_bytes) / 1024;
 
-	max_inodes = superblock->fs_ipg * superblock->fs_ncg;
+	max_inodes = sb.fs_ipg * sb.fs_ncg;
 
 	for (index = 1; index < total_gadgets; index++)
 	    if (gadgets[index] && gad_addresses[index])
@@ -658,11 +822,11 @@ handle_gadget(struct Gadget *gadget, UWORD code)
 		refresh_prealloc();
 		break;
 	    case ID_CASE:
-		*stat->case_independent = !*stat->case_independent;
+		*stat->case_dependent = !*stat->case_dependent;
 		refresh_prealloc();
 		break;
 	    case ID_RONLY:
-		superblock->fs_ronly = !superblock->fs_ronly;
+		sb.fs_ronly = !sb.fs_ronly;
 		refresh_prealloc();
 		break;
 	    case ID_COMMENT:
@@ -733,7 +897,7 @@ handle_gadget(struct Gadget *gadget, UWORD code)
 		refresh_prealloc();
 		break;
 	    default:
-		printf("got message for unknown gadget %d\n",
+		fprintf(stderr, "got message for unknown gadget %d\n",
 			gadget->GadgetID);
 	}
 }
@@ -765,7 +929,7 @@ handle_messages(void)
 			GT_EndRefresh(window, TRUE);
 			break;
 		    default:
-			printf("got unknown message class %d\n", class);
+			fprintf(stderr, "got unknown message class %d\n", class);
 		}
 	    }
 	}
@@ -775,7 +939,7 @@ static void
 calc_prealloc(void)
 {
 	prealloc = (*stat->resolve_symlinks ?  1 : 0 ) |
-		   (*stat->case_independent ?  2 : 0 ) |
+		   (*stat->case_dependent   ?  2 : 0 ) |
 		   (*stat->unix_paths       ?  4 : 0 ) |
 		   (*stat->link_comments    ?  8 : 0 ) |
 		   (*stat->inode_comments   ? 16 : 0 ) |
@@ -806,57 +970,104 @@ setup(void)
 	if (!visual)
 		errorexit("Couldn't get visual info for public screen\n");
 
+	if (dflag) {
+	    window_ops.Height += 3;
+
+	    /* cachelist */
+	    window_ops.Height += 6 * 8 + 4;
+
+	    /* hashlist */
+	    window_ops.Height += 4 * 8 + 4;
+	}
 	window = OpenWindowTags(&window_ops, WA_PubScreen, screen, TAG_DONE);
 	if (!window)
 		errorexit("Unable to create window on public screen!\n");
 }
 
+static void
+print_usage(const char *progname)
+{
+    printf("%s\n"
+           "usage: %s [<options>] [<device>]\n"
+           "options:\n"
+           "   -d = debug mode\n"
+           "   -h = display this help text\n",
+           version + 7, progname);
+    exit(1);
+}
+
 int
 main(int argc, char *argv[])
 {
-	int index;
+    int index;
+    int arg;
+    char *handler_arg = NULL;
 
-	handler_name[0] = '\0';
+    handler_name[0] = '\0';
 
-	if (argc < 2) {
-	    get_filesystems(0);
-	    if (filesystems[0])
-		strcpy(handler_name, filesystems[0]);
-	    else
-		errorexit("There are no BFFS filesystem handlers running\n");
+    for (arg = 1; arg < argc; arg++) {
+	const char *ptr = argv[arg];
+	if (*ptr == '-') {
+	    while (*(++ptr) != '\0') {
+		switch (*ptr) {
+		    case 'd':
+			dflag++;
+			break;
+		    case 'h':
+			print_usage(argv[0]);
+		    default:
+			printf("Unknown argument -%s\n\n", ptr);
+			print_usage(argv[0]);
+		}
+	    }
 	} else {
-	    strcpy(handler_name, argv[1]);
-	    index = get_filesystems(handler_name);
-	    if ((index < 0) || (index >= MAX_BFFSs)) {
-		fprintf(stderr, "%s ", argv[1]);
-		errorexit("does not have a mounted BFFS filesystem\n");
+	    if (handler_arg != NULL) {
+		printf("Only one handler may be specified\n");
+		print_usage(argv[0]);
 	    }
-	    if (filesystems[index])
-		strcpy(handler_name, filesystems[index]);
-	    else {
-		fprintf(stderr, "Unable to find %s ", argv[1]);
-		errorexit("as a mounted BFFS filesystem\n");
-	    }
+	    handler_arg = ptr;
 	}
+    }
 
-	if (open_handler(handler_name)) {
-	    fprintf(stderr, "Error communicating with %s ", handler_name);
-	    errorexit("handler.\n");
+    if (handler_arg == NULL) {
+	get_filesystems(NULL);
+	if (filesystems[0])
+	    strcpy(handler_name, filesystems[0]);
+	else
+	    errorexit("There are no BFFS filesystem handlers running\n");
+    } else {
+	strcpy(handler_name, handler_arg);
+	index = get_filesystems(handler_name);
+	if ((index < 0) || (index >= MAX_BFFSs)) {
+	    fprintf(stderr, "%s ", handler_arg);
+	    errorexit("does not have a mounted BFFS filesystem\n");
 	}
+	if (filesystems[index]) {
+	    strcpy(handler_name, filesystems[index]);
+	} else {
+	    fprintf(stderr, "Unable to find %s ", handler_arg);
+	    errorexit("as a mounted BFFS filesystem\n");
+	}
+    }
 
-	stat = get_stat();
-	if (!stat) {
-	    if (*handler_name == '\0')
-		errorexit("You must specify a BFFS filesystem handler to monitor\n");
-	    fprintf(stderr, "%s ", handler_name);
-	    errorexit("does not have a mounted BFFS filesystem!\n");
-	} else
-	    stats = (ULONG *) stat;
+    if (open_handler(handler_name)) {
+	fprintf(stderr, "Error communicating with %s ", handler_name);
+	errorexit("handler.\n");
+    }
 
-	setup();
-	setup_gadgets();
-	refresh_handlers();
-	handle_messages();
-	cleanup();
+    stat = get_stat();
+    if (!stat) {
+	if (*handler_name == '\0')
+	    errorexit("You must specify a BFFS filesystem handler to monitor\n");
+	fprintf(stderr, "%s ", handler_name);
+	errorexit("does not have a mounted BFFS filesystem!\n");
+    } else
+	stats = (ULONG *) stat;
+
+    conv_superblock();
+    setup();
+    setup_gadgets();
+    refresh_handlers();
+    handle_messages();
+    cleanup();
 }
-

@@ -30,8 +30,6 @@
 #define OPT_TIME  0
 #define OPT_SPACE 1
 
-#define FRAGS_PER_BLK   superblock->fs_frag
-
 int   block_avail(unsigned char *map, ULONG fpos);
 int   block_fragblock_find(struct cg *mycg, ULONG preferred, int min_frags);
 int   rest_is_free(unsigned char *map, ULONG frag);

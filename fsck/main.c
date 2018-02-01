@@ -83,8 +83,10 @@ main(argc, argv)
 	extern int optind;
 
 #ifdef AMIGA
-	if (dio_checkstack(20000))
+#ifndef _DCC
+	if (dio_checkstack(30000))
 	    exit(1);
+#endif
 #else
 	sync();
 #endif
@@ -226,6 +228,9 @@ checkfilesys(filesys, mntpt, auxdata, child)
 	struct dups *dp;
 	struct zlncnt *zlnp;
 	int cylno;
+#ifdef UFS_V1
+	unsigned long n_ifree;
+#endif
 
 #ifdef unix
 	if (preen && child)
@@ -291,16 +296,34 @@ checkfilesys(filesys, mntpt, auxdata, child)
 	/*
 	 * print out summary statistics
 	 */
+#ifdef UFS_V1
+	if (sblock.fs_flags & FS_FLAGS_UPDATED) {
+	    n_ffree = sblock.fs_new_cstotal.cs_nffree[is_big_endian];
+	    n_bfree = sblock.fs_new_cstotal.cs_nbfree[is_big_endian];
+	    n_ifree = sblock.fs_new_cstotal.cs_nifree[is_big_endian];
+	} else {
+	    n_ffree = sblock.fs_cstotal.cs_nffree;
+	    n_bfree = sblock.fs_cstotal.cs_nbfree;
+	    n_ifree = sblock.fs_cstotal.cs_nifree;
+	}
+#else
 	n_ffree = sblock.fs_cstotal.cs_nffree;
 	n_bfree = sblock.fs_cstotal.cs_nbfree;
+#endif
 	pwarn("%ld files, %ld used, %ld free ",
 	    n_files, n_blks, n_ffree + sblock.fs_frag * n_bfree);
 	printf("(%ld frags, %ld blocks, %d.%d%% fragmentation)\n",
 	    n_ffree, n_bfree, (n_ffree * 100) / sblock.fs_dsize,
 	    ((n_ffree * 1000 + sblock.fs_dsize / 2) / sblock.fs_dsize) % 10);
+#ifdef UFS_V1
+	if (debug &&
+	    (n_files -= maxino - ROOTINO - n_ifree))
+		printf("%ld files missing\n", n_files);
+#else
 	if (debug &&
 	    (n_files -= maxino - ROOTINO - sblock.fs_cstotal.cs_nifree))
 		printf("%ld files missing\n", n_files);
+#endif
 	if (debug) {
 		n_blks += sblock.fs_ncg *
 			(cgdmin(&sblock, 0) - cgsblock(&sblock, 0));

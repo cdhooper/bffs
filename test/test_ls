@@ -1,0 +1,9 @@
+C:avail
+set i 0
+lab start
+if not $i gt 20 val
+    ls -lR tdev: >nil:
+    set i `eval $i + 1`
+    Skip back start
+endif
+C:avail

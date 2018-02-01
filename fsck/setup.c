@@ -64,20 +64,30 @@ struct bufarea asblk;
 struct	disklabel *getdisklabel();
 
 #ifdef AMIGA
-int
-break_abort(void)
+void
+error_exit(int rc)
 {
 	dio_inhibit(0);
 	dio_close();
+	exit(rc);
+}
+
+int
+break_abort(void)
+{
 	write(2, "^C\n", 3);
-	exit(1);
+	error_exit(1);
 }
 #endif
 
 setup(dev)
 	char *dev;
 {
+#ifdef OLD_CS
 	long cg, size, asked, i, j;
+#else
+	long cg, size, asked, i;
+#endif
 	long bmapsize;
 	struct disklabel *lp;
 	off_t sizepb;
@@ -255,11 +265,30 @@ setup(dev)
 		sizepb = sblock.fs_bsize;
 		sblock.fs_maxfilesize.val[0] = 0;
 		sblock.fs_maxfilesize.val[1] = 0;
+#ifdef cdh
+		/* This is messy because DICE C doesn't have 64-bit types */
+		sblock.fs_maxfilesize.val[0] = 0;
+		sblock.fs_maxfilesize.val[1] = sblock.fs_bsize * NDADDR - 1;
+		int size_bits   = 0;
+		int nindir_bits = 0;
+		for (sizepb = 1; sizepb < sblock.fs_bsize; sizepb <<= 1)
+			size_bits++;
+		for (sizepb = 1; sizepb < NINDIR(&sblock); sizepb <<= 1)
+			nindir_bits++;
+		for (i = 0; i < NIADDR; i++) {
+		    size_bits += nindir_bits;
+		    if (size_bits < 32)
+			sblock.fs_maxfilesize.val[1] |= (1 << size_bits);
+		    else
+			sblock.fs_maxfilesize.val[0] |= (1 << (size_bits - 32));
+		}
+#else
 		S32(sblock.fs_maxfilesize) = sblock.fs_bsize * NDADDR - 1;
 		for (i = 0; i < NIADDR; i++) {
 			sizepb *= NINDIR(&sblock);
-			S32(sblock.fs_maxfilesize) += sizepb;
+			sblock.fs_maxfilesize += sizepb;
 		}
+#endif
 		sblock.fs_maxsymlinklen = MAXSYMLINKLEN;
 		sblock.fs_qbmask.val[0] = 0xffffffff;
 		sblock.fs_qbmask.val[1] = 0xffffffff;
@@ -281,9 +310,15 @@ setup(dev)
 		doinglevel1++;
 		sblock.fs_postblformat = FS_DYNAMICPOSTBLFMT;
 		sblock.fs_nrpos = 8;
+#ifdef UFS_V1
+		sblock.fs_postbloff =
+		    (char *)(&sblock.fs_maxbsize) -
+		    (char *)(&sblock.fs_link);
+#else
 		sblock.fs_postbloff =
 		    (char *)(&sblock.fs_opostbl[0][0]) -
 		    (char *)(&sblock.fs_link);
+#endif
 		sblock.fs_rotbloff = &sblock.fs_space[0] -
 		    (u_char *)(&sblock.fs_link);
 		sblock.fs_cgsize =
@@ -300,6 +335,7 @@ setup(dev)
 	 * read in the summary info.
 	 */
 	asked = 0;
+#ifdef OLD_CS
 	for (i = 0, j = 0; i < sblock.fs_cssize; i += sblock.fs_bsize, j++) {
 		size = sblock.fs_cssize - i < sblock.fs_bsize ?
 		    sblock.fs_cssize - i : sblock.fs_bsize;
@@ -313,6 +349,22 @@ setup(dev)
 			asked++;
 		}
 	}
+#else
+	size = sblock.fs_cssize;
+	sblock.fs_csp = (struct csum *) calloc(1, (unsigned)size);
+	if (sblock.fs_csp == NULL) {
+		printf("cannot alloc %u bytes for csp\n", size);
+		goto badsb;
+	}
+
+	if (bread((char *)sblock.fs_csp,
+	    fsbtodb(&sblock, sblock.fs_csaddr), size) != 0 && !asked) {
+		pfatal("BAD SUMMARY INFORMATION");
+		if (reply("CONTINUE") == 0)
+			errexit("");
+		asked++;
+	}
+#endif
 	/*
 	 * allocate and initialize the necessary maps
 	 */
@@ -341,7 +393,15 @@ setup(dev)
 		    (unsigned)(maxino + 1) * sizeof(short));
 		goto badsb;
 	}
+#ifdef UFS_V1
+	if (sblock.fs_flags & FS_FLAGS_UPDATED) {
+	    numdirs = sblock.fs_new_cstotal.cs_ndir[is_big_endian];
+	} else {
+	    numdirs = sblock.fs_cstotal.cs_ndir;
+	}
+#else
 	numdirs = sblock.fs_cstotal.cs_ndir;
+#endif
 	inplast = 0;
 	listmax = numdirs + 10;
 	inpsort = (struct inoinfo **)calloc((unsigned)listmax,
@@ -412,6 +472,9 @@ readsb(listerr)
 	 * of whole super block against an alternate super block.
 	 * When an alternate super-block is specified this check is skipped.
 	 */
+#ifdef cdh
+	totalreads++;
+#endif
 	getblk(&asblk, cgsblock(&sblock, sblock.fs_ncg - 1), sblock.fs_sbsize);
 	if (asblk.b_errs)
 		return (0);
@@ -429,12 +492,39 @@ readsb(listerr)
 	altsblock.fs_optim = sblock.fs_optim;
 	altsblock.fs_rotdelay = sblock.fs_rotdelay;
 	altsblock.fs_maxbpg = sblock.fs_maxbpg;
+#ifdef OLD_CS
 	bcopy((char *)sblock.fs_csp, (char *)altsblock.fs_csp,
 		sizeof sblock.fs_csp);
+#else
+	bcopy((char *)sblock.fs_ocsp, (char *)altsblock.fs_ocsp,
+		sizeof sblock.fs_ocsp);
+	altsblock.fs_contigdirs = sblock.fs_contigdirs;
+	altsblock.fs_csp = sblock.fs_csp;
+	altsblock.fs_maxcluster = sblock.fs_maxcluster;
+	altsblock.fs_active = sblock.fs_active;
+#endif
+#ifdef UFS_V1
+#define offsetof(T,memb) ((size_t)&(((T *)0)->memb)-(size_t)((T *)0))
+	/*
+	 * If this is a new format filesystem, then also copy the fields
+	 * which used to be fs_opostbl[][].
+	 */
+	if (altsblock.fs_flags & FS_FLAGS_UPDATED) {
+	    if (debug)
+		printf("Superblock is BSD V1\n");
+
+	    bcopy((char *)&sblock.fs_maxbsize, (char *)&altsblock.fs_maxbsize,
+		  offsetof(struct fs, fs_contigsumsize) -
+		  offsetof(struct fs, fs_maxbsize));
+	}
+#endif
 	bcopy((char *)sblock.fs_fsmnt, (char *)altsblock.fs_fsmnt,
 		sizeof sblock.fs_fsmnt);
+#ifndef UFS_V1
+	/* Below is from old filesystem structure */
 	bcopy((char *)sblock.fs_sparecon, (char *)altsblock.fs_sparecon,
 		sizeof sblock.fs_sparecon);
+#endif
 	/*
 	 * The following should not have to be copied.
 	 */
@@ -477,20 +567,25 @@ readsb(listerr)
 			ptr2++;
 		    }
 		}
-#define offsetof(T,memb) ((size_t)&(((T *)0)->memb)-(size_t)((T *)0))
 
 		printf("\nsuperblock offsets (for debug):\n"
-		       "   fs_optim=%x fs_fsmnt=%x fs_csp=%x fs_cgrotor=%x"
-		       "   fs_opostbl=%x\n"
-		       "   fs_sparecon=%x fs_contigsumsize=%x fs_inodefmt=%x\n",
+		       "   fs_optim=%x fs_fsmnt=%x fs_cgrotor=%x fs_csp=%x "
+		       "fs_maxbsize=%x\n"
+		       "   fs_new_cstotal=%x fs_new_time=%x fs_snapinum=%x "
+		       "fs_sparecon32=%x\n"
+		       "   fs_contigsumsize=%x fs_inodefmt=%x fs_magic=%x\n",
 		       offsetof(struct fs, fs_optim),
 		       offsetof(struct fs, fs_fsmnt),
-		       offsetof(struct fs, fs_csp),
 		       offsetof(struct fs, fs_cgrotor),
-		       offsetof(struct fs, fs_opostbl),
-		       offsetof(struct fs, fs_sparecon),
+		       offsetof(struct fs, fs_csp),
+		       offsetof(struct fs, fs_maxbsize),
+		       offsetof(struct fs, fs_new_cstotal),
+		       offsetof(struct fs, fs_new_time),
+		       offsetof(struct fs, fs_snapinum),
+		       offsetof(struct fs, fs_sparecon32),
 		       offsetof(struct fs, fs_contigsumsize),
-		       offsetof(struct fs, fs_inodefmt));
+		       offsetof(struct fs, fs_inodefmt),
+		       offsetof(struct fs, fs_magic));
 		}
 #endif
 		return (0);

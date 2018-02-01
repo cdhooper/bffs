@@ -41,6 +41,23 @@ typedef struct {
         ULONG   fa_ctime_us;
 } fileattr_t;
 
+/*
+ * Most of these "NFS" file attribute types types come from RFC1094.
+ * NFFIFO and higher come from NetBSD's nfsproto.h header.
+ */
+typedef enum {
+        NFNON = 0,
+        NFREG = 1,
+        NFDIR = 2,
+        NFBLK = 3,
+        NFCHR = 4,
+        NFLNK = 5,
+        NFSOCK = 6,
+        NFFIFO = 7,
+        NFATTRDIR = 8,
+        NFNAMEDATTR = 9,
+} fileattr_type_t;
+
 extern char *volumename;
 extern int   og_perm_invert;  /* invert permissions on other/group */
 

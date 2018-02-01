@@ -1,5 +1,7 @@
 #define FRAGS_PER_BLK	superblock->fs_frag
 
+#define fsbtodb(fs, b)	((b) << (fs)->fs_fsbtodb)
+
 /*
  * Cylinder group macros to locate things in cylinder groups.
  * They calc file system addresses of cylinder group data structures.

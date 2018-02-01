@@ -69,14 +69,7 @@ static char *rcsid = "$Id: mkfs.c,v 1.9.2.2 1994/07/20 20:33:46 cgd Exp $";
 extern int DEV_BSIZE;
 extern int DEV_BSHIFT;
 
-/* defined in include/ufs/fs.h
-#define S32(x) (x.val[1])
-*/
-
-#define btodb(bytes)                    /* calculates (bytes / DEV_BSIZE) */ \
-        ((unsigned)(bytes) >> DEV_BSHIFT)
-#define dbtob(db)                       /* calculates (db * DEV_BSIZE) */ \
-        ((unsigned)(db) << DEV_BSHIFT)
+#define btodb(bytes) ((unsigned)(bytes) >> 9)   /* calculates (bytes / 512) */
 #endif
 
 /*
@@ -161,7 +154,9 @@ mkfs(pp, fsys, fi, fo)
 	long mapcramped, inodecramped;
 	long postblsize, rotblsize, totalsbsize;
 	time_t utime;
-#ifndef cdh
+#ifdef cdh
+	unsigned long sizepb;
+#else
 	int ppid, status;
 	quad_t sizepb;
 #endif
@@ -291,11 +286,22 @@ mkfs(pp, fsys, fi, fo)
 	if (!POWEROF2(sblock.fs_ntrak))
 		sblock.fs_cgmask <<= 1;
 #ifdef cdh
-	/* fancy dancy computations?  hardcode a bazillion or so... */
+	/* This is messy because DICE C doesn't have 64-bit types */
 	sblock.fs_maxfilesize.val[0] = 0;
-	sblock.fs_maxfilesize.val[1] = 0;
-/* OLD	S32(sblock.fs_maxfilesize) = 0xffffffff; */
-	S32(sblock.fs_maxfilesize) = sblock.fs_bsize * NDADDR - 1;
+	sblock.fs_maxfilesize.val[1] = sblock.fs_bsize * NDADDR - 1;
+	int size_bits   = 0;
+	int nindir_bits = 0;
+	for (sizepb = 1; sizepb < sblock.fs_bsize; sizepb <<= 1)
+		size_bits++;
+	for (sizepb = 1; sizepb < NINDIR(&sblock); sizepb <<= 1)
+		nindir_bits++;
+	for (i = 0; i < NIADDR; i++) {
+		size_bits += nindir_bits;
+		if (size_bits < 32)
+		    sblock.fs_maxfilesize.val[1] |= (1 << size_bits);
+		else
+		    sblock.fs_maxfilesize.val[0] |= (1 << (size_bits - 32));
+	}
 #else
 	sblock.fs_maxfilesize = sblock.fs_bsize * NDADDR - 1;
 	for (sizepb = sblock.fs_bsize, i = 0; i < NIADDR; i++) {
@@ -625,8 +631,8 @@ next:
 		    fsys, sblock.fs_size * NSPF(&sblock), sblock.fs_ncyl,
 		    "cylinders", sblock.fs_ntrak, sblock.fs_nsect);
 #ifdef cdh
-		temp  = sblock.fs_size * sblock.fs_fsize / 1024 * 100 / 1024;
-		temp2 = sblock.fs_fpg  * sblock.fs_fsize / 1024 * 100 / 1024;
+		temp  = sblock.fs_fsize / 512 * sblock.fs_size * 50 / 1024;
+		temp2 = sblock.fs_fsize / 512 * sblock.fs_fpg  * 50 / 1024;
 		printf("\t%d.%02dMB in %d cyl groups (%d c/g, %d.%02dMB/g, %d i/g)\n",
 		    temp  / 100, temp  % 100, sblock.fs_ncg, sblock.fs_cpg,
 		    temp2 / 100, temp2 % 100, sblock.fs_ipg);

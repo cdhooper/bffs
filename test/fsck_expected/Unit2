@@ -1,0 +1,9 @@
+** units/Unit2
+No disk label.
+** Last Mounted on /mnt
+** Phase 1 - Check Blocks and Sizes
+** Phase 2 - Check Pathnames
+** Phase 3 - Check Connectivity
+** Phase 4 - Check Reference Counts
+** Phase 5 - Check Cyl groups
+59 files, 426 used, 148 free (12 frags, 17 blocks, 2.1% fragmentation)

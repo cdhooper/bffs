@@ -1,0 +1,41 @@
+magic	11954	time	Wed Oct 09 11:59:54 1996
+UFS V1
+cylgrp	dynamic	inodes	4.4BSD
+nbfree	52	ndir	10	nifree	344	nffree	4
+ncg	1	ncyl	8	size	1088	blocks	1039
+bsize	8192	shift	13	mask	0xffffe000
+fsize	2048	shift	11	mask	0xfffff800
+frag	4	shift	2	fsbtodb	0
+cpg	16	bpg	544	fpg	2176	ipg	512
+minfree	5%	optim	time	maxcontig 8	maxbpg	2048
+rotdelay 0ms	headswitch 0us	trackseek 0us	rps	60
+ntrak	1	nsect	136	npsect	136	spc	136
+symlinklen 60	trackskew 0	interleave 1	contigsumsize 8
+nindir	2048	inopb	64	nspf	1
+sblkno	8	cblkno	12	iblkno	16	dblkno	48
+sbsize	2048	cgsize	2048	cgoffset 136	cgmask	0xffffffff
+csaddr	48	cssize	2048	shift	9	mask	0xfffffe00
+cgrotor	0	fmod	0	ronly	0
+insufficient space to maintain rotational tables
+
+cs[].cs_(nbfree,ndir,nifree,nffree):
+	(52,10,344,4) 
+cylinders in last group 8
+blocks in last group 272
+
+
+cg 0:
+magic	90255	tell	0	time	Wed Oct 09 11:59:49 1996
+cgx	0	ncyl	8	niblk	512	ndblk	1088
+nbfree	52	ndir	10	nifree	344	nffree	4
+rotor	856	irotor	167	frotor	840
+frsum	2	1	0
+sum of frsum: 4
+clusters 1-7:	0	0	0	0	0	0	0
+clusters size 8 and over: 1
+clusters free:	220-271
+iused:	0-167
+free:	798-799, 847, 851, 880-1087
+b:
+   c6:	(18)	 18
+   c7:	(34)	 34

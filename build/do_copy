@@ -1,4 +1,6 @@
 cd sys:git
+failat 65535
+
 makedir tdev:bffs
 
 ;copy .gitignore bffstool bin build dcp disklabel dist DMakefile DMakefile.2.06 doc dump dumpfs chmod chown edumpfs ln ls touch fs fsck mknod mountlist newfs rdb restore tunefs ucbinclude umount unix_support tdev:bffs/. all clone

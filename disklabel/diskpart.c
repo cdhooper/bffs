@@ -91,13 +91,22 @@ enum	{ UNSPEC, EDIT, READ, RESTORE, WRITE} op = UNSPEC;
 int	debug;
 #endif
 
-void break_abort()
+#ifdef AMIGA
+void
+error_exit(int rc)
 {
-	dio_inhibit(0);
-	dio_close();
-	fprintf(stderr, "^C\n");
-	exit(1);
+    dio_inhibit(0);
+    dio_close();
+    exit(rc);
 }
+
+void
+break_abort(void)
+{
+    fprintf(stderr, "^C\n");
+    error_exit(1);
+}
+#endif
 
 main(argc, argv)
 	int argc;
@@ -151,17 +160,21 @@ main(argc, argv)
 
 	specname	= argv[0];
 
+#ifdef AMIGA
 	onbreak(break_abort);
         if (dio_open(specname) == 0) {
 	    dio_inhibit(1);
             ifd = -1;
         } else {
+#endif
 		ifd = open(specname, op == READ ? O_RDONLY : O_RDWR);
 		if (ifd < 0) {
 			fprintf(stderr, "Unable to open device %s\n", specname);
 			exit(1);
 		}
+#ifdef AMIGA
 	}
+#endif
 	special = specname;
 	if (op != READ)
 		ofd = ifd;

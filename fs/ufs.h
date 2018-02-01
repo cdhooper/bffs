@@ -39,10 +39,17 @@
 #define MAX_PART	8	/* Number disk partitions supported     */
 
 
-extern	ULONG	phys_sectorsize;	/* physical disk sector size, env */
+typedef struct {
+	struct	Task *sigTask;
+	ULONG	sigMask;
+} intdata_t;
+extern  intdata_t IntData;
+
+extern	int	bsd44fs;		/* 0 = 4.3 BSD, 1 = 4.4 BSD	  */
 extern	int	fs_partition;		/* current partition number	  */
 extern	struct	fs *superblock;		/* current superblock		  */
 extern	struct	IOExtTD *trackIO;	/* pointer to trackdisk IORequest */
+extern	ULONG	phys_sectorsize;	/* physical disk sector size, env */
 extern	ULONG	psectoffset;		/* disk partition start sector    */
 extern	ULONG	psectmax;		/* disk partition end sector      */
 extern	ULONG	tranmask;		/* device DMA transfer mask	  */
@@ -51,7 +58,6 @@ extern	ULONG	pfragshift;		/* pointers in a frag		  */
 extern	ULONG	pfragmask;		/* mask current pointer in frag	  */
 extern	ULONG	fblkshift;		/* frags in a block		  */
 extern	ULONG	fblkmask;		/* mask current frag in block	  */
-extern  int	bsd44fs;		/* 0 = 4.3 BSD, 1 = 4.4 BSD	  */
 extern  ULONG	fs_lfmask;		/* quick mask, bits flipped ala q */
 extern  ULONG	fs_lbmask;		/* quick mask, bits flipped ala q */
 
@@ -65,9 +71,9 @@ int  open_dchange(void);
 void close_dchange(int normal);
 void motor_off(void);
 void motor_on(void);
-void superblock_flush(void);
-void close_ufs(void);
-int  open_ufs(void);
+int  superblock_flush(void);
+void close_device(void);
+int  open_device(void);
 int  find_superblock(void);
 void superblock_destroy(void);
 int  data_read(void *buf, ULONG num, ULONG size);

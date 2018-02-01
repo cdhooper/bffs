@@ -17,7 +17,6 @@ const char *version = "\0$VER: edumpfs 1.5 (19-Jan-2018) © Chris Hooper";
 #include "fsmacros.h"
 #include "convert.h"
 
-
 #include "ufs.h"
 #include "superblock.h"
 #include "ufs/sun_label.h"
@@ -46,14 +45,14 @@ int	show_cg_summary	= 1;
 int	short_inodes	= 1;
 int	short_frags	= 1;
 int	sbsize;
-int	convert		= 0;
+int	swap_endian	= 0;
 int	invert		= 0;
 int	super_block	= SUPER_BLOCK;
 
 static ULONG
 disk16(ULONG x)
 {
-	if (convert)
+	if (swap_endian)
 		return ((ULONG) DISK16(x));
 	else
 		return (x);
@@ -63,7 +62,7 @@ disk16(ULONG x)
 static ULONG
 disk32(ULONG x)
 {
-	if (convert)
+	if (swap_endian)
 		return (DISK32(x));
 	else
 		return (x);
@@ -73,7 +72,7 @@ disk32(ULONG x)
 static ULONG
 disk64(quad x)
 {
-	if (convert)
+	if (swap_endian)
 		return (DISK64(x));
 	else
 		return (x.val[0]);
@@ -82,75 +81,112 @@ disk64(quad x)
 static void
 print_superblock(int partition, ULONG offset)
 {
-	ULONG fs_size;
+	ULONG temp_size;
+	ULONG temp_size2;
+	int   fs_size_shift = 0;
 	char buf[10];
 
-	printf("\nPartition %d at offset %d: ", partition, offset);
-
-	printf("%s\n", superblock->fs_fsmnt);
-	printf(" fsize=%-5d  fshift=%-2d  fmask=%08x    cblkno=%-4d  sblkno=%-4d\n",
+	printf("\nPartition %d at offset %d: %s\n",
+	       partition, offset, superblock->fs_fsmnt);
+	printf(" fsize=%-6d fshift=%-3d fmask=%08x    cblkno=%-5d  sblkno=%-4d\n",
 		disk32(superblock->fs_fsize), disk32(superblock->fs_fshift),
 		disk32(superblock->fs_fmask), disk32(superblock->fs_cblkno),
 		disk32(superblock->fs_sblkno));
-	printf(" bsize=%-5d  bshift=%-2d  bmask=%08x    iblkno=%-4d  dblkno=%-4d\n",
+	printf(" bsize=%-6d bshift=%-3d bmask=%08x    iblkno=%-5d  dblkno=%-4d\n",
 		disk32(superblock->fs_bsize), disk32(superblock->fs_bshift),
 		disk32(superblock->fs_bmask), disk32(superblock->fs_iblkno),
 		disk32(superblock->fs_dblkno));
-	printf("cssize=%-5d csshift=%-2d csmask=%08x    csaddr=%-4d    frag=%-4d\n",
+	printf("cssize=%-5d csshift=%-2d csmask=%08x    csaddr=%-7d  frag=%-4d\n",
 		disk32(superblock->fs_cssize), disk32(superblock->fs_csshift),
 		disk32(superblock->fs_csmask), disk32(superblock->fs_csaddr),
 		disk32(superblock->fs_frag));
 	printf("cgsize=%-5d            cgmask=%08x  cgoffset=%-2d fragshift=%-1d\n",
 		disk32(superblock->fs_cgsize), disk32(superblock->fs_cgmask),
 		disk32(superblock->fs_cgoffset), disk32(superblock->fs_fragshift));
-	printf("sbsize=%-5d\n",
-		disk32(superblock->fs_sbsize));
-	printf("npsect=%-4d   ntrak=%-4d    ncyl=%-4d     size=%-6d dsize=%-6d\n",
-		disk32(superblock->fs_npsect), disk32(superblock->fs_ntrak),
-		disk32(superblock->fs_ncyl), disk32(superblock->fs_size),
-		disk32(superblock->fs_dsize));
-	fs_size = disk32(superblock->fs_dsize) * disk32(superblock->fs_fsize);
-	printf("   fpg=%-5d    ipg=%-5d    cpg=%-4d                 Size=%d.%03d MB\n",
-		disk32(superblock->fs_fpg), disk32(superblock->fs_ipg),
-		disk32(superblock->fs_cpg), fs_size / 1048576,
-		(fs_size % 1048576) / 1000);
-	fs_size = (disk32(superblock->fs_cstotal.cs_nbfree) *
-		   disk32(superblock->fs_frag) +
-		   disk32(superblock->fs_cstotal.cs_nffree)) *
-		  disk32(superblock->fs_fsize);
-	printf("  ndir=%-4d  nifree=%-5d nbfree=%-5d  nffree=%-4d   Free=%d.%03d MB\n",
-		disk32(superblock->fs_cstotal.cs_ndir),
-		disk32(superblock->fs_cstotal.cs_nifree),
+	printf("sbsize=%-6d altsb=%d\n",
+		disk32(superblock->fs_sbsize), cgsblock(superblock, disk32(superblock->fs_ncg) - 1));
+	printf("npsect=%-6d ntrak=%-7d ncyl=%-7d size=%-8d\n",
+		disk32(superblock->fs_npsect),
+		disk32(superblock->fs_ntrak),
+		disk32(superblock->fs_ncyl),
+		disk32(superblock->fs_size));
+	temp_size = disk32(superblock->fs_dsize) / 10;
+	fs_size_shift = disk32(superblock->fs_fshift);
+	if (fs_size_shift > 10)
+	    temp_size <<= (fs_size_shift - 10);
+	else
+	    temp_size >>= (10 - fs_size_shift);
+	printf(" nsect=%-7d nspf=%-8d cpg=%-6d dsize=%-8d Size=%u.%02u MB\n",
+		disk32(superblock->fs_nsect),
+		disk32(superblock->fs_nspf),
+		disk32(superblock->fs_cpg),
+		disk32(superblock->fs_dsize),
+		temp_size / 100, temp_size % 100);
+
+	temp_size = disk32(superblock->fs_cstotal.cs_nffree);
+	if (fs_size_shift > 10)
+	    temp_size <<= (fs_size_shift - 10);
+	else
+	    temp_size >>= (10 - fs_size_shift);
+
+	temp_size2 = disk32(superblock->fs_cstotal.cs_nbfree);
+	fs_size_shift = disk32(superblock->fs_bshift);
+	if (fs_size_shift > 10)
+	    temp_size2 <<= (fs_size_shift - 10);
+	else
+	    temp_size2 >>= (10 - fs_size_shift);
+
+	temp_size += temp_size2;
+	temp_size /= 10;
+	printf("   fpg=%-8d ipg=%-8d ncg=%-5d nbfree=%-8d Free=%u.%02u MB\n",
+		disk32(superblock->fs_fpg),
+		disk32(superblock->fs_ipg),
+		disk32(superblock->fs_ncg),
 		disk32(superblock->fs_cstotal.cs_nbfree),
-		disk32(superblock->fs_cstotal.cs_nffree),
-		fs_size / 1048576, (fs_size % 1048576) / 1000);
-	printf("  nspf=%-4d  maxbpg=%-5d    ngc=%-3d maxcontig=%-1d      time=%-9d\n",
-		disk32(superblock->fs_nspf), disk32(superblock->fs_maxbpg),
-		disk32(superblock->fs_ncg), disk32(superblock->fs_optim),
-		disk32(superblock->fs_time));
+		temp_size / 100, temp_size % 100);
+
+
+	printf("  ndir=%-6d clean=%-5d maxbpg=%-5d nffree=%-6d\n",
+		disk32(superblock->fs_cstotal.cs_ndir),
+		superblock->fs_clean,
+		disk32(superblock->fs_maxbpg),
+		disk32(superblock->fs_cstotal.cs_nffree));
 	sprintf(buf, "%d%%", disk32(superblock->fs_minfree));
-	printf(" inopb=%-4d  nindir=%-5d  optim=%1d     minfree=%3s     rpm=%-4d\n",
-		disk32(superblock->fs_inopb), disk32(superblock->fs_nindir),
-		disk32(superblock->fs_optim), buf,
-		disk32(superblock->fs_rps) * 60, disk32(superblock->fs_rotdelay));
-	printf(" nsect=%-4d  interleave=%-2d  trackskew=%-2d  spc=%-3d\n",
-		disk32(superblock->fs_nsect), disk32(superblock->fs_interleave),
-		disk32(superblock->fs_spc));
-	printf(" fmod=%-2d clean=%-2d ronly=%-2d flags=%-2d cgrotor=%-2d\n",
-		superblock->fs_fmod, superblock->fs_clean, superblock->fs_ronly,
-		superblock->fs_flags, disk32(superblock->fs_cgrotor));
-	printf("cpc=%d contigsumsize=%d maxsymlinklen=%d state=%d magic=%x\n",
-		disk32(superblock->fs_cpc), disk32(superblock->fs_contigsumsize),
-		disk32(superblock->fs_maxsymlinklen),
-		disk32(superblock->fs_state), disk32(superblock->fs_magic));
-	printf("qbmask=%08x %08x qfmask=%08x %08x postblformat=%d\n",
-	       disk32(superblock->fs_qbmask.val[0]),
-					disk32(superblock->fs_qbmask.val[1]),
-	       disk32(superblock->fs_qfmask.val[0]),
-					disk32(superblock->fs_qfmask.val[1]),
-		superblock->fs_postblformat, disk32(superblock->fs_nrpos));
+	printf("   cpc=%-2d maxcontig=%-4d minfree=%-5s nifree=%-6d\n",
+		disk32(superblock->fs_cpc),
+		disk32(superblock->fs_maxcontig), buf,
+		disk32(superblock->fs_cstotal.cs_nifree));
+	printf(" inopb=%-5d nindir=%-6d optim=%-6d flags=%02x\n",
+		disk32(superblock->fs_inopb),
+		disk32(superblock->fs_nindir),
+		disk32(superblock->fs_optim),
+		superblock->fs_flags);
+	printf("   rpm=%-5d intrlv=%-4d trkskew=%-3d rotdelay=%d\n",
+		disk32(superblock->fs_rps) * 60,
+		disk32(superblock->fs_interleave),
+		disk32(superblock->fs_trackskew),
+		disk32(superblock->fs_rotdelay));
+	printf("   spc=%-6d ronly=%-4d cgrotor=%-7d time=%-9d\n",
+		disk32(superblock->fs_spc),
+		superblock->fs_ronly,
+		disk32(superblock->fs_cgrotor),
+		disk32(superblock->fs_time));
+	printf(" state=%-6d magic=%-11x contigsumsize=%-3d maxsymlinklen=%d\n",
+		disk32(superblock->fs_state),
+		disk32(superblock->fs_magic),
+		disk32(superblock->fs_contigsumsize),
+		disk32(superblock->fs_maxsymlinklen));
+	printf("qbmask=%08x:%08x qfmask=%08x:%08x  postblformat=%d\n",
+	       disk32(superblock->fs_qbmask.val[swap_endian]),
+	       disk32(superblock->fs_qbmask.val[!swap_endian]),
+	       disk32(superblock->fs_qfmask.val[swap_endian]),
+	       disk32(superblock->fs_qfmask.val[!swap_endian]),
+	       superblock->fs_postblformat, disk32(superblock->fs_nrpos));
 	printf("postbloff=%d rotbloff=%d\n",
 	       disk32(superblock->fs_postbloff), disk32(superblock->fs_rotbloff));
+	/* Calculate device block size based on the superblock */
+	dev_bsize = disk32(superblock->fs_fsize) / disk32(superblock->fs_nspf);
+	dio_assign_bsize(dev_bsize);
 }
 
 static void
@@ -217,6 +253,7 @@ print_cg_summary(ULONG poffset)
 	int	index;
 	int	index2;
 	struct	csum	*ptr;
+	ULONG   blk;
 
 	cinfo = (struct csum *) AllocMem(disk32(superblock->fs_cssize),
 					 MEMF_PUBLIC | MEMF_CLEAR);
@@ -236,19 +273,25 @@ print_cg_summary(ULONG poffset)
 		printf("%2d: ndir=%-3d nbfree=%-4d nifree=%-4d nffree=%-4d ",
 			index, disk32(ptr->cs_ndir), disk32(ptr->cs_nbfree),
 			disk32(ptr->cs_nifree), disk32(ptr->cs_nffree));
-		if (bread((char *) cg, cgtod(superblock, index) + poffset,
+		blk = fsbtodb(superblock, cgtod(superblock, index));
+		if (bread((char *) cg, blk + poffset,
 			disk32(superblock->fs_cgsize))) {
 		    printf("Read blk %u failed\n", cgtod(superblock, index));
 		    return;
 		}
-		printf("ncyl=%d niblk=%d ndblk=%d\n", (long) disk16(cg->cg_ncyl),
-			(long) disk16(cg->cg_niblk), disk32(cg->cg_ndblk));
+		printf("ncyl=%d niblk=%d ndblk=%d\n",
+			(long) disk16(cg->cg_ncyl),
+			(long) disk16(cg->cg_niblk),
+			disk32(cg->cg_ndblk));
 		printf("    frotor=%d irotor=%d btotoff=%d time=%d boff=%d ",
-			disk32(cg->cg_btotoff), disk32(cg->cg_frotor),
-			disk32(cg->cg_irotor), disk32(cg->cg_time),
+			disk32(cg->cg_btotoff),
+			disk32(cg->cg_frotor),
+			disk32(cg->cg_irotor),
+			disk32(cg->cg_time),
 			disk32(cg->cg_boff));
 		printf("iusedoff=%d\n    freeoff=%d nextfreeoff=%d ",
-			disk32(cg->cg_iusedoff), disk32(cg->cg_freeoff),
+			disk32(cg->cg_iusedoff),
+			disk32(cg->cg_freeoff),
 			disk32(cg->cg_nextfreeoff));
 		printf("cgx=%d ", disk32(cg->cg_cgx));
 		printf("frsum=");
@@ -256,7 +299,8 @@ print_cg_summary(ULONG poffset)
 			printf("%d ", disk32(cg->cg_frsum[index2]));
 		}
 		printf("\n    clustersumoff=%d clusteroff=%d nclusterblks=%d\n",
-			disk32(cg->cg_clustersumoff), disk32(cg->cg_clusteroff),
+			disk32(cg->cg_clustersumoff),
+			disk32(cg->cg_clusteroff),
 			disk32(cg->cg_nclusterblks));
 
 		if (invert)
@@ -293,21 +337,21 @@ read_superblock(int partition, ULONG sboff)
         temp_sb = (struct fs *) AllocMem(DEV_BSIZE, MEMF_PUBLIC);
 	superblock = temp_sb;
 	dev_bsize = DEV_BSIZE;
-	if (bread((char *)temp_sb, super_block * DEV_BSIZE / DEV_BSIZE + sboff,
+	if (bread((char *)temp_sb, super_block * 512 / DEV_BSIZE + sboff,
 		    DEV_BSIZE)) {
 	    printf("Read blk %u failed\n",
-		    super_block * DEV_BSIZE / DEV_BSIZE + sboff);
+		    super_block * 512 / DEV_BSIZE + sboff);
 	    return (0);
 	}
 	sbsize = disk32(temp_sb->fs_sbsize);
 
 	if ((sbsize < 512) || (sbsize > 32768)) {
-	    convert = !convert;
+	    swap_endian = !swap_endian;
 	    sbsize = DISK32(sbsize);
 	    if ((sbsize < 512) || (sbsize > 32768)) {
-		convert = !convert;
+		swap_endian = !swap_endian;
 		printf("No Superblock at offset %d for partition %d\n",
-			super_block * DEV_BSIZE / DEV_BSIZE + sboff, partition);
+			super_block * 512 / DEV_BSIZE + sboff, partition);
 		FreeMem(temp_sb, DEV_BSIZE);
 		superblock = NULL;
 		temp_sb = NULL;
@@ -315,7 +359,7 @@ read_superblock(int partition, ULONG sboff)
 	    }
 	}
 
-	if (convert)
+	if (swap_endian)
 		printf("x86 architecture superblock\n");
 
         superblock = (struct fs *) AllocMem(sbsize, MEMF_PUBLIC | MEMF_CLEAR);
@@ -324,9 +368,9 @@ read_superblock(int partition, ULONG sboff)
 		return (0);
 	}
 	if (bread((char *)superblock,
-		    super_block * DEV_BSIZE / DEV_BSIZE + sboff, sbsize)) {
+		    super_block * 512 / DEV_BSIZE + sboff, sbsize)) {
 	    printf("Read blk %u failed\n",
-		    super_block * DEV_BSIZE / DEV_BSIZE + sboff, sbsize);
+		    super_block * 512 / DEV_BSIZE + sboff, sbsize);
 	    return (0);
 	}
 	dev_bsize = disk32(superblock->fs_fsize);
@@ -412,7 +456,7 @@ print_sun_disk_label(void)
 		    return (-1);
 		}
 	    }
-	    convert = 1;
+	    swap_endian = 1;
 	}
 
 	bcfact = disk16(label->bb_heads) * disk16(label->bb_nspt);
@@ -429,16 +473,18 @@ print_sun_disk_label(void)
 		return (0);
 	}
 
-	printf(" [Sun %s disk label] ", (convert ? "x86" : ""));
+	printf(" [Sun%s disk label] ", (swap_endian ? " x86" : ""));
 
 	printf("%s\n", label->bb_mfg_label);
 	printf("    Cylinders=%-5d Reserved=%-2d Available=%-5d Media Interleave=%d\n",
 		disk16(label->bb_ncyl), disk16(label->bb_ncylres),
 		disk16(label->bb_nfscyl), disk16(label->bb_hw_interleave));
-	printf("Sectors/Track=%-5d Heads=%-2d    Revs/Min=%-5d  Extra=(%d/%d/%d)\n\n",
+	printf("Sectors/Track=%-5d Heads=%-2d    Revs/Min=%-5d  "
+	       "Altsect/Cyl=%-5d   Extra=(%d/%d/%d)\n\n",
 		disk16(label->bb_nspt), disk16(label->bb_heads),
 		disk16(label->bb_rpm), disk32(label->bb_reserved1),
-		disk32(label->bb_reserved2), disk32(label->bb_reserved3));
+		disk16(label->bb_alt_per_cyl),
+		disk16(label->bb_reserved2), disk32(label->bb_reserved3));
 
 	printf("Partition   Start (Cyl/Block)   Next Available (Cyl/Block)\n");
 	for (pnum = 0; pnum < MAX_PART; pnum++)
@@ -456,6 +502,7 @@ print_sun_disk_label(void)
 			disk32(label->bb_part[pnum].fs_start_cyl) * bcfact);
 		times++;
 	    }
+
 	FreeMem(label, DEV_BSIZE);
 	return (0);
 }
@@ -466,7 +513,10 @@ print_bsd44_disk_label(void)
 	int	times = 0;
 	int	pnum;
 	int	fs_offset;
-	int	fs_size;
+	ULONG	fs_size;
+	ULONG   temp_size;
+	ULONG   temp_size2;
+	int     fs_size_shift = 0;
 	ULONG	*buffer;
 	struct	bsd44_label *label;	/* disk partition table */
 	char	buf[32];
@@ -507,41 +557,66 @@ print_bsd44_disk_label(void)
 	printf(" %d %d\n", label->bb_dtype, label->bb_dsubtype);
 	printf("       Cylinders=%-4d    Cyl Reserved=%-3d          Spares/Track=%d\n",
 		label->bb_ncyl, label->bb_spare_cyl, label->bb_spare_spt);
-	printf(" Tracks/Cyl¡nder=%-3d    Total Sectors=%-7d   Spares/Cylinder=%d\n",
+	printf(" Tracks/Cylinder=%-3d    Total Sectors=%-10uSpares/Cylinder=%d\n",
 		label->bb_heads, label->bb_nsec, label->bb_spare_spc);
 	printf("   Sectors/Track=%-3d Sectors/Cylinder=%-5d         Sector Size=%d\n",
-		label->bb_nspt, label->bb_nspc, label->bb_secsize);
+		label->bb_nspt, label->bb_nspc, disk32(label->bb_secsize));
 	printf(" Track Seek Time=%-5d     Track Skew=%-5d Hardware Interleave=%d\n",
 		label->bb_trkseek, label->bb_trackskew, label->bb_hw_interleave);
 	printf("Head Switch Time=%-5d  Cylinder Skew=%-5d    Disk Revs/Minute=%d\n",
 		label->bb_headswitch, label->bb_cylskew, label->bb_rpm);
 
-	printf("\n Part  Start Blk  Num Blks   # MB  FSize  BSize     Start      End\n");
+	printf("\n Part  StartBlk  Num_Blks     #_MB FSize BSize      Start        End\n");
 	for (pnum = 0; pnum < MAX_PART; pnum++)
 	    if (disk32(label->bb_part[pnum].fs_size) != 0) {
 		fs_offset = disk32(label->bb_part[pnum].fs_start_sec);
 		fs_size   = disk32(label->bb_part[pnum].fs_size);
-		printf("%2d(%c)  %9d %9d ",
+
+		printf("%2d(%c) %9d %9d ",
 			pnum, pnum + 'a', fs_offset, fs_size);
-		sprintf(buf, "%d.%03d",
-			fs_size * label->bb_secsize / 1048576,
-			(fs_size * label->bb_secsize % 1048576) / 1000);
-		printf(" %-.5s %6d  %5d ", buf,
+
+		fs_size_shift = 0;
+		for (temp_size2 = disk32(label->bb_secsize); temp_size2 > 1;
+		     temp_size2 >>= 1) {
+		    fs_size_shift++;
+		}
+		temp_size = fs_size;
+		if (fs_size_shift > 10)
+		    temp_size <<= (fs_size_shift - 10);
+		else
+		    temp_size >>= (10 - fs_size_shift);
+		temp_size /= 10;
+
+		sprintf(buf, "%u.%02u", temp_size / 100, temp_size % 100);
+		printf("%8s %5d %5d ", buf,
 			label->bb_part[pnum].fs_fsize,
 			label->bb_part[pnum].fs_fsize *
 				label->bb_part[pnum].fs_frag);
-		sprintf(buf, "%5d/%d/%d",
+		sprintf(buf, "%d/%d/%d",
 			fs_offset / label->bb_nspc,
 			(fs_offset % label->bb_nspc) / label->bb_nspt,
 			fs_offset % label->bb_nspt);
-		printf("%-10s%5d/%d/%d\n", buf,
+		printf("%10s ", buf);
+		sprintf(buf, "%d/%d/%d",
 			(fs_offset + fs_size) / label->bb_nspc,
 			((fs_offset + fs_size) % label->bb_nspc) / label->bb_nspt,
 			(fs_offset + fs_size) % label->bb_nspt);
+		printf("%10s\n", buf);
 	    }
 
+	/* Calculate device block size based on the partition table */
+	dev_bsize = disk32(label->bb_secsize);
+
 	FreeMem(buffer, DEV_BSIZE);
+	dio_assign_bsize(dev_bsize);
 	return (0);
+}
+
+void
+error_exit(int rc)
+{
+	dio_close();
+	exit(rc);
 }
 
 static int
@@ -569,8 +644,7 @@ break_abort(void)
 
 	superblock = NULL;
 	temp_sb = NULL;
-	dio_close();
-	exit(1);
+	error_exit(1);
 }
 
 static void
@@ -601,7 +675,7 @@ print_help(void)
 	    "specified mounted partition.  If %s finds a disk label, it will\n"
 	    "attempt to print filesystem information pertaining to each partition\n"
 	    "listed in the disk label.  %s currently understands SunOS type\n"
-	    "as well as the new BSD disk label (which can be created and edited with\n"
+	    "as well as the BSD disk label (which can be created and edited with\n"
 	    "diskpart).  There is currently no facility for editing a SunOS disk\n"
 	    "label (other than using a Sun to do it).\n"
 
@@ -655,7 +729,7 @@ main(int argc, char *argv[])
 				else if (*ptr == 's') {
 					index++;
 					if (index >= argc) {
-					    fprintf(stderr, "-%c option requires block number\n", *ptr);
+					    fprintf(stderr, "-%c option requires 512-sector number\n", *ptr);
 					    print_usage();
 					}
 					super_block = atoi(argv[index]);

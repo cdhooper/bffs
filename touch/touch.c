@@ -1,5 +1,5 @@
 /* touch
- *      This program is Copyright 2017 Chris Hooper.  All code herein
+ *      This program is Copyright 2018 Chris Hooper.  All code herein
  *      is freeware.  No portion of this code may be sold for profit
  *      without prior written approval of the author.
  */
@@ -33,7 +33,7 @@ const int smdays[12] = {
 	181, 212, 243, 273, 304, 334
 };
 
-#define ACCESS_INVISIBLE 0
+#define ACCESS_INVISIBLE 0  /* BFFS-specific; maps to SHARED_LOCK in FFS */
 
 static void
 print_usage(const char *progname)
@@ -43,6 +43,7 @@ print_usage(const char *progname)
 		"usage:  %s [-acmp] [[cc]yy][mmddhhmm[.ss]] file [...]\n"
 		"\t\t-a is set only access time\n"
 		"\t\t-c is set only inode change time\n"
+		"\t\t-C is just create file\n"
 		"\t\t-m is set only modify time\n"
 		"\t\t-p print current times (do not modify)\n",
 		version + 7, progname);
@@ -217,6 +218,7 @@ main(int argc, char *argv[])
     int mflag = 0;
     int aflag = 0;
     int cflag = 0;
+    int Cflag = 0;
     int pflag = 0;
     int set_all = 0;
     int rc = 0;
@@ -235,6 +237,8 @@ main(int argc, char *argv[])
 		    aflag = !aflag;
 		else if (*name == 'c')
 		    cflag = !cflag;
+		else if (*name == 'C')
+		    Cflag = !Cflag;
 		else if (*name == 'm')
 		    mflag = !mflag;
 		else if (*name == 'p')
@@ -274,6 +278,8 @@ main(int argc, char *argv[])
 	} else
 	    UnLock(lock);
 
+	if (Cflag)
+	    continue;
 
 	if (GetTimes(name, &tval[0], &tval[1], &tval[2])) {
 	    printf("Failed to get time of %s\n", name);

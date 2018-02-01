@@ -22,7 +22,7 @@ PROG=/bin/chown
 
 RM=-delete force >NIL:
 CC=dcc
-CFLAGS=-O2 -r -proto
+CFLAGS=-O2 -ms -r -proto
 
 $(PROG): chown.c
 	$(CC) $(CFLAGS) %(right) -o %(left)

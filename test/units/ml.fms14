@@ -1,4 +1,4 @@
-testdev:
+fms14:
     FileSystem = fs:BFFSFileSystem
     Device = fmsdisk.device
     Unit = 14
@@ -13,6 +13,6 @@ testdev:
     BlocksPerTrack = 18
     Buffers = 64
     Reserved = 0;  /* Unix partition */
-    PreAlloc = 11;  /* 8 for link comment, 16 for inode comment */
+    PreAlloc = 11
     DosType = 0x42464653  /* BFFS */
 #

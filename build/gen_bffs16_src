@@ -1,0 +1,3 @@
+delete bffs16_src.lha >nil:
+echo lha -r -2 -I a bffs16_src.lha bffs_1.6/ @bffs_1.6/build/gen_bffs16_src.files
+lha -r -2 -I a bffs16_src.lha bffs_1.6/ @bffs_1.6/build/gen_bffs16_src.files

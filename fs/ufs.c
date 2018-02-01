@@ -26,14 +26,9 @@
 #include <devices/hardblocks.h>
 #include <dos/filehandler.h>
 
-/*
-#define SYS_TYPES_H
-*/
-
 #ifdef GCC
 #include <proto/exec.h>
 #include <inline/dos.h>
-struct MsgPort *CreatePort(UBYTE *name, long pri);
 #else
 #include <clib/exec_protos.h>
 #include <clib/alib_protos.h>
@@ -54,7 +49,24 @@ struct MsgPort *CreatePort(UBYTE *name, long pri);
 #include "request.h"
 #include "unixtime.h"
 
+#ifdef TD_EXTENDED
+#define TD_CMD_READ  ETD_READ
+#define TD_CMD_WRITE ETD_WRITE
+#else
+#define TD_CMD_READ  CMD_READ
+#define TD_CMD_WRITE CMD_WRITE
+#endif
+
+#define TD_READ64     24
+#define TD_WRITE64    25
+#define TD_SEEK64     26
+#define TD_FORMAT64   27
+
 #define S static
+
+#ifdef GCC
+struct MsgPort *CreatePort(UBYTE *name, long pri);
+#endif
 
 S struct IOExtTD *trackIO = NULL;/* trackdisk IORequest for data	  */
 S struct IOExtTD *dchangeIO = NULL; /* trackdisk IORequest for disk change */
@@ -68,6 +80,10 @@ S char    *TRACKDISK = "trackdisk.device"; /* use this device for changeint */
 S char    *MESSYDISK = "messydisk.device"; /* if this device is specified   */
 S ULONG	superblock_sector = SUPER_BLOCK; /* default superblock location   */
 
+#ifdef BOTHENDIAN
+int    is_big_endian = 0;
+#endif
+
 struct	fs *superblock = NULL;	/* current superblock			  */
 int	bsd44fs = 0;		/* 0 = 4.3 BSD fs, 1 = 4.4 BSD fs	  */
 int	openerror = 1;		/* 1 = OpenDevce failed			  */
@@ -76,6 +92,7 @@ int	fs_partition;		/* current partition			  */
 ULONG	fs_lfmask;		/* global for faster access, ~fmask	  */
 ULONG	fs_lbmask;		/* global for faster access, ~bmask	  */
 ULONG	phys_sectorsize = 512;	/* physical disk sector size, from env	  */
+ULONG	phys_sectorshift = 9;	/* shift value for physical sector size   */
 ULONG	psectoffset;		/* disk partition start sector            */
 ULONG	psectmax;		/* disk partition end sector              */
 ULONG	tranmask = 0;		/* device DMA transfer mask		  */
@@ -86,15 +103,13 @@ extern	char *handler_name;	/* device name handler was started as     */
 
 /* interrupt handler declarations for disk change routines */
 extern VOID   IntHandler(VOID);
-struct InterruptData {	/* stack space for int handler (data) */
-	struct	Task *sigTask;
-	ULONG	sigMask;
-} IntData;
+intdata_t	     IntData;   /* data segment info for interrupt handler */
 struct Interrupt     IntHand;	/* exec interrupt struct for int handler */
 
 int    dcsigBit = 0;		/* signal bit in use for disk changes */
 int    dcsubmitted = 0;		/* whether a disk change interrupt IO
 				   request has been submitted */
+int    use_td64 = 0;
 
 
 /* data_read()
@@ -115,14 +130,16 @@ data_read(void *buf, ULONG num, ULONG size)
 
 	motor_is_on = 1;
 
-#ifdef TD_EXTENDED
-	trackIO->iotd_Req.io_Command = ETD_READ;   /* set IO Command */
-#else
-	trackIO->iotd_Req.io_Command = CMD_READ;   /* set IO Command */
-#endif
 	trackIO->iotd_Req.io_Length  = size;       /* #bytes to read */
 	trackIO->iotd_Req.io_Data    = buf;        /* buffer to read into */
-	trackIO->iotd_Req.io_Offset  = sectoff * phys_sectorsize;
+	trackIO->iotd_Req.io_Offset  = sectoff << phys_sectorshift;
+	if (use_td64) {
+	    trackIO->iotd_Req.io_Command = TD_READ64; /* set IO Command */
+	    trackIO->iotd_Req.io_Actual  = sectoff >> (32 - phys_sectorshift);
+	    /* io_Actual has upper 32 bits of byte offset */
+	} else {
+	    trackIO->iotd_Req.io_Command = TD_CMD_READ; /* set IO Command */
+	}
 
 	PRINT(("data_read from faddr=%u sector=%u size=%d\n",
 	       num, sectoff, size));
@@ -140,6 +157,11 @@ data_read(void *buf, ULONG num, ULONG size)
 
 	if (DoIO((struct IORequest *) trackIO)) {
 	    PRINT2(("drf faddr=%d sector=%d size=%d\n", num, sectoff, size));
+	    if (use_td64 == -1) {
+		/* Turn off TD64 and try again */
+		use_td64 = 0;
+		return (data_read(buf, num, size));
+	    }
 	    while (do_request(REQUEST_BLOCK_BAD_R, sectoff, size, ""))
 		for (index = 0; index < 4; index++)
 		    if (!DoIO((struct IORequest *) trackIO))
@@ -149,6 +171,11 @@ data_read(void *buf, ULONG num, ULONG size)
 				sectoff, size));
 	    return(1);
 	}
+	if (use_td64 == -1) {
+	    PRINT(("Using TD64\n"));
+	    use_td64 = 1;
+	}
+
 	return(0); /* Success */
 }
 
@@ -169,16 +196,22 @@ data_write(void *buf, ULONG num, ULONG size)
 	int   index;
 	ULONG sectoff = FSIZE / phys_sectorsize * num + psectoffset;
 
+	if (superblock->fs_ronly)
+	    return (1);
+
 	motor_is_on = 1;
 
-#ifdef TD_EXTENDED
-	trackIO->iotd_Req.io_Command = ETD_WRITE;  /* set IO Command */
-#else
-	trackIO->iotd_Req.io_Command = CMD_WRITE;  /* set IO Command */
-#endif
 	trackIO->iotd_Req.io_Length  = size;       /* #bytes to write */
 	trackIO->iotd_Req.io_Data    = buf;        /* source data */
-	trackIO->iotd_Req.io_Offset  = sectoff * phys_sectorsize;
+	trackIO->iotd_Req.io_Offset  = sectoff << phys_sectorshift;
+
+	if (use_td64) {
+	    trackIO->iotd_Req.io_Command = TD_WRITE64;
+	    trackIO->iotd_Req.io_Actual  = sectoff >> (32 - phys_sectorshift);
+	    /* io_Actual has upper 32 bits of byte offset */
+	} else {
+	    trackIO->iotd_Req.io_Command = TD_CMD_WRITE;
+	}
 
 	PRINT(("data_write to faddr=%u sector=%u size=%d\n",
 	       num, sectoff, size));
@@ -210,13 +243,13 @@ data_write(void *buf, ULONG num, ULONG size)
 }
 #endif
 
-/* close_ufs()
- *	This routine performs the complement operation of open_ufs()
+/* close_device()
+ *	This routine performs the complement operation of open_device()
  *	It shuts down the device and deallocates the associated data
  *	structures.
  */
 void
-close_ufs(void)
+close_device(void)
 {
 	if (openerror)
 		PRINT2(("Failed to open device.\n"));
@@ -234,13 +267,13 @@ close_ufs(void)
 	}
 }
 
-/* open_ufs()
+/* open_device()
  *	This routine will open the driver for the media device
  *	and initialize all structures used to communicate with
  *	that device.
  */
 int
-open_ufs(void)
+open_device(void)
 {
 	ULONG flags;
 	ULONG temp;
@@ -249,14 +282,13 @@ open_ufs(void)
 	extern int inode_comments;
 	extern int og_perm_invert;
 	extern int minfree;
-	extern char *version;
 	unsigned char	temp_gmt;
 	char  *ptr;
 
 	sprintf(stat->handler_version, "%.4s", version + 22);
 	ptr = stat->handler_version + 4;
-#	ifdef INTEL
-	    *(ptr++) = 'I';
+#	ifdef BOTHENDIAN
+	    *(ptr++) = 'B';
 #	endif
 
 #	ifdef RONLY
@@ -305,7 +337,7 @@ open_ufs(void)
 		else
 		    goto good_open;
 
-	close_ufs();
+	close_device();
 	sprintf(stat->disk_type, "%s:%cd%d Dev?", handler_name,
 		tolower(*(DISK_DEVICE)), DISK_UNIT);
 	return(1);
@@ -320,7 +352,7 @@ open_ufs(void)
 	/* if request succeeds and NO disk present, give up */
 	if (!DoIO((struct IORequest *) trackIO) && trackIO->iotd_Req.io_Actual) {
 		PRINT2(("no disk present, closing ufs\n"));
-		close_ufs();
+		close_device();
 		sprintf(stat->disk_type, "%s:%cd%d Dsk?", handler_name,
 			tolower(*(DISK_DEVICE)), DISK_UNIT);
 		return(1);
@@ -355,22 +387,27 @@ open_ufs(void)
 		flags	 =  ENVIRONMENT->de_PreAlloc;
 		temp	 =  ENVIRONMENT->de_SizeBlock * sizeof(long);
 		switch (temp) {
-		     case 512:
-		     case 1024:
-		     case 2048:
-		     case 4096:
-		     case 8192:
-		     case 16384:
-			phys_sectorsize = temp;
-			break;
 		     default:
 			PRINT2(("Invalid RDB sector size of %d\n", temp));
+			temp = 512;
+			/* FALLTHROUGH */
+		     case 16384:
+		     case 8192:
+		     case 4096:
+		     case 2048:
+		     case 1024:
+		     case 512:
+			phys_sectorsize = temp;
+			phys_sectorshift = 0;
+			while ((temp >>= 1) != 0)
+			    phys_sectorshift++;
+			break;
 		}
 		psectmax = ENVIRONMENT->de_BlocksPerTrack *
 		       (ENVIRONMENT->de_HighCyl + 1) * ENVIRONMENT->de_Surfaces;
 
 		resolve_symlinks = (flags) & 1;
-		case_independent = (flags >> 1) & 1;
+		case_dependent   = (flags >> 1) & 1;
 		unix_paths	 = (flags >> 2) & 1;
 		link_comments	 = (flags >> 3) & 1;
 		inode_comments	 = (flags >> 4) & 1;
@@ -379,8 +416,8 @@ open_ufs(void)
 		temp_gmt	 = (flags >> 8) & 255;
 		GMT		 = *((char *) &temp_gmt);
 
-		PRINT(("tm=%x rs=%d ci=%d up=%d lc=%d ",
-			tranmask, ENVIRONMENT->de_Reserved, case_independent,
+		PRINT(("tm=%x rs=%d cdep=%d up=%d lc=%d ",
+			tranmask, ENVIRONMENT->de_Reserved, case_dependent,
 			unix_paths, link_comments));
 		PRINT(("ic=%d pi=%d mf=%d gmt=%d\n",
 			inode_comments, og_perm_invert, minfree, GMT));
@@ -389,6 +426,7 @@ open_ufs(void)
 
 	/* must be reset for every disk change */
 	superblock_sector = SUPER_BLOCK * 512 / phys_sectorsize;
+	use_td64 = -1;  /* auto-detect TD64 */
 
 	return(0);
 }
@@ -402,8 +440,8 @@ static int
 sun_label_read(int new_partition)
 {
 	struct	sun_label *label;	/* disk partition table */
-	int	part_off;
-	int	part_end;
+	ULONG	part_off;
+	ULONG	part_end;
 
 	if (no_Sun_label)
 		return(1);
@@ -509,6 +547,12 @@ bsd44_label_read(int new_partition)
 
 	for (fs_offset = 0; fs_offset < phys_sectorsize - sizeof(*label); fs_offset += 16) {
 		label = (struct bsd44_label *) (buffer + fs_offset);
+#ifdef BOTHENDIAN
+		/* Auto-detect endian */
+		if ((DISK32(label->bb_magic)  == B44BB_MAGSWAP) &&
+		    (DISK32(label->bb_magic2) == B44BB_MAGSWAP))
+		    is_big_endian = !is_big_endian;
+#endif
 		if ((DISK32(label->bb_magic)  == B44BB_MAGIC) &&
 		    (DISK32(label->bb_magic2) == B44BB_MAGIC))
 			goto good_value;
@@ -521,7 +565,7 @@ bsd44_label_read(int new_partition)
 	psectoffset += DISK32(label->bb_part[new_partition].fs_start_sec);
 
 	part_end = (ENVIRONMENT->de_HighCyl + 1) * ENVIRONMENT->de_Surfaces *
-		    ENVIRONMENT->de_BlocksPerTrack * phys_sectorsize;
+		    ENVIRONMENT->de_BlocksPerTrack;
 
 	if ((label->bb_part[new_partition].fs_size == 0) ||
 	    (DISK32(label->bb_part[new_partition].fs_size) *
@@ -592,26 +636,30 @@ cgsummary_read(void)
 {
 	char *space;
 	int blks;
-	int index;
+	ULONG cssize = DISK32(superblock->fs_cssize);
+	ULONG csaddr;
 
-	space = cgsummary_base =
-		(char *) AllocMem(DISK32(superblock->fs_cssize), MEMF_PUBLIC);
+	space = cgsummary_base = (char *) AllocMem(cssize, MEMF_PUBLIC);
 	if (cgsummary_base == NULL) {
-		PRINT2(("Unable to allocate %d bytes for superblock cg summary info\n",
-			DISK32(superblock->fs_cssize)));
+		PRINT2(("Unable to allocate %u bytes for cg summary info\n",
+			cssize));
 		return(1);
 	}
 
-	if (data_read(cgsummary_base, DISK32(superblock->fs_csaddr),
-		      DISK32(superblock->fs_cssize)))
+	if (superblock->fs_flags & FS_FLAGS_UPDATED)
+	    csaddr = DISK32(superblock->fs_new_csaddr[is_big_endian]);
+	else
+	    csaddr = DISK32(superblock->fs_csaddr);
+
+	if (data_read(cgsummary_base, csaddr, cssize)) {
 		PRINT2(("data read fault for superblock cg summary info\n"));
-
-	blks = howmany(DISK32(superblock->fs_cssize), FBSIZE);
-
-	for (index = 0; index < blks; index++) {	/* count up blocks */
-		superblock->fs_csp[index] = (struct csum *) space;
-		space += FBSIZE;
+		superblock->fs_ronly = 1;
+		return(0);
 	}
+
+	blks = howmany(cssize, FBSIZE);
+
+	superblock->fs_csp = (struct csum *) space;
 	return(0);
 }
 
@@ -627,6 +675,10 @@ ffs_oldfscompat(void)
         if (DISK32(superblock->fs_postblformat) == FS_42POSTBLFMT)
                 superblock->fs_nrpos = DISK32(8);
 
+#ifdef BOTHENDIAN
+	if (is_big_endian == 0)
+	    PRINT(("x86 "));
+#endif
 	switch (DISK32(superblock->fs_inodefmt)) {
 	    case 0:
 		PRINT(("BSD 4.2 inode format\n"));
@@ -668,6 +720,30 @@ ffs_oldfscompat(void)
 	PRINT(("lfmask=%08x lbmask=%08x\n", fs_lfmask, fs_lbmask));
 }
 
+#ifdef BOTHENDIAN
+/* Auto-detect endian by checking fragsize * frags_per_block = blocksize */
+static void
+superblock_detect_endian(struct fs *sb)
+{
+    int try;
+
+    if (sb->fs_bsize == 0)
+	return;
+
+    for (try = 0; try < 2; try++) {
+	ULONG bsize = DISK32(sb->fs_bsize);
+	ULONG fsize = DISK32(sb->fs_fsize);
+	if (((1 << DISK32(sb->fs_bshift)) == bsize) &&
+	    ((1 << DISK32(sb->fs_fshift)) == fsize) &&
+	    (fsize * DISK32(sb->fs_frag) == bsize)) {
+	    return;
+	}
+	/* Try "other" endian */
+	is_big_endian = !is_big_endian;
+    }
+}
+#endif
+
 /* superblock_read()
  *	This routine is used to read the superblock from the disk
  *	at the specified partition.  It calls partition_info_read()
@@ -680,7 +756,7 @@ superblock_read(int partition)
 {
 	int	index	   = 0;
 	int	csize	   = 1;
-	int	ssector	   = 0;
+	ULONG	ssector	   = 0;
 	struct fs *temp_sb;
 
 	if (partition_info_read(partition))
@@ -700,35 +776,43 @@ superblock_read(int partition)
 		case 5:
 			ssector = 16;
 			break;
-		case 17:
+		case 18:
 			ssector = 48;
 			break;
 		case 49:
+			ssector = 64;
+			break;
+		case 65:
 			ssector = 112;
 			break;
 		case 113:
 			ssector = 240;
 			break;
 	    }
+
 	    FSIZE = phys_sectorsize;
 	    if (data_read(temp_sb, superblock_sector, phys_sectorsize)) {
 		PRINT2(("** data read fault for superblock_read\n"));
 		break;
 	    }
+#ifdef BOTHENDIAN
+	    superblock_detect_endian(temp_sb);
+#endif
 
 	    FBSIZE = DISK32(temp_sb->fs_bsize);
 	    if ((FBSIZE == 4096)  || (FBSIZE == 8192) ||
 		(FBSIZE == 16384) || (FBSIZE == 32768)) {
 		superblock = (struct fs *) AllocMem(FBSIZE, MEMF_PUBLIC);
 		if (superblock == NULL)
-		    PRINT2(("superblock_read: could not allocate %d bytes\n",
+		    PRINT2(("superblock_read: could not allocate %u bytes\n",
 			   FBSIZE));
 		break;
 #ifdef DEBUG
 	    } else {
-		PRINT2(("Superblock not found at sector %d\n", ssector +
+		PRINT2(("Superblock not found at sector %u\n", ssector +
 			superblock_sector));
-	        if ((FBSIZE != 4096)  && (FBSIZE != 8192) &&
+	        if ((FBSIZE != 0)     && (FBSIZE != 0xffffffff) &&
+	            (FBSIZE != 4096)  && (FBSIZE != 8192) &&
 		    (FBSIZE != 16384) && (FBSIZE != 32768))
 			PRINT2(("bsize %d ", FBSIZE));
 		PRINT2(("\n"));
@@ -742,22 +826,20 @@ superblock_read(int partition)
 		return(1);
 	}
 
-	FSIZE = phys_sectorsize;
 	data_read(superblock, superblock_sector, FBSIZE);
 	FreeMem(temp_sb, phys_sectorsize);
 	FSIZE = DISK32(superblock->fs_fsize);
 
+	superblock->fs_ronly = 0;     /* Start it out Read/Write */
 
-PRINT(("part=%d fs_bsize=%d fs_size=%d frags x %d bytes/frag = %dk\n",
-	fs_partition, FBSIZE, DISK32(superblock->fs_size), FSIZE,
-	DISK32(superblock->fs_size) * FSIZE / 1024));
-PRINT(("cginfo=%d len=%d ncg=%d fpg=%d cgsize=%d ileave=%d\n",
-	DISK32(superblock->fs_csaddr), DISK32(superblock->fs_cssize),
-	DISK32(superblock->fs_ncg), DISK32(superblock->fs_fpg),
-	DISK32(superblock->fs_cgsize), DISK32(superblock->fs_interleave)));
-PRINT(("csaddr=%d cssize=%d\n", DISK32(superblock->fs_csaddr),
-	DISK32(superblock->fs_cssize)));
-PRINT(("fsid=%08x%08x\n", DISK32(superblock->fs_id)));
+	PRINT(("part=%d fs_bsize=%d fs_size=%u frags x %d bytes/frag = %uk\n",
+		fs_partition, FBSIZE, DISK32(superblock->fs_size), FSIZE,
+		FSIZE / 512 * DISK32(superblock->fs_size) / 2));
+	PRINT(("csaddr=%d cssize=%d ncg=%d fpg=%d cgsize=%d ileave=%d\n",
+		DISK32(superblock->fs_csaddr), DISK32(superblock->fs_cssize),
+		DISK32(superblock->fs_ncg), DISK32(superblock->fs_fpg),
+		DISK32(superblock->fs_cgsize),
+		DISK32(superblock->fs_interleave)));
 
 	switch (DISK32(superblock->fs_magic)) {
 	    case FS_UFS1_MAGIC:
@@ -772,7 +854,7 @@ PRINT(("fsid=%08x%08x\n", DISK32(superblock->fs_id)));
 		goto bad_superblock;
 	}
 	if (superblock->fs_flags & (FS_FLAGS_SUJ | FS_FLAGS_MULTILEVEL |
-				    FS_FLAGS_GJOURNAL | FS_FLAGS_UPDATED)) {
+				    FS_FLAGS_GJOURNAL)) {
 	    PRINT2(("Unsupported FFS v2 filesystem (flags %02x)\n",
 		    (unsigned char) superblock->fs_flags));
 	    superblock->fs_ronly = 1;
@@ -784,52 +866,24 @@ PRINT(("fsid=%08x%08x\n", DISK32(superblock->fs_id)));
 	}
 
 	fblkshift = DISK32(superblock->fs_fragshift);
+	fblkmask  = (1 << fblkshift) - 1;
 
-/* ORIGINAL
-	fblkmask  = 1;
-	for (index = 1; index < fblkshift; index <<= 1) {
-		fblkmask <<= 1;
-		fblkmask  |= 1;
-	}
-
-	pfragshift = 1;
-	pfragmask  = 1;
 	csize = DISK32(superblock->fs_nindir) >> fblkshift;
-	for (index = 2; index < csize; index <<= 1) {
-		pfragshift++;
-		pfragmask <<= 1;
-		pfragmask  |= 1;
-	}
-*/
-
-	fblkmask  = 0;
-	for (index = 0; index < fblkshift; index++) {
-		fblkmask <<= 1;
-		fblkmask  |= 1;
-	}
-
 	pfragshift = 0;
-	pfragmask  = 0;
-	csize = DISK32(superblock->fs_nindir) >> fblkshift;
-	for (index = 1; index < csize; index <<= 1) {
+	for (index = 1; index < csize; index <<= 1)
 		pfragshift++;
-		pfragmask <<= 1;
-		pfragmask  |= 1;
-	}
+	pfragmask = (1 << pfragshift) - 1;
 
-	PRINT(("fblkshift=%d fblkmask=%d pfragshift=%d pfragmask=%d\n",
+	PRINT(("fblkshift=%u fblkmask=%x pfragshift=%u pfragmask=%x\n",
 		fblkshift, fblkmask, pfragshift, pfragmask));
 
-#	ifdef RONLY
-		superblock->fs_ronly = 1;     /* Sorry, read only  */
-#	else
-		superblock->fs_ronly = 0;     /* Start it out Read/Write */
-#	endif
-
+#ifdef RONLY
+	superblock->fs_ronly = 1;     /* Sorry, read only  */
+#else
 	if (physical_ro)
 		superblock->fs_ronly = 1;
-
-	superblock->fs_fmod  = 0;      /* superblock clean flag */
+#endif
+	superblock->fs_fmod  = 0;      /* superblock synced with disk flag */
 	superblock->fs_clean = 0;      /* superblock clean unmount flag */
 
 	sprintf(stat->disk_type + strlen(stat->disk_type),
@@ -852,7 +906,8 @@ PRINT(("fsid=%08x%08x\n", DISK32(superblock->fs_id)));
 /* rdb_label_read()
  *	This routine will read an Amiga RDB disk label and return
  *	the specified partition.
- *	THIS ROUTINE HAS NOT YET BEEN IMPLEMENTED.
+ *
+ *	THIS ROUTINE IS NOT FULLY IMPLEMENTED.
  */
 rdb_label_read(new_partition)
 int new_partition;
@@ -987,23 +1042,33 @@ motor_on(void)
  *	This routine will write the superblock out to disk only if
  *	it was modified since the last call to superblock_flush()
  */
-void
+int
 superblock_flush(void)
 {
-	if (superblock->fs_fmod) {
-	    PRINT(("superblock flush\n"));
+	ULONG csaddr;
 
-	    superblock->fs_time = DISK32(unix_time());
-	    superblock->fs_fmod = 0;
+	if ((superblock->fs_fmod == 0) || (superblock->fs_ronly))
+	    return (0);
 
-	    if (data_write(superblock, lfragno(superblock,
-			   superblock_sector * phys_sectorsize), FBSIZE))
-		PRINT2(("** data write fault for superblock"));
+	PRINT(("superblock flush\n"));
 
-	    if (data_write(cgsummary_base, DISK32(superblock->fs_csaddr),
-			   DISK32(superblock->fs_cssize)))
-		PRINT2(("** data write fault for superblock cg summary info\n"));
+	superblock->fs_time = DISK32(unix_time());
+	superblock->fs_fmod = 0;
+
+	if (superblock->fs_flags & FS_FLAGS_UPDATED) {
+	    csaddr = DISK32(superblock->fs_new_csaddr[is_big_endian]);
+	    superblock->fs_new_time[is_big_endian] = superblock->fs_time;
+	} else {
+	    csaddr = DISK32(superblock->fs_csaddr);
 	}
+
+	if (data_write(superblock, lfragno(superblock,
+		       superblock_sector * phys_sectorsize), FBSIZE))
+	    PRINT2(("** data write fault for superblock\n"));
+
+	if (data_write(cgsummary_base, csaddr, DISK32(superblock->fs_cssize)))
+	    PRINT2(("** data write fault for superblock cg summary info\n"));
+	return (1);
 }
 #endif
 
@@ -1129,3 +1194,36 @@ close_dchange(int normal)
 	}
 #endif
 }
+
+#ifdef BOTHENDIAN
+
+unsigned short
+disk16(unsigned short x)
+{
+    if (is_big_endian)
+	return (x);
+
+    /*
+     * This could be faster in assembly as:
+     *     rol.w #8, d0
+     */
+    return(((x >> 8) & 255) | ((x & 255) << 8));
+}
+
+unsigned long
+disk32(unsigned long x)
+{
+    if (is_big_endian)
+	return (x);
+
+    /*
+     * This could be faster in assembly as:
+     *     rol.w #8, d0
+     *     swap d1
+     *     rol.w $8, d0
+     */
+    return((x >> 24) | (x << 24) |
+	   ((x << 8) & (255 << 16)) |
+	   ((x >> 8) & (255 << 8)));
+}
+#endif

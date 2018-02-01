@@ -20,7 +20,7 @@
 
 PROG=/bin/dbprint
 CC=dcc
-CFLAGS=-O2 -r -proto -ms $(CFLAGS_ADD)
+CFLAGS=-O2 -ms -r -proto $(CFLAGS_ADD)
 ASM=das
 RM=-delete force >NIL:
 SRCS=stack.asm handler.c debug.c packets.c ufs.c system.c fread.c fwrite.c file.c inode.c cache.c dir.c table.c alloc.c unixtime.c config.c request.c inthand.asm
@@ -99,4 +99,5 @@ $(OBJ)/stack.o: stack.asm
 	$(ASM) %(right:*.asm) -o %(left)
 
 clean:
-	$(RM) $(OBJS) $(PROG) $(FS)
+	@echo Cleaning $(OBJ)
+	@$(RM) $(OBJS) $(PROG) $(FS)

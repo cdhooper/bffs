@@ -1,4 +1,4 @@
-testdev:
+fms0:
     FileSystem = fs:BFFSFileSystem
     Device = fmsdisk.device
     Unit = 0
@@ -13,4 +13,5 @@ testdev:
     BlocksPerTrack = 9
     Buffers = 20
     Reserved = 0;  /* Unix partition */
+    PreAlloc = 0
 #

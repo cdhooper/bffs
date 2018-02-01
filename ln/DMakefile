@@ -25,7 +25,7 @@ SRCS=ln.c amiga_unix.c
 OBJS=$(SRCS:*.*:"$(OBJ)/%1.o")
 
 CC=dcc
-CFLAGS=-O2 -r -proto -Dcdh -I/ucbinclude -I/unix_support
+CFLAGS=-O2 -ms -r -proto -Dcdh -I/ucbinclude -I/unix_support
 RM = -delete force >NIL:
 
 $(PROG): $(OBJ) $(OBJS)

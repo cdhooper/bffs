@@ -17,6 +17,7 @@ Usage:
 Command line options:
 	-a is set only the file access time
 	-c is set only the file inode change time
+	-C is just create file (don't update all timestamps)
 	-m is set only the file modification time
 	-p is print current times for a file (do not modify)
 

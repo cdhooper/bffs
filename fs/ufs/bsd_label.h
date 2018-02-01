@@ -1,7 +1,8 @@
 #ifndef _BSD_LABEL_H
 #define _BSD_LABEL_H
 
-#define B44BB_MAGIC 0x82564557  /* BSD 44 Boot block magic number   */
+#define B44BB_MAGIC   0x82564557 /* BSD 44 Boot block magic number   */
+#define B44BB_MAGSWAP 0x57455682 /* BSD 44 Boot block magic number   */
 
 /*
  * This structure was created purely from examination of a BSD boot sector.

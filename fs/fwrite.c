@@ -111,7 +111,7 @@ file_frags_write(ULONG sfrag, ULONG nfrags, char *buf, ULONG inum)
     if (lfrag)
         cache_invalidate(lfrag);
 
-    PRINT(("ffw: gather frags=%d (%d to %d)\n",
+    PRINT(("ffw: gather %u frags (%u to %u)\n",
 	   nfrags, sfrag, sfrag + nfrags - 1));
 
     frag = 0;
@@ -173,10 +173,10 @@ file_write(ULONG inum, ULONG sbyte, ULONG nbytes, char *buf)
 	ULONG	spos, epos, sfrag, efrag;
 	ULONG	nffrags, filesize;
 	ULONG	faddr;
+	ULONG	start;
+	ULONG	blocks;
+	ULONG	ablocks;
 	int	read_last_frag = 1;
-	int	start;
-	int	blocks;
-	int	ablocks;
 
 	inode = inode_read(inum);
 #ifndef FAST
@@ -187,24 +187,15 @@ file_write(ULONG inum, ULONG sbyte, ULONG nbytes, char *buf)
 #endif
 	filesize = IC_SIZE(inode);
 
-	/* expand allocation if file will grow larger than current allocation */
-	if (sbyte + nbytes > DISK32(inode->ic_blocks) * phys_sectorsize) {
-		start  = DISK32(inode->ic_blocks) / NDSPF;
-/*
-		blocks = ((sbyte + nbytes + FBSIZE - 1) / phys_sectorsize -
-			  DISK32(inode->ic_blocks)) / NDSPB;
-*/
+	/* expand allocation if file will grow larger than current size */
+	if (sbyte + nbytes > filesize) {
+		start  = filesize / FSIZE;
 
-PRINT(("sbyte=%d nbytes=%d FBSIZE=%d ic_blocks=%d NDSPB=%d\n",
-	sbyte, nbytes, FBSIZE, DISK32(inode->ic_blocks), NDSPB));
-/*
-		blocks = ((sbyte + nbytes + FBSIZE - 1) / FBSIZE -
-			  DISK32(inode->ic_blocks)) / NDSPB;
-*/
-		blocks = (sbyte + nbytes + FBSIZE - 1 -
-			  DISK32(inode->ic_blocks) * phys_sectorsize) / FBSIZE;
+		PRINT(("fw expand: sbyte=%u nbytes=%u ic_size=%u\n",
+		       sbyte, nbytes, filesize));
+		blocks = (sbyte + nbytes + FBSIZE - 1 - filesize) / FBSIZE;
 
-		PRINT(("fw: Expand %d (size=%d) at frag %d by %d blocks\n",
+		PRINT(("fwrite: Expand %u (size=%u) at frag %u by %u blocks\n",
 			inum, filesize, start, blocks));
 		ablocks = file_blocks_add(inode, inum, start, blocks);
 
@@ -226,7 +217,7 @@ PRINT(("sbyte=%d nbytes=%d FBSIZE=%d ic_blocks=%d NDSPB=%d\n",
 			    return(-1);
 			}
 #endif
-			IC_SETSIZE(inode, filesize);
+			SET_IC_SIZE(inode, filesize);
 			read_last_frag = 0;
 		}
 	} else if (sbyte + nbytes > filesize) {
@@ -238,7 +229,7 @@ PRINT(("sbyte=%d nbytes=%d FBSIZE=%d ic_blocks=%d NDSPB=%d\n",
 		    return(-1);
 		}
 #endif
-		IC_SETSIZE(inode, filesize);
+		SET_IC_SIZE(inode, filesize);
 	}
 
 

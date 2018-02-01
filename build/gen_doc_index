@@ -1,0 +1,52 @@
+#!/bin/sh
+
+DOC=doc/user_manual
+[ -d ../doc ] && DOC=../$DOC
+
+grep -A 1 -n  $DOC |
+sed -e 's///g' -e s/:$// -e 's/^[0-9]*-//' |
+awk '
+function docline()
+{
+    return (getline LINE < "'$DOC'");
+}
+BEGIN {
+    PAGENUM=1
+} {
+    LINENUM=$1 +1
+    getline;
+    TEXT=$0;
+    getline;
+    SEARCH=toupper(TEXT);
+    gsub(" ", "", SEARCH);
+    LINENUMS[SEARCH] = LINENUM;
+    PAGENUMS[SEARCH] = ++PAGENUM;
+} END {
+    while (docline()) {
+	print LINE;
+	if (index(LINE, "----------------") != 0)
+	    break;
+    }
+    while (docline()) {
+	if (LINE == "")
+	    break;
+	SECTION=substr(LINE, 23);
+	SEARCH=toupper(SECTION);
+	gsub(" ", "", SEARCH);
+	LINENUM=LINENUMS[SEARCH];
+	PAGENUM=PAGENUMS[SEARCH];
+	if (LINENUM == "")
+	    LINENUM="?";
+	if (PAGENUM == "")
+	    PAGENUM="?";
+	printf("%9s %8s    %s\n", LINENUM, PAGENUM, SECTION);
+    }
+    while (docline()) {
+	print LINE;
+    }
+}' > $DOC.new
+echo "Differences:"
+diff $DOC $DOC.new
+echo ""
+echo "If the above looks fine, update with:"
+echo "    mv $DOC.new $DOC"

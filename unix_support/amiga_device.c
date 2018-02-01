@@ -23,67 +23,128 @@ typedef long daddr_t;
 #define BTOC(x) ((x)<<2)
 #define CTOB(x) ((x)>>2)
 
+#define TD_READ64     24
+#define TD_WRITE64    25
+#define TD_SEEK64     26
+#define TD_FORMAT64   27
+
+
 char         *dos_dev_name     = NULL;
-char          disk_device[100] = "scsi.device";
+static char   disk_device_buf[100];
+char         *disk_device      = disk_device_buf;
 int           disk_unit        = 0;
 static int    disk_flags       = 0;
 static int    device_direct    = 0;
 int           DEV_BSIZE        = 512;
 int           DEV_BSHIFT       = 9;
 static int    inhibited        = 0;
-static ULONG  poffset          = 0;
-static ULONG  pmax             = 0;
+static ULONG  psectoffset      = 0; /* Start sector for partition */
+static ULONG  psectmax         = 0; /* One sector beyond partition end */
 static struct IOExtTD *trackIO = NULL;
+static int    use_td64         = -1;
 
 static int dio_init(void);
 int dio_inhibit(int inhibit);
+void error_exit(int rc);
 
 int
 bread(char *buf, daddr_t blk, long size)
 {
+	ULONG sectoff = blk + psectoffset;
+	ULONG high32 = sectoff >> (32 - DEV_BSHIFT);
 #ifdef DEBUG
-	printf("bread: blk=%d size=%d BSIZE=%d buf=%08x poffset=%d ploc=%d\n",
-		blk, size, DEV_BSIZE, buf, poffset, blk * DEV_BSIZE + poffset);
+	printf("bread: blk=%d size=%d BSIZE=%d buf=%08x poffset=%u loc=%u\n",
+		blk, size, DEV_BSIZE, buf, psectoffset, sectoff);
 #endif
 	if (dos_dev_name == NULL)
 		return (fbread(buf, blk, size));
 
-	trackIO->iotd_Req.io_Command = CMD_READ;	/* set IO Command */
 	trackIO->iotd_Req.io_Length  = size;		/* #bytes to read */
 	trackIO->iotd_Req.io_Data    = buf;		/* buffer to use */
-
-	trackIO->iotd_Req.io_Offset = blk * DEV_BSIZE + poffset;
-
-	if (trackIO->iotd_Req.io_Offset + size > pmax) {
-		printf("Attempted to read past the end of the partition, block=%d size=%d\n", blk, size);
+	trackIO->iotd_Req.io_Offset  = sectoff << DEV_BSHIFT;
+	if (high32) {
+	    if (use_td64 == 0) {
+failed_io64:
+		printf("Can't address blk %u with 32-bit only device\n",
+		       sectoff);
 		return (1);
+	    }
+	    trackIO->iotd_Req.io_Command = TD_READ64;	/* set IO Command */
+            trackIO->iotd_Req.io_Actual  = high32;
+            /* io_Actual has upper 32 bits of byte offset */
+	} else {
+	    trackIO->iotd_Req.io_Command = CMD_READ;	/* set IO Command */
 	}
 
-	return (DoIO((struct IORequest *)trackIO));
+	if (sectoff + (size + DEV_BSIZE - 1) / DEV_BSIZE > psectmax) {
+	    printf("Attempted to read past the end of the partition: "
+		   "block=%d size=%d\n", blk, size);
+	    return (1);
+	}
+
+	if (DoIO((struct IORequest *) trackIO)) {
+            if (high32 && use_td64 == -1) {
+                use_td64 = 0;
+                return (bread(buf, blk, size));
+            }
+	    return (1);
+	}
+        if (high32 && use_td64 == -1) {
+#ifdef DEBUG
+            printf("Used TD64 for addr %x:%08x\n",
+		   high32, trackIO->iotd_Req.io_Offset);
+#endif
+            use_td64 = 1;
+        }
+	return (0);
 }
 
 int
 bwrite(char *buf, daddr_t blk, long size)
 {
+	ULONG sectoff = blk + psectoffset;
+	ULONG high32 = sectoff >> (32 - DEV_BSHIFT);
 #ifdef DEBUG
-	printf("bwrite: blk=%d size=%d BSIZE=%d buf=%08x poffset=%d\n",
-		blk, size, DEV_BSIZE, buf, poffset);
+	printf("bwrite: blk=%d size=%d BSIZE=%d buf=%08x loc=%u\n",
+		blk, size, DEV_BSIZE, buf, sectoff);
 #endif
-	if (dos_dev_name == NULL)
-		return (fbwrite(buf, blk, size));
-
-	trackIO->iotd_Req.io_Command = CMD_WRITE;	/* set IO Command */
-	trackIO->iotd_Req.io_Length  = size;		/* #bytes to read */
-	trackIO->iotd_Req.io_Data    = buf;		/* buffer to use */
-
-	trackIO->iotd_Req.io_Offset = blk * DEV_BSIZE + poffset;
-
-	if (trackIO->iotd_Req.io_Offset + size > pmax) {
-		printf("Attempted to write past the end of the partition, block=%d size=%d\n", blk, size);
-		return (1);
+	if (dos_dev_name == NULL) {
+	    if (fbwrite(buf, blk, size))
+		error_exit(1);
+	    return (0);
 	}
 
-	return (DoIO((struct IORequest *)trackIO));
+	trackIO->iotd_Req.io_Length  = size;		/* #bytes to read */
+	trackIO->iotd_Req.io_Data    = buf;		/* buffer to use */
+	trackIO->iotd_Req.io_Offset  = sectoff << DEV_BSHIFT;
+	if (high32) {
+	    if (use_td64 == 0) {
+		printf("Can't address blk %u with 32-bit only device\n",
+		       sectoff);
+		error_exit(1);
+	    }
+	    trackIO->iotd_Req.io_Command = TD_WRITE64;	/* set IO Command */
+            trackIO->iotd_Req.io_Actual  = high32;
+            /* io_Actual has upper 32 bits of byte offset */
+	} else {
+	    trackIO->iotd_Req.io_Command = CMD_WRITE;	/* set IO Command */
+	}
+
+	if (sectoff + (size + DEV_BSIZE - 1) / DEV_BSIZE > psectmax) {
+	    printf("Attempted to write past the end of the partition: "
+		   "block=%d size=%d\n", blk, size);
+	    error_exit(1);
+	}
+
+	if (DoIO((struct IORequest *) trackIO)) {
+            if (high32 && use_td64 == -1) {
+                /* Turn off TD64 and try again */
+                use_td64 = 0;
+                return (bwrite(buf, blk, size));
+            }
+	    error_exit(1);
+	}
+	return (0);
 }
 
 static void
@@ -109,8 +170,7 @@ dio_set_bsize(int bsize)
 void
 dio_assign_bsize(int bsize)
 {
-	if (dos_dev_name == NULL)
-		dio_set_bsize(bsize);
+	dio_set_bsize(bsize);
 }
 
 int
@@ -140,6 +200,7 @@ dio_open(char *name)
 		DeleteExtIO((struct IORequest *)trackIO);
 		exit(1);
 	}
+
 	return (0);
 }
 
@@ -152,7 +213,7 @@ dio_close(void)
 	while (inhibited)
 		dio_inhibit(0);
 
-	if (trackIO) {
+	if (trackIO != NULL) {
 		trackIO->iotd_Req.io_Command    = TD_MOTOR;
 		trackIO->iotd_Req.io_Flags      = 0x0;  /* Motor status */
 		trackIO->iotd_Req.io_Length     = 0;    /* 0=off, 1=on */
@@ -184,19 +245,21 @@ dio_init(void)
 	/* Check for device driver and LUN */
 	if (strstr(lookfor, ".device,") == NULL)
 	    return (1);
+	disk_device = disk_device_buf;
 	strcpy(disk_device, "scsi.device");
 	disk_unit = 0;
 	disk_flags = 0;
 	DEV_BSIZE = 512;
-	poffset = 0;
-	pmax = -1;
+	DEV_BSHIFT = 9;
+	psectoffset = 0;
+	psectmax = -1;
 	if (sscanf(lookfor, "%[^,],%n%i%n,%n%i%n,%n%i%n,%n%i%n,%n%i%n",
 		   disk_device, &e, &disk_unit, &e, &e, &disk_flags, &e, &e,
-		   &DEV_BSIZE, &e, &e, &poffset, &e, &e, pmax) < 1) {
+		   &DEV_BSIZE, &e, &e, &psectoffset, &e, &e, psectmax) < 1) {
 	    fprintf(stderr, "Bad device name or unit number\n");
 bad_device_name:
 	    fprintf(stderr, "Specify <diskdriver.device>,<lun>"
-			"[,<flags>,<s-size>,<s-start>,<s-end>]\n"
+			"[,<flags>,<sectsize>,<sectstart>,<sectend>]\n"
 		    "Example: scsi.device,2 - "
 			"use C= SCSI driver, LUN 2, entire disk\n"
 		    "Example: scsi.device,2,0,512,20480,65536 - "
@@ -209,9 +272,6 @@ bad_device_name:
 	    goto bad_device_name;
 	}
 	dio_set_bsize(DEV_BSIZE);
-	poffset *= DEV_BSIZE;
-	if (pmax != -1)
-	    pmax *= DEV_BSIZE;
 	device_direct = 1;
     } else {
 	/* Device name terminated with a colon */
@@ -221,26 +281,60 @@ bad_device_name:
 	struct DosInfo    *dosinfo;
 	struct DevInfo    *devinfo;
 	struct DosEnvec   *envec;
+	struct MsgPort    *task = NULL;
 	*pos = '\0';
 
 	dosbase  = (struct DosLibrary *) OpenLibrary("dos.library", 0L);
-
 	rootnode = dosbase->dl_Root;
 	dosinfo  = (struct DosInfo *) BTOC(rootnode->rn_Info);
-	devinfo  = (struct DevInfo *) BTOC(dosinfo->di_DevInfo);
 
-	while (devinfo != NULL) {
-		devname	= (char *) BTOC(devinfo->dvi_Name);
-		if ((stricmp(devname + 1, lookfor) == 0) &&
-		    (devinfo->dvi_Type == DLT_DEVICE)) {
+	Forbid();
+	    devinfo = (struct DevInfo *) BTOC(dosinfo->di_DevInfo);
+
+	    while (devinfo != NULL) {
+		devname = (char *) BTOC(devinfo->dvi_Name);
+		if (stricmp(devname + 1, lookfor) == 0) {
+		    if (devinfo->dvi_Type == DLT_DEVICE) {
 			notfound = 0;
 			break;
+		    }
+		    if (devinfo->dvi_Type == DLT_VOLUME) {
+			/* Need to look up device which matches this volume */
+			task = devinfo->dvi_Task;
+			notfound = 2;
+			break;
+		    }
+		    printf("Device %s is not of the necessary type\n",
+			   devname + 1);
+		    notfound = 2;
 		}
-		devinfo	= (struct DevInfo *) BTOC(devinfo->dvi_Next);
-	}
+		devinfo = (struct DevInfo *) BTOC(devinfo->dvi_Next);
+	    }
+	Permit();
 
+	if (notfound == 2) {
+	    /*
+	     * Do another pass looking for a Device with the same task
+	     * as the volume which was specified.
+	     */
+	    Forbid();
+		devinfo = (struct DevInfo *) BTOC(dosinfo->di_DevInfo);
+
+		while (devinfo != NULL) {
+		    if ((devinfo->dvi_Type == DLT_DEVICE) &&
+		        (devinfo->dvi_Task == task)) {
+			devname = (char *) BTOC(devinfo->dvi_Name);
+			sprintf(dos_dev_name, "%s:", devname + 1);
+			notfound = 0;
+			break;
+		    }
+		    devinfo = (struct DevInfo *) BTOC(devinfo->dvi_Next);
+		}
+	    Permit();
+	}
 	if (notfound) {
-		fprintf(stderr, "%s: is not mounted.\n", lookfor);
+		if (notfound == 1)
+		    fprintf(stderr, "%s: is not mounted.\n", lookfor);
 		CloseLibrary((struct Library *)dosbase);
 		exit(1);
 	}
@@ -253,15 +347,14 @@ bad_device_name:
 	envec		= (struct DosEnvec *) BTOC(startup->fssm_Environ);
 
 	tempsize	= envec->de_SizeBlock * sizeof (long);
+	psectoffset	= envec->de_LowCyl * envec->de_Surfaces *
+			  envec->de_BlocksPerTrack;
+	psectmax		= (envec->de_HighCyl + 1) * envec->de_Surfaces *
+			  envec->de_BlocksPerTrack;
+	CloseLibrary((struct Library *)dosbase);
 
 	dio_set_bsize(tempsize);
 
-	poffset		= envec->de_LowCyl * envec->de_Surfaces *
-			  envec->de_BlocksPerTrack * DEV_BSIZE;
-	pmax		= (envec->de_HighCyl + 1) * envec->de_Surfaces *
-			  envec->de_BlocksPerTrack * DEV_BSIZE;
-
-	CloseLibrary((struct Library *)dosbase);
 #ifdef DEBUG
 	printf("low=%d\n", envec->de_LowCyl);
 	printf("high=%d\n", envec->de_HighCyl);
@@ -274,8 +367,8 @@ bad_device_name:
     printf("device=%s\n", disk_device);
     printf("unit=%d\n", disk_unit);
     printf("flags=%d\n", disk_flags);
-    printf("poffset=%u (blk %u)\n", poffset, poffset / DEV_BSIZE);
-    printf("pmax=%u DEV_BSIZE=%d\n", pmax, DEV_BSIZE);
+    printf("poffset=%u\n", psectoffset);
+    printf("pmax=%u\n", psectmax);
 #endif
 
     return (0);

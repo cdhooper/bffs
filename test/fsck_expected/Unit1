@@ -1,0 +1,15 @@
+** units/Unit1
+No disk label.
+IMPOSSIBLE INTERLEAVE=0 IN SUPERBLOCK
+SET TO DEFAULT? no
+
+IMPOSSIBLE NPSECT=1387370859 IN SUPERBLOCK
+SET TO DEFAULT? no
+
+** Last Mounted on /mnt
+** Phase 1 - Check Blocks and Sizes
+** Phase 2 - Check Pathnames
+** Phase 3 - Check Connectivity
+** Phase 4 - Check Reference Counts
+** Phase 5 - Check Cyl groups
+16 files, 60 used, 1843 free (19 frags, 228 blocks, 0.0% fragmentation)

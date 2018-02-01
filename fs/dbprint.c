@@ -19,6 +19,8 @@
  */
 
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 #include <clib/alib_protos.h>
 #include <clib/exec_protos.h>
 #include <clib/dos_protos.h>
@@ -36,6 +38,25 @@ struct dbMessage  {
     char buf[STRING_LEN];
 };
 
+int
+break_abort(void)
+{
+    struct dbMessage *message;
+    struct MsgPort   *incoming;
+
+    Forbid();
+    while (incoming = FindPort(BFFSDEBUG)) {
+	while (message = (struct dbMessage *)
+	    GetMsg(incoming))
+	FreeMem(message, sizeof(struct dbMessage));
+	DeletePort(incoming);
+    }
+    Permit();
+
+printf("clean\n");
+    exit(0);
+}
+
 void
 output_string(FILE *fp, char *str)
 {
@@ -47,34 +68,42 @@ output_string(FILE *fp, char *str)
     }
 }
 
-int main(argc, argv)
-int argc;
-char *argv[];
+int
+main(int argc, char *argv[])
 {
-    struct MsgPort *incoming;
+    struct dbMessage *message;
+    struct MsgPort   *incoming;
+    FILE *fp;
     ULONG signals;
     ULONG sigmask;
-    struct dbMessage *message;
-    FILE *fp;
+    int force = 0;
 
+    if (argc > 1 && strcmp(argv[1], "-f") == 0) {
+	argc--;
+	argv++;
+	force++;
+    }
     if (argc > 1)
 	fp = fopen(argv[1], "w");
     else
 	fp = NULL;
 
+    onbreak(break_abort);
     Forbid();
     incoming = FindPort(BFFSDEBUG);
     Permit();
     if (incoming != NULL) {
-        output_string(fp, "Debug port already open\n");
-        goto clean_up;
-    }
-
-    /* Let's create a port that everyone can talk to... */
-    incoming = CreatePort((UBYTE *)BFFSDEBUG, 10L);
-    if (incoming == NULL) {
-        output_string(fp, "Unable to create debug port\n");
-        goto clean_up;
+	if (!force) {
+	    output_string(fp, "Debug port already open\n");
+	    goto clean_up;
+	}
+    } else {
+	/* Let's create a port that everyone can talk to... */
+	incoming = CreatePort((UBYTE *)BFFSDEBUG, 10L);
+	if (incoming == NULL) {
+	    output_string(fp, "Unable to create debug port\n");
+	    goto clean_up;
+	}
     }
 
     sigmask = (1 << incoming->mp_SigBit) | SIGBREAKF_CTRL_C;
@@ -89,7 +118,7 @@ char *argv[];
     Forbid();
     while (incoming = FindPort(BFFSDEBUG)) {
 	while (message = (struct dbMessage *)
-		GetMsg(incoming))
+	    GetMsg(incoming))
 	FreeMem(message, sizeof(struct dbMessage));
 	DeletePort(incoming);
     }
@@ -99,5 +128,5 @@ clean_up:
     if (fp)
 	fclose(fp);
 
-    return(0);
+    exit(0);
 }

@@ -47,7 +47,12 @@
 
 #define howmany(x, y)   (((x)+((y)-1))/(y))
 #define quad            quad_t
+typedef unsigned char	uint8_t;
+typedef int		int32_t;
+typedef unsigned int	uint32_t;
 typedef struct          _quad_t { long val[2]; } quad_t;
+typedef long		int64_t[2];
+typedef unsigned long   uint64_t[2];
 typedef short           dev_t;
 typedef long            off_t;
 typedef long            daddr_t;
@@ -113,7 +118,23 @@ typedef unsigned short  gid_t;
  * maximum of two million cylinders.
  */
 #define	MAXMNTLEN 512
-#define	MAXCSBUFS 32
+
+#define FSMAXSNAP 20
+
+/*
+ * There is a 128-byte region in the superblock reserved for in-core
+ * pointers to summary information. Originally this included an array
+ * of pointers to blocks of struct csum; now there are just four
+ * pointers and the remaining space is padded with fs_ocsp[].
+ * NOCSPTRS determines the size of this padding. One pointer (fs_csp)
+ * is taken away to point to a contiguous array of struct csum for
+ * all cylinder groups; a second (fs_maxcluster) points to an array
+ * of cluster sizes that is computed as cylinder groups are inspected;
+ * the third (fs_contigdirs) points to an array that tracks the
+ * creation of new directories; and the fourth (fs_active) is used
+ * by snapshots.
+ */
+#define NOCSPTRS        ((128 / sizeof(void *)) - 4)
 
 /*
  * Per cylinder group information; summarized in blocks allocated
@@ -131,11 +152,21 @@ struct csum {
 	long	cs_nffree;	/* number of free frags */
 };
 
+struct csum_total {
+        int64_t cs_ndir;                /* number of directories */
+        int64_t cs_nbfree;              /* number of free blocks */
+        int64_t cs_nifree;              /* number of free inodes */
+        int64_t cs_nffree;              /* number of free frags */
+        int64_t cs_spare[4];            /* future expansion */
+};
+
 /*
  * Super block for a file system.
  */
 #define FS_UFS1_MAGIC   0x011954        /* UFS1 fast filesystem magic number */
+#define FS_UFS1_MAGSWAP 0x54190100      /* UFS1 FFS swapped endian magic */
 #define FS_UFS2_MAGIC   0x19540119      /* UFS2 fast filesystem magic number */
+#define FS_UFS2_MAGSWAP 0x19015419      /* UFS2 FFS swapped enddian magic */
 
 struct	fs {
 	struct	fs *fs_link;		/* linked list of file systems */
@@ -209,10 +240,45 @@ struct	fs {
 	char	fs_fsmnt[MAXMNTLEN];	/* name mounted on */
 /* these fields retain the current block allocation info */
 	long	fs_cgrotor;		/* last cg searched */
-	struct	csum *fs_csp[MAXCSBUFS]; /* list of fs_cs info buffers */
+	void	*fs_ocsp[NOCSPTRS];     /* padding; was list of fs_cs buffers */
+	u_char	*fs_contigdirs;        /* # of contiguously allocated dirs */
+	struct csum *fs_csp;            /* cg summary info buffer for fs_cs */
+	u_char	*fs_maxcluster;         /* max cluster in each cyl group */
+	u_char	*fs_active;             /* used by snapshots to track fs */
 	long	fs_cpc;			/* cyl per cycle in postbl */
+#ifdef UFS_V1
+/* this area is otherwise allocated unless fs_old_flags & FS_FLAGS_UPDATED */
+        int32_t  fs_maxbsize;           /* maximum blocking factor permitted */
+        uint8_t  fs_journal_version;    /* journal format version */
+        uint8_t  fs_journal_location;   /* journal location type */
+        uint8_t  fs_journal_reserved[2];/* reserved for future use */
+        uint32_t fs_journal_flags;      /* journal flags */
+        uint64_t fs_journallocs[4];     /* location info for journal */
+        uint32_t fs_quota_magic;        /* see quota2.h */
+        uint8_t  fs_quota_flags;        /* see quota2.h */
+        uint8_t  fs_quota_reserved[3];
+        uint64_t fs_quotafile[2];       /* pointer to quota inodes */
+        int64_t  fs_sparecon64[9];      /* reserved for future use */
+        int64_t  fs_sblockloc;          /* byte offset of standard superblock */
+        struct  csum_total fs_new_cstotal;  /* cylinder summary information */
+        int64_t  fs_new_time;           /* last time written */
+        int64_t  fs_new_size;           /* number of blocks in fs */
+        int64_t  fs_new_dsize;          /* number of data blocks in fs */
+        int64_t  fs_new_csaddr;         /* blk addr of cyl grp summary area */
+        int64_t  fs_pendingblocks;      /* blocks in process of being freed */
+        int32_t  fs_pendinginodes;      /* inodes in process of being freed */
+        int32_t  fs_snapinum[FSMAXSNAP];/* list of snapshot inode numbers */
+/* back to stuff that has been around a while */
+        int32_t  fs_avgfilesize;        /* expected average file size */
+        int32_t  fs_avgfpdir;           /* expected # of files per directory */
+        int32_t  fs_save_cgsize;        /* save real cg size to use fs_bsize */
+        int32_t  fs_sparecon32[26];     /* reserved for future constants */
+        uint32_t fs_new_flags;          /* see FS_ flags below */
+/* back to stuff that has been around a while (again) */
+#else
 	short	fs_opostbl[16][8];	/* old rotation block list head */
 	long	fs_sparecon[50];	/* reserved for future constants */
+#endif
 	long	fs_contigsumsize;	/* size of cluster summary array */
 	long	fs_maxsymlinklen;	/* max length of an internal symlink */
 	long	fs_inodefmt;		/* format of on-disk inodes */
@@ -276,8 +342,18 @@ struct	cg {
 	long    cg_clustersumoff;	/* (long) counts of avail clusters */
 	long    cg_clusteroff;		/* (char) free cluster map */
 	long    cg_nclusterblks;	/* number of clusters this cg */
+#ifdef UFS_V1
+	/* The below taken from NetBSD 7.1.1 */
+        int32_t  cg_new_niblk;          /* number of inode blocks this cg */
+        int32_t  cg_initediblk;         /* last initialized inode */
+        int32_t  cg_sparecon32[3];      /* reserved for future use */
+        int64_t  cg_new_time;           /* time last written */
+        int64_t  cg_sparecon64[3];      /* reserved for future use */
+        uint8_t  cg_space[1];           /* space for cylinder group maps */
+#else
 	long	cg_sparecon[13];	/* reserved for future use */
 	u_char	cg_space[1];		/* space for cylinder group maps */
+#endif
 /* actually longer */
 };
 

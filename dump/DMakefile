@@ -29,7 +29,7 @@ OBJS=$(SRCS:*.*:"$(OBJ)/%1.o")
 
 RM=-delete quiet force >nil:
 CC=dcc
-CFLAGS=-O2 -r -I/ucbinclude -I/unix_support -I/restore -Dcdh
+CFLAGS=-O2 -ms -r -I/ucbinclude -I/unix_support -I/restore -Dcdh
 
 $(PROG): $(OBJ) $(OBJS)
 	$(CC) $(CFLAGS) %(right:*.o) -o %(left)

@@ -26,7 +26,7 @@ OBJS=$(SRCS:*.*:"$(OBJ)/%1.o")
 
 RM=-delete force >NIL:
 CC=dcc
-CFLAGS=-O2 -r -Dcdh -I/ucbinclude -I/fs
+CFLAGS=-O2 -ms -r -Dcdh -I/ucbinclude -I/fs
 
 INC=$(DOTDOT)/ucbinclude
 HFILES=$(INC)/paths.h $(INC)/ufs/fs.h $(INC)/sys/disklabel.h $(INC)/sys/param.h

@@ -1,0 +1,105 @@
+DISKLABEL(8)              BSD System Manager's Manual             DISKLABEL(8)
+
+NAME
+     disklabel -- read and write disk pack label
+
+SYNOPSIS
+     disklabel [-r] disk
+     disklabel -w [-r] disk disktype [packid [priboot secboot]]
+     disklabel -e [-r] disk
+     disklabel -R [r] disk protofile [priboot secboot]
+     disklabel [-NW] [disk]
+
+DESCRIPTION
+     Disklabel can be used to install, examine or modify the label on a disk
+     drive or pack.  When writing the label, it can be used to change the
+     drive identification, the disk partitions on the drive, or to replace a
+     damaged label or bootstrap.  The disk label is located on one of the
+     first sectors of each disk (usually block 0).  On machines that require a
+     block-0 bootstrap (VAX 11/750), the label is inserted into the bootstrap
+     program.  This information is used by the system disk driver and by the
+     bootstrap program to determine how to program the drive.  There are sev-
+     eral forms of the command that display, install or modify the label on a
+     disk.  Each form has an additional option, -r, which causes the label to
+     be read from or written to the disk directly, rather than going through
+     the system's in-core copy of the label.  When writing, the in-core copy
+     is also updated if possible.  This option may allow a label to be
+     installed on a disk without kernel support for a label, such as when
+     labels are first installed on a system; it must be used when first
+     installing a label on a disk.
+
+     The first form of the command is used to examine the label on the named
+     disk drive (e.g. hp0 or /dev/rhp0c).  It will display all of the parame-
+     ters associated with the drive and its partition layout.  Unless the -r
+     flag is given, the kernel's in-core copy of the label is displayed; if
+     the disk has no label, or the partition types on the disk are incorrect,
+     the kernel may have constructed or modified the label.  If the -r flag is
+     given, the label from the raw disk will be displayed rather than the in-
+     core label.
+
+     The second form of the command, with the -w flag, is used to write a
+     standard label on the designated drive.  The required arguments to
+     disklabel are the drive to be labelled (e.g. hp0), and the drive type as
+     described in the disktab(5) file.  The drive parameters and partitions
+     are taken from that file.  If different disks of the same physical type
+     are to have different partitions, it will be necessary to have separate
+     disktab entries describing each, or to edit the label after installation
+     as described below.  The first optional argument is a pack identification
+     string, up to 16 characters long.  The pack id must be quoted if it con-
+     tains blanks.  If the -r flag is given, the disk sectors containing the
+     label and bootstrap will be written directly, otherwise the existing
+     label will be updated in place without modifying the bootstrap.  If the
+     disk does not already have a label, the -r flag must be used.  In either
+     case, the kernel's in-core label is replaced.
+
+     Alternate versions of the bootstrap files may be specified after the pack
+     identifier.  If an alternate bootstrap is not specified, the standard
+     bootstrap will be used.  The bootstrap programs are located in /usr/mdec.
+     The names of the bootstrap programs may be specified in disktab(5); if
+     not specified, the default names are of the form basename boot for the
+     primary (block 0) bootstrap, and boot basename for the secondary (block
+     1-15) bootstrap; for example, /usr/mdec/hpboot and /usr/mdec/boothp if
+     the disk device is hp0.
+
+     An existing disk label may be edited by using the -e flag.  The label is
+     read from the in-core kernel copy, or directly from the disk if the -r
+     flag is also given.  The label is formatted and then supplied to an edi-
+     tor for changes.  If no editor is specified in an EDITOR environment
+     variable, vi(1) is used.  When the editor terminates, the formatted label
+     is reread and used to rewrite the disk label.
+
+     With the -R flag, disklabel is capable of restoring a disk label that was
+     formatted in a prior operation and saved in an ascii file.  The prototype
+     file used to create the label should be in the same format as that pro-
+     duced when reading or editing a label.  Comments are delimited by # and
+     newline.  If the -r option is also given, a block-0 bootstrap is
+     installed on machines that use one; either the disktype or the names of
+     the bootstrap files must be specified on such machines.
+
+     Finally, the -NW flags for disklabel explicitly disallow and allow,
+     respectively, writing of the pack label area on the selected disk.
+
+FILES
+     /etc/disktab
+     /usr/mdec/xxboot
+     /usr/mdec/bootxx
+
+SEE ALSO
+     disktab(5), disklabel(5)
+
+DIAGNOSTICS
+     The kernel device drivers will not allow the size of a disk partition to
+     be decreased or the offset of a partition to be changed while it is open.
+     Some device drivers create a label containing only a single large parti-
+     tion if a disk is unlabeled; thus, the label must be written to the ``a''
+     partition of the disk while it is open.  This sometimes requires the
+     desired label to be set in two steps, the first one creating at least one
+     other partition, and the second setting the label on the new partition
+     while shrinking the ``a'' partition.
+
+BUGS
+     When a disk name is given without a full pathname, the constructed device
+     name uses the ``c'' partition on the vax and the ``a'' partition on the
+     tahoe.
+
+BSD                              June 24, 1990                             BSD

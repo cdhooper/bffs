@@ -19,7 +19,7 @@
 #
 
 PROG=/bin/ls
-CFLAGS=-O2 -r -proto -I/ucbinclude -I/fs -Dcdh -1.3
+CFLAGS=-O2 -ms -r -proto -I/ucbinclude -I/fs -Dcdh -1.3
 CC=dcc
 RM=-delete force >NIL:
 

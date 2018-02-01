@@ -7,7 +7,7 @@ LAB Usage
 .BRA (
 .KET )
     echo "Usage: genml <blksize> <bufs> <cyl> <trackspercyl> <blkspertrack> <fms##>"
-    echo "Floppy example: genml 512 64 79 11"
+    echo "Floppy example: genml 512 32 79 11"
 .BRA <
 .KET >
     quit 116
@@ -20,7 +20,7 @@ endif
 echo "blksize=<blksize>"
 
 if x<buffers> EQ x
-.DEF buffers 64
+.DEF buffers 32
     echo "Default buffers=<buffers>"
 endif
 
@@ -56,7 +56,7 @@ assign fms: bffssrc:test/units
 set ml fms:ml.<fmsdisk>
 echo "Creating ml $ml"
 echo "tdev:" > $ml
-echo "    FileSystem = bffssrc:l/BFFSFileSystem.debug" >> $ml
+echo "    FileSystem = fs:BFFSFileSystem.debug" >> $ml
 echo "    Device = fmsdisk.device" >> $ml
 echo "    Sectorsize = <blksize>" >> $ml
 echo "    Unit = 20" >> $ml
@@ -71,6 +71,6 @@ echo "    Surfaces = <trackspercyl>" >> $ml
 echo "    BlocksPerTrack = <blkspertrack>" >> $ml
 echo "    Buffers = <buffers>" >> $ml
 echo "    Reserved = 0" >> $ml
-echo "    PreAlloc = 0xf801" >> $ml
+echo "    PreAlloc = 0xf802" >> $ml
 echo "    DosType = 0x42464653  "/* BFFS */ >> $ml
 echo "#" >> $ml

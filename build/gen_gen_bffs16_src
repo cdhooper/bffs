@@ -1,0 +1,22 @@
+#!/bin/sh
+
+[ -d ../build ] && cd ..
+TOPDIR=bffs_1.6
+BUILDFILE=build/gen_bffs16_src
+OUTPUT_FILE=bffs16_src.lha
+
+find * -type f -a ! -name '.git*' | egrep -v '\.uaem|bernie_test|/units/|/obj|build/gen_|doc/paper.ps|mountlist/|call_tree|dist/|build/archive|build/gen|\.swp|git/' |
+sed -e 's/^/'"$TOPDIR\/"'/' >$BUILDFILE.files
+(
+echo "delete $OUTPUT_FILE >nil:"
+CMD="lha -r -2 -I a $OUTPUT_FILE bffs_1.6/ @$TOPDIR/$BUILDFILE.files"
+echo "echo $CMD"
+echo "$CMD"
+) > $BUILDFILE
+echo "-s--rwed 2018-01-17 09:18:51.50 " > $BUILDFILE.uaem
+
+[ -L ../$TOPDIR ] && rm -f ../$TOPDIR
+ln -s `pwd` ../$TOPDIR
+
+echo "Done.  Execute $TOPDIR/$BUILDFILE from sys: on UAE."
+exit

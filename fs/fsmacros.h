@@ -16,12 +16,15 @@
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Portions of this file Copyright 1986 University of California, Berkeley.
+ * Most lines have been modified to suit an endian-independent implementation.
  */
 
 #ifndef _FSMACROS_H
 #define _FSMACROS_H
 
-#define FRAGS_PER_BLK	superblock->fs_frag
+#define FRAGS_PER_BLK	DISK32(superblock->fs_frag)
 
 /*
  * Cylinder group macros to locate things in cylinder groups.
@@ -37,6 +40,8 @@
 
 #define blkstofrags(fs, blks)   /* calculates (blks * fs->fs_frag) */	\
         ((blks) << DISK32(fs->fs_fragshift))
+#define fragstoblks(fs, frag)   /* calculates (frag / fs->fs_frag) */	\
+        ((frag) >> DISK32(fs->fs_fragshift))
 
 /* inode number to file system frag offset	*/
 #define itofo(fs, x)	((x) & (INOPF(fs)-1))
@@ -76,13 +81,18 @@
         (DISK32(cgp->cg_magic) == CG_MAGIC ||				\
         DISK32(((struct ocg *)(cgp))->cg_magic) == CG_MAGIC)
 
+#define cg_clustersfree(cgp) \
+	((u_char *)(cgp) + DISK32((cgp)->cg_clusteroff))
+#define cg_clustersum(cgp) \
+	((long *)((char *)(cgp) + DISK32((cgp)->cg_clustersumoff)))
+
 /*
  * Extract the bits for a block from a map.
  * Compute the cylinder and rotational position of a cyl block addr.
  */
 #define blkmap(fs, map, loc)						\
         (((map)[(loc) / NBBY] >> ((loc) % NBBY)) &			\
-        (0xff >> (NBBY - (fs)->fs_frag)))
+        (0xff >> (NBBY - DISK32((fs)->fs_frag))))
 #define cbtocylno(fs, bno)						\
         ((bno) * NSPF(fs) / DISK32((fs)->fs_spc))
 #define cbtorpos(fs, bno)						 \
@@ -96,11 +106,15 @@
 /*
  * Number of disk sectors per block; assumes DEV_BSIZE byte sector size.
  */
-#define NSPB(fs)        (DISK32(fs->fs_nspf << (fs)->fs_fragshift))
+#define NSPB(fs)        (DISK32(fs->fs_nspf) << DISK32((fs)->fs_fragshift))
 #define NSPF(fs)        (DISK32(fs->fs_nspf))
 
-#define NDSPF      	(FSIZE  / phys_sectorsize)
-#define NDSPB      	(FBSIZE / phys_sectorsize)
+/*
+ * The below two macros are used for inode blocks (ic_blocks), which
+ * are always counts of 512 byte blocks, regardless of the sector size.
+ */
+#define NDSPF           (FSIZE  >> 9)  /* FSIZE / 512 */
+#define NDSPB           (FBSIZE >> 9)  /* FBSIZE / 512 */
 
 /*
  * The following macros optimize certain frequently calculated
@@ -108,7 +122,7 @@
  * modulos and multiplications.
  */
 #define fragroundup(fs, size)   /* calculates roundup(size, fs->fs_fsize) */	\
-        (((size) + DISK32(fs->fs_fsize - 1)) & ~fs_lfmask)
+        (((size) + DISK32(fs->fs_fsize) - 1) & ~fs_lfmask)
 #define numfrags(fs, loc)       /* calculates (loc / fs->fs_fsize) */		\
         ((loc) >> DISK32(fs->fs_fshift))
 #define fragnum(fs, fsb)        /* calculates (fsb % fs->fs_frag) */		\
@@ -126,11 +140,8 @@
 
 /*
  * Convert cylinder group to base address of its global summary info.
- *
- * N.B. This macro assumes that sizeof (struct csum) is a power of two.
  */
-#define fs_cs(fs, indx)							\
-        fs_csp[(indx) >> DISK32(fs->fs_csshift)][(indx) & ~DISK32(fs->fs_csmask)]
+#define fs_cs(fs, indx) fs_csp[indx]
 
 /*
  * Macros for access to cylinder group array structures
@@ -145,7 +156,7 @@
         : ((short *)((char *)(cgp) + DISK32(cgp->cg_boff)) +		\
 	  (cylno) * DISK32(fs->fs_nrpos)))
 #define cg_blktot(cgp)							\
-        ((DISK32(cgp->cg_magic != CG_MAGIC))				\
+        ((DISK32(cgp->cg_magic) != CG_MAGIC)				\
         ? (((struct ocg *)(cgp))->cg_btot)				\
         : ((long *)((char *)(cgp) + DISK32(cgp->cg_btotoff))))
 

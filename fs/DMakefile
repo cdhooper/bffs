@@ -18,34 +18,81 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
+#
+# This Makefile builds all the following targets
+# ----------------------------------------------
+# Main version supporting both big endian and little endian filesystems:
+#     dmake bffs
+#
+# Debug version supporting both big endian and little endian filesystems:
+#     dmake bffs.debug
+#
+# Read-only version supporting both big endian and little endian filesystems:
+#     dmake bffs.ro
+#
+# Faster/smaller version supporting only big endian filesystems:
+#     dmake bffs.be
+#
+# Read-only faster/smaller version supporting only big endian filesystems:
+#     dmake bffs.robe
+#
+#
+# =================================================================
+#
+# You can also manually build couple other variants of BFFS
+# ---------------------------------------------------------
+# Read-only version only supporting big endian filesystems:
+#     dmake bffs.ro
+#
+# Read-only big endian with safety checks removed (faster and smaller):
+#     dmake bffs.robefast
+
 LDIR=/l
 
-all: bffs bffs.debug bffs.ro bffs.rofast bffs.rointel
-
-bffs.debug:
-	@set CFLAGS_ADD=-DDEBUG
-	@dmake -q -f DMakefile.3 -DOBJ obj.debug -DFS $(LDIR)/BFFSFilesystem.debug
+all: bffs bffs.debug bffs.ro bffs.be bffs.robe
 
 bffs:
-	@set CFLAGS_ADD=""
+	@echo Building %(left)
+	@set CFLAGS_ADD=-DBOTHENDIAN
 	@dmake -q -f DMakefile.3 -DOBJ obj -DFS $(LDIR)/BFFSFilesystem
 
+bffs.debug:
+	@echo Building %(left)
+	@set CFLAGS_ADD=-DBOTHENDIAN -DDEBUG
+	@dmake -q -f DMakefile.3 -DOBJ obj.debug -DFS $(LDIR)/BFFSFilesystem.debug
+
 bffs.ro:
-	@set CFLAGS_ADD=-DRONLY
+	@echo Building %(left)
+	@set CFLAGS_ADD=-DRONLY -DBOTHENDIAN
 	@dmake -q -f DMakefile.3 -DOBJ obj.ro -DFS $(LDIR)/BFFSFilesystem.ro
 
-bffs.rofast:
-	@set CFLAGS_ADD=-DRONLY -DFAST
-	@dmake -q -f DMakefile.3 -DOBJ obj.rofast -DFS $(LDIR)/BFFSFilesystem.rofast
+bffs.be:
+	@echo Building %(left)
+	@set CFLAGS_ADD=""
+	@dmake -q -f DMakefile.3 -DOBJ obj.be -DFS $(LDIR)/BFFSFilesystem.be
 
-bffs.rointel:
-	@set CFLAGS_ADD=-DRONLY -DINTEL
-	@dmake -q -f DMakefile.3 -DOBJ obj.rointel -DFS $(LDIR)/BFFSFilesystem.rointel
+bffs.bedebug:
+	@echo Building %(left)
+	@set CFLAGS_ADD=-DDEBUG -s -d1
+	@set CFLAGS_ADD=-DDEBUG
+	@dmake -q -f DMakefile.3 -DOBJ obj.bedebug -DFS $(LDIR)/BFFSFilesystem.bedebug
+
+bffs.robe:
+	@echo Building %(left)
+	@set CFLAGS_ADD=-DRONLY
+	@dmake -q -f DMakefile.3 -DOBJ obj.robe -DFS $(LDIR)/BFFSFilesystem.robe
+
+bffs.robefast:
+	@echo Building %(left)
+	@set CFLAGS_ADD=-DRONLY -DFAST
+	@dmake -q -f DMakefile.3 -DOBJ obj.robefast -DFS $(LDIR)/BFFSFilesystem.robefast
 
 clean:
 	@set CFLAGS_ADD=""
 	@dmake clean -q -f DMakefile.3 -DOBJ obj -DFS $(LDIR)/BFFSFilesystem
 	@dmake clean -q -f DMakefile.3 -DOBJ obj.debug -DFS $(LDIR)/BFFSFilesystem.debug
 	@dmake clean -q -f DMakefile.3 -DOBJ obj.ro -DFS $(LDIR)/BFFSFilesystem.ro
-	@dmake clean -q -f DMakefile.3 -DOBJ obj.rofast -DFS $(LDIR)/BFFSFilesystem.rofast
-	@dmake clean -q -f DMakefile.3 -DOBJ obj.rointel -DFS $(LDIR)/BFFSFilesystem.rointel
+	@dmake clean -q -f DMakefile.3 -DOBJ obj.be -DFS $(LDIR)/BFFSFilesystem.be
+	@dmake clean -q -f DMakefile.3 -DOBJ obj.bedebug -DFS $(LDIR)/BFFSFilesystem.bedebug
+	@dmake clean -q -f DMakefile.3 -DOBJ obj.robe -DFS $(LDIR)/BFFSFilesystem.robe
+	@dmake clean -q -f DMakefile.3 -DOBJ obj.robefast -DFS $(LDIR)/BFFSFilesystem.robefast

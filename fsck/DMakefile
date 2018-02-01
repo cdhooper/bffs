@@ -25,7 +25,7 @@ SRCS=main.c fsck_inode.c pass1.c pass1b.c pass2.c pass3.c pass4.c pass5.c preen.
 OBJS=$(SRCS:*.*:"$(OBJ)/%1.o")
 
 CC=dcc
-CFLAGS=-O2 -r -I/ucbinclude -I/unix_support -Dcdh
+CFLAGS=-O2 -ms -r -I/ucbinclude -I/unix_support -gs -Dcdh -DUFS_V1
 RM = -delete quiet force >nil:
 
 $(PROG): $(OBJ) $(OBJS)
@@ -34,59 +34,59 @@ $(PROG): $(OBJ) $(OBJS)
 $(OBJ): $(OBJ)
 	makedir %(left)
 
-$(OBJ)/main.o: main.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+$(OBJ)/main.o: main.c fsck.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)/fsck_inode.o: fsck_inode.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+$(OBJ)/fsck_inode.o: fsck_inode.c fsck.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)/pass1.o: pass1.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+$(OBJ)/pass1.o: pass1.c fsck.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)/pass1b.o: pass1b.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+$(OBJ)/pass1b.o: pass1b.c fsck.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)/pass2.o: pass2.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+$(OBJ)/pass2.o: pass2.c fsck.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)/pass3.o: pass3.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+$(OBJ)/pass3.o: pass3.c fsck.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)/pass4.o: pass4.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+$(OBJ)/pass4.o: pass4.c fsck.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)/pass5.o: pass5.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+$(OBJ)/pass5.o: pass5.c fsck.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)/preen.o: preen.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+$(OBJ)/preen.o: preen.c fsck.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)/setup.o: setup.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+$(OBJ)/setup.o: setup.c fsck.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)/utilities.o: utilities.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+$(OBJ)/utilities.o: utilities.c fsck.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)/dir.o: dir.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+$(OBJ)/dir.o: dir.c fsck.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
-$(OBJ)/fsck_other.o: fsck_other.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+$(OBJ)/fsck_other.o: fsck_other.c fsck.h
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
 $(OBJ)/getopt.o: $(DOTDOT)/unix_support/getopt.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
 $(OBJ)/ffs_subr.o: $(DOTDOT)/unix_support/ffs_subr.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
 $(OBJ)/ffs_tables.o: $(DOTDOT)/unix_support/ffs_tables.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
 $(OBJ)/amiga_device.o: $(DOTDOT)/unix_support/amiga_device.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
 $(OBJ)/amiga_label.o: $(DOTDOT)/unix_support/amiga_label.c
-	$(CC) $(CFLAGS) -c %(right) -o %(left)
+	$(CC) $(CFLAGS) -c %(right:*.c) -o %(left)
 
 clean:
 	$(RM) $(OBJS) $(PROG)

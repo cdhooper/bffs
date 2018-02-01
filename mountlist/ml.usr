@@ -1,16 +1,17 @@
 usr:
-	FileSystem = bffssrc:fs/BFFSFileSystem
+	FileSystem = fs:BFFSFileSystem.debug
 	Device = uaehf.device
 	Sectorsize = 512
-	Unit = 2
+	Unit = 0
 	Flags = 0
-	Priority = 10
-	StackSize = 600
-	GlobVec = 0
+	Mount = 1
+	StackSize = 512
+	Priority = -1
+	GlobVec = -1
 	Surfaces = 64
 	BlocksPerTrack = 63
 	Reserved = 0
-	PreAlloc = 0
+        PreAlloc = 0xf800
 	Interleave = 0
 	LowCyl = 170
 	HighCyl = 519

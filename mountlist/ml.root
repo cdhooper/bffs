@@ -1,8 +1,8 @@
 root:
-	FileSystem = bffssrc:fs/BFFSFileSystem
+	FileSystem = fs:BFFSFileSystem
 	Device = uaehf.device
 	Sectorsize = 512
-	Unit = 2
+	Unit = 0
 	Flags = 0
 	Mount = 1
 	Stacksize = 512
@@ -11,7 +11,7 @@ root:
 	Surfaces = 64
 	BlocksPerTrack = 63
 	Reserved = 0
-        PreAlloc = 0x701
+        PreAlloc = 0xf800
 	Interleave = 0
 	LowCyl = 2
 	HighCyl = 103

@@ -1,0 +1,19 @@
+/* 9GB filesystem */
+GB9:
+    FileSystem = fs:BFFSFileSystem.debug
+    Device = uaehf.device
+    Unit = 2
+    Sectorsize = 512
+    LowCyl = 0
+    HighCyl = 8191
+    Surfaces = 9
+    BlocksPerTrack = 256
+    Stacksize = 512
+    Flags = 0
+    Mount = 1
+    Priority = -1
+    GlobVec = -1
+    Buffers = 64
+    Reserved = 0;  /* Unix partition */
+    PreAlloc = 0xf800
+#

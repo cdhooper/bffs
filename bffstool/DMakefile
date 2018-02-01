@@ -25,7 +25,7 @@ OBJS=$(SRCS:*.*:"$(OBJ)/%1.o")
 
 RM=-delete force >NIL:
 CC=dcc
-CFLAGS=-O2 -r -proto -I/fs
+CFLAGS=-O2 -ms -r -proto -I/fs
 
 $(PROG): $(OBJ) $(OBJS)
 	$(CC) $(CFLAGS) %(right:*.o) -o %(left)

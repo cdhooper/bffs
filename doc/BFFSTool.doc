@@ -31,38 +31,40 @@ that on the command line; ie: "bffstool bf0:"
 A window should open with the title, "Berkeley Fast Filesystem (BFFS) status
 tool V1.6"  If it doesn't start, then no handlers were found in the system.
 In that case, you will need to consult the documentation for correctly
-installing a BFFS handler.  If you have a handler installed correctly,
-you may have one of two problems.  The partition must be mounted and
-accessed before BFFSTool will recognize the filesystem handler as valid.
+installing a BFFS filesystem handler.  If you have a handler installed
+correctly, you may have one of two problems.  The partition must be mounted
+and accessed before BFFSTool will recognize the filesystem handler as valid.
 The other possible problem may be that you are attempting to run BFFSTool
 with the wrong version of the BFFSFileSystem.  BFFSTool 1.6 will ONLY
-work with version 1.3 or higher of BFFSFileSystem.
+work with version 1.3 or higher of BFFSFileSystem.  Some fields may not
+be shown correctly or at all with differing versions of BFFSTool and
+BFFSFileSystem.  It's best to use the same version.
 
 
-The window should look similar to the following:
+The window should look similar to the following (just under 2GB fmsdisk):
 _____________________________________________________________________________
 |_|_________________________________________________________________________|
-|    read hits   0      read opens  0       frags free 7         | Refresh ||
-|    read misses 0      read groups 7      blocks free 0         +---------+|
-|   write hits   0      read Kbytes 12     inodes free 23        |  Sync   ||
-|   write misses 0     write opens  0         num dirs 1         +---------+|
-|  cgread hits   0     write groups 0       block size 8192      |  Clear  ||
-|  cgread misses 0     write Kbytes 0        frag size 1024      +---------+|
-| cgwrite hits   0          locates 1       num inodes 64        |  Quit   ||
-| cgwrite misses 0         examines 0       data frags 679       -----------|
-|    cache moves 0     examinenexts 0        num frags 720                _ |
-|        flushes 0          flushes 0          num cgs 1    Auto Symlink |x||
-|     cg flushes 0          renames 0          num cyl 80    Ignore Case |x||
-|   force writes 0                           sec/track 9   Link Comments |_||
-|cg force writes 0       sync timer:1        track/cyl 2  Inode Comments | ||
-|       destroys 0      sync stalls:10          cyl/cg 80                +-+|
-|    invalidates 0       GMT offset:0         frags/cg 720    Unix Paths |_||
-| cg max buffers:6         PreAlloc 0x7      inodes/cg 64      Read Only | ||
-|    max buffers:32                            minfree 0                 +-+|
-|  total buffers 32     media start 0         modified 0    Show Minfree |_||
-| in use buffers 2      media end   737280       clean 0    Grp/Otr Bits |_||
-|  dirty buffers 0          version 1.6 R               ____________________|
-| locked buffers 0        disk type Sun md0a           |@|______BFFSa:_____||
+|    read hits   0      read opens  0      inodes free 250429    | Refresh ||
+|    read misses 0      read groups 20     blocks free 257117    +---------+|
+|   write hits   0      read Kbytes 27      frags free 14        |  Sync   ||
+|   write misses 0     write opens  0        num frags 2088960   +---------+|
+|  cgread hits   0     write groups 0       data frags 2056951   |  Clear  ||
+|  cgread misses 0     write Kbytes 0       block size 8192      +---------+|
+| cgwrite hits   0          locates 1        frag size 1024      |  Quit   ||
+| cgwrite misses 0         examines 0      phys sector 1024      -----------|
+|    cache moves 0     examinenexts 0                                     _ |
+|        flushes 0          flushes 0          num cyl 255  Auto Symlink |_||
+|     cg flushes 0          renames 0        sec/track 128  Respect Case |_||
+|   force writes 0                           track/cyl 64  Link Comments |_||
+|cg force writes 0       sync timer:1           cyl/cg 6  Inode Comments | ||
+|       destroys 0      sync stalls:12         num cgs 43                +-+|
+|    invalidates 0       GMT offset:-8       inodes/cg 5824   Unix Paths |_||
+| cg max buffers:4         PreAlloc 0xf800    frags/cg 49152   Read Only | ||
+|    max buffers:16                            minfree 5                 +-+|
+|  total buffers 16     media start 0         modified 0    Show Minfree |_||
+| in use buffers 0      media end   2088960      clean 0    Grp/Otr Bits |_||
+|  dirty buffers 0          version 1.6 BrD             ____________________|
+| locked buffers 0        disk type tdev:fd20a         |@|______BFFSa:_____||
 |___________________________________________________________________________|
 
 The above is a mediocre ASCII representation of the graphic display.
@@ -278,16 +280,16 @@ version		This is a comment field filled by the filesystem to
 			disk device.  Since not all devices are able
 			to use extended packets, your distribution
 			will probably have this option turned off.
-		I  Intel byte ordering code.  This version of the
-			filesystem has been compiled to support Intel
+		B  This version of the filesystem has been compiled to
+			support both Motorola (big-endian) and Intel
 			(little-endian) byte ordering for the filesystem
-			metadata (ie: 386i and 386BSD).  This, of course
-			automatically makes the filesystem incompatible
-			with Motorola byte ordering filesystems, which
-			include Sun SPARC, and Amiga.  This version
-			should be able to read both Sun 386i and NetBSD
-			x86 filesystems.  The required translation code
-			makes the filesystem code larger and run slower.
+			metadata.  Little endian support is useful for
+			filesystems written by 386i, 386BSD, and NetBSD-x86.
+			It is also compatible with Motorola byte ordering
+			filesystems, which include Sun 68k, Sun SPARC, and
+			Amiga.  The required translation code makes the
+			filesystem code slightly larger and slower than
+			the version only supporting big-endian (68k).
 		.  When directories are examined by user programs, the
 			filesystem will automatically show . and ..
 			This option is not compiled in by default to provide
@@ -302,7 +304,7 @@ version		This is a comment field filled by the filesystem to
 			the filesystem is a bit dangerous because a corrupt
                         filesytem can potentially be corrupted MUCH worse if
                         it's not detected early. 
-		D  Filesytem is compiled with debugging messages turned on.
+		D  Filesystem is compiled with debugging messages turned on.
 			This increases the size of the filesystem and slows it
 			down.  This version of the filesystem is useful if you
 			notice a problem (corruption, crash, etc) and would
@@ -402,21 +404,22 @@ Auto Symlink	This box allows you to turn on and off the automatic
 		programs will crash if they run into a soft link and attempt
 		to resolve it.  You can enable this option if you run into
 		a problem with one.
-Ignore Case	This box allows you to turn on and off the case independence
-		you have grown used to with AmigaOS.  When off, multiple files
+Respect Case	This box allows you to turn on and off the case independence
+		you have grown used to with AmigaOS.  When on, multiple files
 		with the same name (just different case) can be created in
 		a directory.  When reading a file, the exact case must be
-		used to open the file.  When on, you can still access the
+		used to open the file.  When woff, you can still access the
 		files having only a difference of case in the name, but you
 		must exactly specify the case to get at a specific file.
-		Having "Ignore case" on may be necessary when trying to use a
+		Having "Respect case" on may be necessary when trying to use a
 		UNIX filesystem with files such as "Makefile" and "makefile"
+		and tools which require the above to be differentiated.
 Link Comments	This box allows you to turn on and off directory comments for
 		"special" files; symbolic links and character/block special
 		devices.
 Inode Comments	This box allows you to turn on and off directory comments for
 		files showing UNIX inode number, permissions, uid, gid, number
-		of links, nunber of physical disk (512 byte) blocks, and
+		of links, number of physical disk (512 byte) blocks, and
 		number of bytes allocated to the file.	Note that directory
 		listings are faster if you have comments disabled.
 Unix Paths	This box allows you to turn on and off the UNIX path parser.

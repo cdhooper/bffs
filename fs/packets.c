@@ -58,7 +58,6 @@ extern	ULONG phys_sectorsize;
 void
 PUnimplemented(void)
 {
-	PRINT(("Unimplemented %d\n", pack->dp_Type));
 	global.Res1 = DOSFALSE;
 	global.Res2 = ERROR_ACTION_NOT_KNOWN;
 }
@@ -177,7 +176,7 @@ FreeLock(struct BFFSLock *lock)
 void
 PFreeLock(void)
 {
-	FreeLock((struct BFFSLock *) BTOC(ARG1));
+    FreeLock((struct BFFSLock *) BTOC(ARG1));
 }
 
 
@@ -538,7 +537,7 @@ PFindOutput(void)
 	    fileh->lock = CreateLock(inum, ACCESS_WRITE, pinum, ioffset);
 
 	    if (fileh->lock == NULL) {
-		PRINT2(("INCON: FO: file created, but could not lock\n"));
+		PRINT2(("BUG: FO file created, but could not lock\n"));
 		inum_free(inum);
 		global.Res2 = ERROR_OBJECT_NOT_FOUND;
 		goto doserror;
@@ -755,19 +754,9 @@ PSeek(void)
 void
 PEnd(void)
 {
-	struct BFFSfh *fileh;
+    struct BFFSfh *fileh;
 
-	fileh = (struct BFFSfh *) ARG1;
-
-#ifndef FAST
-    if ((fileh->real_inum < 3) || (fileh->real_inum > 2097152)) {
-	PRINT2(("** invalid real inode number %d given to End for file %d\n",
-		fileh->real_inum, fileh->lock->fl_Key));
-	global.Res1 = -1;
-	global.Res2 = ERROR_SEEK_ERROR;
-	return;
-    }
-#endif
+    fileh = (struct BFFSfh *) ARG1;
 
 #ifndef RONLY
     if (fileh->access_mode == MODE_WRITE)
@@ -807,31 +796,46 @@ PParent(void)
 void
 PDeviceInfo(void)
 {
-	extern int timing;
-	struct InfoData *infodata;
+    extern int timing;
+    struct InfoData *infodata;
+    unsigned long nbfree;
+    unsigned long dsize;
 
-	if (TYPE == ACTION_INFO)
-		infodata = (struct InfoData *) BTOC(ARG2);
-	else
-		infodata = (struct InfoData *) BTOC(ARG1);
+    if (superblock->fs_flags & FS_FLAGS_UPDATED) {
+	 nbfree = DISK32(superblock->fs_new_cstotal.cs_nbfree[is_big_endian]);
+	 dsize  = DISK32(superblock->fs_new_dsize[is_big_endian]);
+    } else {
+	 nbfree = DISK32(superblock->fs_cstotal.cs_nbfree);
+	 dsize  = DISK32(superblock->fs_dsize);
+    }
 
-	infodata->id_NumSoftErrors	= 0L;
-	infodata->id_UnitNumber 	= 0L;  /* was DISK_UNIT */
-	if (superblock->fs_ronly)
-		infodata->id_DiskState	= ID_WRITE_PROTECTED;
-	else
-		infodata->id_DiskState	= ID_VALIDATED;
+    if (TYPE == ACTION_INFO)
+	    infodata = (struct InfoData *) BTOC(ARG2);
+    else
+	    infodata = (struct InfoData *) BTOC(ARG1);
 
-	infodata->id_NumBlocks	   = DISK32(superblock->fs_dsize);
-	infodata->id_NumBlocksUsed = (DISK32(superblock->fs_dsize) -
-				      DISK32(superblock->fs_cstotal.cs_nbfree) *
-				      DISK32(superblock->fs_frag) + (minfree ?
-				      (DISK32(superblock->fs_minfree) *
-				      DISK32(superblock->fs_dsize) / 100) : 0) );
-	infodata->id_BytesPerBlock = FSIZE;
-	infodata->id_DiskType	   = ID_FFS_DISK;
-	infodata->id_VolumeNode    = CTOB(VolNode);  /* BPTR */
-	infodata->id_InUse	   = timing;
+    infodata->id_NumSoftErrors     = 0L;
+    infodata->id_UnitNumber        = 0L;  /* was DISK_UNIT */
+    if (superblock->fs_ronly)
+	    infodata->id_DiskState = ID_WRITE_PROTECTED;
+    else
+	    infodata->id_DiskState = ID_VALIDATED;
+
+    infodata->id_NumBlocks	   = dsize;
+
+    infodata->id_NumBlocksUsed     = dsize - nbfree * FRAGS_PER_BLK;
+    if (minfree != 0)
+	infodata->id_NumBlocksUsed += DISK32(superblock->fs_minfree) *
+				      dsize / 100;
+    infodata->id_BytesPerBlock = FSIZE;
+    infodata->id_DiskType          = ID_FFS_DISK;
+    infodata->id_VolumeNode        = CTOB(VolNode);  /* BPTR */
+    infodata->id_InUse             = timing;
+
+    /*
+     * Note that we need to return ID_DOS_DISK or ID_FFS_DISK here per
+     * Randell Jesup at Commodore 22-Dec-1991.
+     */
 }
 
 
@@ -921,11 +925,8 @@ PDeleteObject(void)
 	PRINT(("delete %s, i=%d offset=%d nlink=%d\n",
 		name, inum, ioffset, DISK16(inode->ic_nlink)));
 
-#ifdef INTEL
 	inode->ic_nlink = DISK16(DISK16(inode->ic_nlink) - 1);
-#else
-	inode->ic_nlink--;
-#endif
+
 	if ((DISK16(inode->ic_mode) & IFMT) == IFDIR) { /* it's a dir */
 		pinode = inode_modify(pinum);
 #ifndef FAST
@@ -936,14 +937,10 @@ PDeleteObject(void)
 		    return;
 		}
 #endif
-#ifdef INTEL
+
+		/* Below are for "." and ".." */
 		inode->ic_nlink = DISK16(DISK16(inode->ic_nlink) - 1);
 		pinode->ic_nlink = DISK16(DISK16(pinode->ic_nlink) - 1);
-#else
-		inode->ic_nlink--;			/* for "."  */
-		pinode->ic_nlink--;			/* for ".." */
-#endif
-
 	}
 	inode = inode_read(inum);
 	if (DISK16(inode->ic_nlink) < 1) {
@@ -963,6 +960,7 @@ void
 PMoreCache(void)
 {
 	if (abs(ARG1) > 9999) {
+	    /* Any AddBuffers amount > 10000 or < 10000 adjusts the CG cache */
 	    int sign;
 	    int value;
 
@@ -987,17 +985,18 @@ PMoreCache(void)
 	    global.Res1 = cache_cg_size;
 
 	} else {
-	    PRINT(("morecache: cache=%d amount=%d ", cache_size, ARG1));
-	    cache_size += (ARG1 / NSPF(superblock));
+	    int amount = ARG1;
+	    PRINT2(("morecache: cache=%d amount=%d ", cache_size, amount));
+	    cache_size += amount;
 
 	    if (cache_size < 4)
 		cache_size = 4;
 
-	    global.Res1 = cache_size * NSPF(superblock);
-
-	    PRINT(("-> cache=%d\n", cache_size));
-
 	    cache_adjust();
+
+	    PRINT2(("-> cache=%d\n", cache_size));
+
+	    global.Res1 = cache_size;
 	}
 }
 
@@ -1071,11 +1070,7 @@ PCreateDir(void)
 		dir_create(newinum, ".", newinum, DT_DIR);  /* returns 0 */
 		if (dir_create(newinum, "..", pinum, DT_DIR)) {
 			inode = inode_modify(pinum);
-#ifdef INTEL
 			inode->ic_nlink = DISK16(DISK16(inode->ic_nlink) + 1);
-#else
-			inode->ic_nlink++;
-#endif
 			global.Res1 = CTOB(CreateLock(newinum, ACCESS_WRITE,
 						      pinum, ioffset));
 			global.Res2 = 0;
@@ -1188,15 +1183,9 @@ PRenameObject(void)
 			if (isdir) {
 			    dir_inum_change(inum, oldpinum, newpinum);
 			    inode = inode_modify(oldpinum);
-#ifdef INTEL
 			    inode->ic_nlink = DISK16(DISK16(inode->ic_nlink) - 1);
 			    inode = inode_modify(newpinum);
 			    inode->ic_nlink = DISK16(DISK16(inode->ic_nlink) + 1);
-#else
-			    inode->ic_nlink--;
-			    inode = inode_modify(newpinum);
-			    inode->ic_nlink++;
-#endif
 			}
 			global.Res1 = DOSTRUE;
 		    } else
@@ -1228,7 +1217,6 @@ PRenameDisk(void)
 	return;
 #else
 	int	newlen;
-	char	*temp;
 	char	*newname;
 
 	if (superblock->fs_ronly) {
@@ -1237,8 +1225,8 @@ PRenameDisk(void)
 		return;
 	}
 
-	newname = ((char *) BTOC(ARG1)) + 1;
-/*	PRINT(("renamedisk: New name=%.*s\n", *(newname - 1), newname)); */
+	newname = ((char *) BTOC(ARG1));
+/*	PRINT(("renamedisk: New name=%.*s\n", *newname, newname + 1)); */
 	if (VolNode == NULL) {
 		PRINT2(("rename called with NULL Volnode\n"));
 		global.Res1 = DOSFALSE;
@@ -1246,29 +1234,19 @@ PRenameDisk(void)
 		return;
 	}
 
-	newlen = *(newname - 1);
+	newlen = *newname;
 	if (newlen >= MAXMNTLEN - 2)
 		newlen = MAXMNTLEN - 2;
 
-	strncpy(superblock->fs_fsmnt + 1, newname, MAXMNTLEN);
+	strncpy(superblock->fs_fsmnt + 1, newname + 1, MAXMNTLEN);
 	superblock->fs_fsmnt[0] = '/';
 	superblock->fs_fsmnt[newlen + 1] = '\0';
 	superblock->fs_fmod++;
 
-	temp = (char *) AllocMem(MAXMNTLEN, MEMF_PUBLIC);
-	if (temp == NULL) {
-		PRINT2(("RenameDisk: unable to allocate %u bytes\n",
-			MAXMNTLEN));
-		global.Res1 = DOSFALSE;
-		return;
-	}
-
-	strcpy(temp + 1, superblock->fs_fsmnt + 1);
-	temp[0] = (char) strlen(temp + 1);
-
-	VolNode->dl_Name = CTOB(temp);
-	FreeMem(volumename, MAXMNTLEN);
-	volumename = temp;
+	Forbid();
+	memcpy(volumename, newname, newlen + 1);
+	volumename[0] = newlen;
+	Permit();
 #endif
 }
 
@@ -1578,7 +1556,6 @@ PWriteProtect(void)
 		superblock->fs_ronly = 1;
 	else if (!physical_ro)
 		superblock->fs_ronly = 0;
-	superblock->fs_fmod++;
 #endif
 }
 
@@ -1602,10 +1579,11 @@ PIsFilesystem(void)
 void
 PDie(void)
 {
+#if 0
 	close_files();
 	close_filesystem();
 	RemoveVolNode();
-	inhibited++;
+#endif
 	receiving_packets = 0;
 }
 
@@ -1617,12 +1595,17 @@ void
 PFlush(void)
 {
 #ifndef RONLY
-	if (!superblock)
+	int count;
+
+	if (superblock == NULL)
 		return;
-	UPSTAT(flushes);
-	superblock_flush();
-	cache_cg_flush();
-	cache_flush();
+
+	count  = superblock_flush();
+	count += cache_cg_flush();
+	count += cache_flush();
+
+	if (count > 0)
+	    UPSTAT(flushes);
 #endif
 }
 
@@ -1690,6 +1673,7 @@ PFilesysStats(void)
 	extern int	link_comments;
 	extern int	inode_comments;
 
+	stat->phys_sectorsize	= (ULONG) phys_sectorsize;
 	stat->superblock	= (ULONG) superblock;
 	stat->cache_head	= (ULONG) &cache_stack_tail;
 	stat->cache_hash	= (ULONG) hashtable;
@@ -1701,7 +1685,7 @@ PFilesysStats(void)
 	stat->disk_pmax		= (ULONG *) &psectmax;
 	stat->unix_paths	= (ULONG *) &unix_paths;
 	stat->resolve_symlinks	= (ULONG *) &resolve_symlinks;
-	stat->case_independent	= (ULONG *) &case_independent;
+	stat->case_dependent	= (ULONG *) &case_dependent;
 	stat->link_comments	= (ULONG *) &link_comments;
 	stat->inode_comments	= (ULONG *) &inode_comments;
 	stat->cache_used	= (ULONG *) &cache_used;
@@ -1924,11 +1908,7 @@ PMakeLink(void)
 		goto doserror;
 	    }
 	    inode = inode_modify(inum);
-#ifdef INTEL
 	    inode->ic_nlink = DISK16(DISK16(inode->ic_nlink) + 1);
-#else
-	    inode->ic_nlink++;
-#endif
 	    return;
 	}
 
@@ -1996,7 +1976,7 @@ PReadLink(void)
 		return;
 	}
 
-	if (linkname) {
+	if (linkname != NULL) {
 	    len = strlen(linkname);
 	    if (len >= ARG4) {
 		global.Res1 = -2;
@@ -2028,12 +2008,6 @@ PSetFileSize(void)
 	global.Res2 = ERROR_DISK_WRITE_PROTECTED;
 	return;
 #else
-	PRINT(("SetFileSize\n"));
-	PRINT(("a=%d %s\n", ARG1, ((char *) BTOC(ARG1)) + 1));
-	PRINT(("b=%d %s\n", ARG2, ((char *) BTOC(ARG2)) + 1));
-	PRINT(("c=%d %s\n", ARG3, ((char *) BTOC(ARG3)) + 1));
-	PRINT(("d=%d %s\n", ARG4, ((char *) BTOC(ARG4)) + 1));
-
 	global.Res1 = DOSFALSE;
 	global.Res2 = ERROR_OBJECT_NOT_FOUND;
 #endif

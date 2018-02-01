@@ -74,7 +74,11 @@
  * made larger without any effect on existing file systems; however making
  * it smaller make make some file systems unmountable.
  */
+#ifdef UFS_V1
+#define	MAXBSIZE	65536 /* XXX MAXPHYS */
+#else
 #define	MAXBSIZE	16384 /* XXX MAXPHYS */
+#endif
 #define MAXFRAG 	8
 
 /*

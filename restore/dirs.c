@@ -403,7 +403,14 @@ putdir(buf, size)
 			}
 			i = DIRBLKSIZ - (loc & (DIRBLKSIZ - 1));
 			if ((dp->d_reclen & 0x3) != 0 ||
+#ifndef cdh
+			    /*
+			     * Removed below because DIRBLKSIZ in original
+			     * filesystem is DEV_BSIZE, which might be
+			     * greater than 1024 as checked here.
+			     */
 			    dp->d_reclen > i ||
+#endif
 			    dp->d_reclen < DIRSIZ(0, dp) ||
 			    dp->d_namlen > NAME_MAX) {
 				vprintf(stdout, "Mangled directory: ");

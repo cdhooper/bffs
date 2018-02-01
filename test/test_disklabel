@@ -1,0 +1,22 @@
+
+set expectdir=disklabel_expected
+set disklabel=bffssrc:bin/disklabel
+set cmp=bffssrc:bin/cmp
+set tfile=ram:test.out
+
+failat 65535
+
+set i 0
+lab start
+if not $i gt 19 val
+    Echo Testing disklabel on Unit$i
+    $disklabel units/Unit$i >$tfile
+    $cmp $tfile $expectdir/Unit$i
+    if warn
+	echo "disklabel output does not match expected - compare with $expectdir/Unit$i"
+	Type NUMBER $expectdir/Unit$i
+	quit 1
+    endif
+    set i `eval $i + 1`
+    skip back start
+endif

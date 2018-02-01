@@ -1,0 +1,21 @@
+# units/Unit8:
+type: SCSI
+disk: fmsdisk
+label: 
+flags:
+bytes/sector: 512
+sectors/track: 9
+tracks/cylinder: 2
+sectors/cylinder: 18
+cylinders: 161
+rpm: 3600
+interleave: 1
+trackskew: 0
+cylinderskew: 0
+headswitch: 0		# milliseconds
+track-to-track seek: 0	# milliseconds
+drivedata: 0 
+
+1 partitions:
+#        size   offset    fstype   [fsize bsize   cpg]
+  a:     2898        0    4.2BSD     1024  8192    32 	# (Cyl.    0 - 160)

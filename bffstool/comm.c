@@ -1,5 +1,5 @@
 /* comm.c  (BFFStool)
- *      This program is copyright (1993 - 2017) Chris Hooper.  All code
+ *      This program is copyright (1993 - 2018) Chris Hooper.  All code
  *      herein is freeware.  No portion of this code may be sold for profit.
  */
 
@@ -20,6 +20,7 @@ struct MsgPort		 *fs = NULL;
 struct MsgPort		 *tempfs = NULL;
 extern struct fs	 *superblock;
 struct cache_set	 *cache_stack;
+struct cache_set	**cache_hash;
 extern struct DosLibrary *DOSBase;
 extern char		 *filesystems[];
 
@@ -32,7 +33,7 @@ open_handler(char *name)
 	char buf[64];
 	int len;
 
-/* dummy, this is for GetDeviceProc only!!
+/* this is for GetDeviceProc only!!
 	if (fs)
 		FreeDeviceProc(fs);
 */
@@ -56,7 +57,7 @@ open_handler(char *name)
 void
 close_handler(void)
 {
-/* dummy, this is for GetDeviceProc only!!
+/* this is for GetDeviceProc only!!
 	FreeDeviceProc(fs);
 */
 	fs = NULL;
@@ -96,6 +97,7 @@ get_stat(void)
 		superblock  = (struct fs *) stat->superblock;
 		cache_stack = (struct cache_set *)
 				*((ULONG *) stat->cache_head);
+		cache_hash  = (struct cache_set **) stat->cache_hash;
 	} else {
 		fprintf(stderr, "Handler does not support FS_STATS\n");
 		stat = NULL;
@@ -178,7 +180,7 @@ get_filesystems(char *name)
 
 	filesystems[index] = NULL;
 
-/* dummy, this is for GetDeviceProc only!!
+/* this is for GetDeviceProc only!!
 	if (tempfs)
 		FreeDeviceProc(tempfs);
 */

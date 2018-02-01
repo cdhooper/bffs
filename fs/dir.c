@@ -35,6 +35,14 @@
 
 #define DIRNAMELEN 107
 
+#undef DIR_DEBUG
+#ifdef DIR_DEBUG
+#define DDPRINT(x) PRINT(x)
+#else
+#define DDPRINT(x)
+#endif
+
+
 /* streqv()
  *	Perform a case-insensitive compare of filenames, stopping at AmigaOS
  *	maximum file name length.
@@ -42,6 +50,7 @@
 int
 streqv(const char *str1, const char *str2)
 {
+#if 0
 	int count = 0;
 
 	while (*str1 != '\0') {
@@ -57,6 +66,9 @@ streqv(const char *str1, const char *str2)
 		return(1);
 	else
 		return(0);
+#else
+	return (strnicmp(str1, str2, DIRNAMELEN) == 0);
+#endif
 }
 
 /*
@@ -133,23 +145,16 @@ dir_create(ULONG pinum, char *name, ULONG inum, int type)
 		return(0);
 	}
 
-#undef DIR_DEBUG
-#ifdef DIR_DEBUG
-	PRINT(("name='%s' len=%d needed=%d ", name, strlen(name), needed));
-#endif
+	DDPRINT(("name='%s' len=%d needed=%d ", name, strlen(name), needed));
 
 	fblks = (IC_SIZE(pinode) + FSIZE - 1) / FSIZE;
 	spill =  IC_SIZE(pinode)              % FSIZE;
 
-#ifdef DIR_DEBUG
-	PRINT(("cre: fblks=%d spill=%d dblks=%d icblks=%d pinum=%d\n", fblks,
+	DDPRINT(("cre: fblks=%d spill=%d size=%u icblks=%u pinum=%u\n", fblks,
 		spill, IC_SIZE(pinode), DISK32(pinode->ic_blocks), pinum));
-#endif
 
 	for (blk = 0; blk < fblks; blk++) {
-#ifdef DIR_DEBUG
-	    PRINT(("_"));
-#endif
+	    DDPRINT(("_"));
 	    buf = cache_frag(ridisk_frag(blk, pinum));
 #ifndef FAST
 	    if (buf == NULL) {
@@ -158,16 +163,20 @@ dir_create(ULONG pinum, char *name, ULONG inum, int type)
 	    }
 #endif
 	    current = (struct direct *) buf;
-	    bend   = (struct direct *) (buf + ((blk < fblks - 1) ? FSIZE :
-			(spill ? spill : FSIZE)));
-#ifdef DIR_DEBUG
-	    PRINT(("current=%p bend=%p\n", current, bend));
-#endif
+	    bend    = (struct direct *)
+		      (buf + ((spill && (blk == fblks - 1)) ? spill : FSIZE));
+
+	    DDPRINT(("current=%p bend=%p\n", current, bend));
 	    while (current < bend) {
-#ifdef DIR_DEBUG
-		PRINT((":%s", current->d_name));
+#ifdef BOTHENDIAN
+		UWORD dirsize = UFS_DIRSIZ(!bsd44fs, current, !is_big_endian);
+#else
+		UWORD dirsize = UFS_DIRSIZ(!bsd44fs, current, 0);
 #endif
-		if ((DISK16(current->d_reclen) - DIRSIZ(current)) > needed) {
+		DDPRINT((":%s", current->d_name));
+
+		if ((DISK16(current->d_reclen) - dirsize) > needed) {
+		    /* Found a place to put the new name */
 		    buf = cache_frag_write(ridisk_frag(blk, pinum), 1);
 #ifndef FAST
 		    if (buf == NULL) {
@@ -175,18 +184,18 @@ dir_create(ULONG pinum, char *name, ULONG inum, int type)
 			return(0);
 		    }
 #endif
-		    /* otherwise, we found a place to put new name */
 		    oldsize = DISK16(current->d_reclen);
-		    current->d_reclen = DISK16(DIRSIZ(current));
+		    current->d_reclen = DISK16(dirsize);
 		    oldsize -= DISK16(current->d_reclen);
 		    current = (struct direct *) ((char *) current +
-			DISK16(current->d_reclen));
+						DISK16(current->d_reclen));
 		    goto finish_success;
 		}
 #ifndef FAST
 		if (DISK16(current->d_reclen) > DIRBLKSIZ) {
 			PRINT2(("INCON: directory corrupt - reclen %d > %d\n",
 				DISK16(current->d_reclen), DIRBLKSIZ));
+			superblock->fs_ronly = 1;
 			return(0);
 		}
 #endif
@@ -195,22 +204,19 @@ dir_create(ULONG pinum, char *name, ULONG inum, int type)
 	    }
 	}
 
-#ifdef DIR_DEBUG
-	PRINT(("\n"));
-#endif
+	DDPRINT(("\n"));
 
 	if (spill != 0) {
 	    /*
-	     * No space is available in all directory blocks, but there is
-	     * space in the frag for at least one more directory block.
+	     * No space is available in any directory block, but there is
+	     * space in the last frag for at least one more directory block.
 	     * Update the inode to expand the directory.
 	     */
 	    pinode = inode_modify(pinum);
-	    PRINT(("inum %d size=%d blocks=%d",
-		   pinum, IC_SIZE(pinode), DISK32(pinode->ic_blocks)));
-	    IC_INCSIZE(pinode, FSIZE - spill);
-	    PRINT((" -> size=%d blocks=%d\n",
-		   IC_SIZE(pinode), DISK32(pinode->ic_blocks)));
+	    PRINT(("inum %u blocks=%u size=%u",
+		   pinum, DISK32(pinode->ic_blocks), IC_SIZE(pinode)));
+	    ADJUST_IC_SIZE(pinode, FSIZE - spill);
+	    PRINT((" -> size=%u\n", IC_SIZE(pinode)));
 	    blk = fblks - 1;
 	    newfrag = ridisk_frag(blk, pinum);
 	    buf = cache_frag_write(newfrag, 1);
@@ -241,10 +247,18 @@ finish_success:
 	current->d_ino    = DISK32(inum);
 	current->d_reclen = DISK16(oldsize);
 	current->d_namlen = strlen(name);
-	if (bsd44fs)
+	if (bsd44fs) {
 		current->d_type  = type;
-	else
+	} else {
 		current->d_type  = 0;		/* dir type unknown now */
+#ifdef BOTHENDIAN
+		/* Little endian BSD43 FFS swaps d_namlen and d_type */
+		if (is_big_endian == 0) {
+			current->d_type   = current->d_namlen;
+			current->d_namlen = 0;
+		}
+#endif
+	}
 	return(FSIZE * blk + (char *) current - buf);	/* dir offset */
 }
 
@@ -278,7 +292,7 @@ dir_is_not_empty(int pinum)
 	fblks	= (IC_SIZE(pinode) + FSIZE - 1) / FSIZE;
 	spill	=  IC_SIZE(pinode)              % FSIZE;
 
-	PRINT(("dir contents=\n"));
+	DDPRINT(("dir contents=\n"));
 	for (blk = 0; blk < fblks; blk++) {
 	    buf = cache_frag(ridisk_frag(blk, pinum));
 #ifndef FAST
@@ -288,16 +302,16 @@ dir_is_not_empty(int pinum)
 	    }
 #endif
 	    current = (struct direct *) buf;
-	    bend   = (struct direct *) (buf + ((blk < fblks - 1) ? FSIZE :
-			(spill ? spill : FSIZE)));
+	    bend    = (struct direct *)
+		      (buf + ((spill && (blk == fblks - 1)) ? spill : FSIZE));
 
 	    while (current < bend) {
 		if (current->d_ino) {
-		    PRINT(("%s%d:\n", current->d_name,
-				DISK16(current->d_reclen)));
+		    DDPRINT(("  %.32s rl=%d\n", current->d_name,
+		             DISK16(current->d_reclen)));
 		    count++;
 		    if (count > 2) {
-			PRINT(("\n"));
+			DDPRINT(("\n"));
 			return(1);
 		    }
 		}
@@ -309,10 +323,10 @@ dir_is_not_empty(int pinum)
 			return(0);
 		}
 #endif
-		current = (struct direct *) ((char *) current + DISK16(current->d_reclen));
+		current = (struct direct *) ((char *) current +
+			   DISK16(current->d_reclen));
 	    }
 	}
-	PRINT(("\n"));
 
 	return(0);
 }
@@ -365,6 +379,7 @@ dir_offset_delete(ULONG pinum, ULONG offset, int check)
 
 	if ((offset == 0) || (offset > IC_SIZE(pinode))) {
 		PRINT2(("INCON: dir_offset_delete: impossible offset %d\n", offset));
+		superblock->fs_ronly = 1;
 		return(0);
 	}
 
@@ -383,12 +398,8 @@ dir_offset_delete(ULONG pinum, ULONG offset, int check)
 	    }
 #endif
 	    current = (struct direct *) buf;
-/*
-	    bend   = (struct direct *) (buf + ((blk < fblks - 1) ? FSIZE :
-			(spill ? spill : FSIZE)));
-*/
-	    bend = (struct direct *) (buf + ((spill && (blk == fblks - 1)) ?
-						spill : FSIZE));
+	    bend    = (struct direct *)
+		      (buf + ((spill && (blk == fblks - 1)) ? spill : FSIZE));
 
 	    pos  = 0;
 	    last = NULL;
@@ -399,20 +410,21 @@ dir_offset_delete(ULONG pinum, ULONG offset, int check)
 		}
 		if (offset == roffset) {
 		    inum = DISK32(current->d_ino);
-		    goto breakloop;
+		    goto found_object;
 		}
 		last = current;
 #ifndef FAST
 		if (DISK16(current->d_reclen) > DIRBLKSIZ) {
-			PRINT2(("INCON: directory corrupt - DIRBLKSIZ > %d\n",
-				DIRBLKSIZ));
+			PRINT2(("INCON: dir corrupt: reclen %d > DIRBLKSIZ\n",
+				DISK16(current->d_reclen)));
+			superblock->fs_ronly = 1;
 			return(0);
 		}
 #endif
 		pos     += DISK16(current->d_reclen);
 		roffset += DISK16(current->d_reclen);
-		current = (struct direct *) ((char *) current +
-				DISK16(current->d_reclen));
+		current = (struct direct *)
+			  ((char *) current + DISK16(current->d_reclen));
 	    }
 	}
 
@@ -420,10 +432,12 @@ dir_offset_delete(ULONG pinum, ULONG offset, int check)
 	global.Res2 = ERROR_OBJECT_NOT_FOUND;
 	return(0);
 
-	breakloop:
+found_object:
 
-	/* if we are deleting a directory, we must first check to make
-		sure there are only two entries left in it; '.' and '..' */
+	/*
+	 * If deleting a directory, first check to make sure there are only
+	 * two entries left in it; '.' and '..'
+	 */
 	if (check && dir_is_not_empty(inum)) {
 		global.Res2 = ERROR_DIRECTORY_NOT_EMPTY;
 		PRINT(("directory %d is not empty\n", inum));
@@ -439,12 +453,12 @@ dir_offset_delete(ULONG pinum, ULONG offset, int check)
 				inum, dirblk));
 			return(0);
 		}
-		PRINT(("dir re-cache dirblk %u: dod %08x != %08x\n", buf, obuf, dirblk));
-		current = (struct direct *)
-				((char *) current + (ULONG) buf - (ULONG) obuf);
+		PRINT(("dir re-cache dirblk %u: dod %08x != %08x\n",
+		       dirblk, buf, obuf));
+
+		current = (struct direct *) ((char *) current + (buf - obuf));
 		if (last != NULL)
-			last = (struct direct *)
-				((char *) last + (ULONG) buf - (ULONG) obuf);
+			last = (struct direct *) ((char *) last + (buf - obuf));
 	}
 #endif
 	if (last == NULL) { /* at beginning */
@@ -569,33 +583,32 @@ dir_inum_change(ULONG pinum, ULONG finum, ULONG tinum)
 	    }
 #endif
 	    current = (struct direct *) buf;
-	    bend   = (struct direct *) (buf + ((blk < fblks - 1) ? FSIZE :
-			(spill ? spill : FSIZE)));
+	    bend    = (struct direct *)
+		      (buf + ((spill && (blk == fblks - 1)) ? spill : FSIZE));
 
 	    while (current < bend) {
 		if (DISK32(current->d_ino) == finum) {
-		    buf = cache_frag_write(ridisk_frag(blk, pinum), 1);
-#ifndef FAST
-		    if (buf == NULL) {
-			PRINT2(("dir_ic: cache_write gave NULL\n"));
-			return(0);
-		    }
-#endif
-		    goto breakloop;
+			buf = cache_frag_write(ridisk_frag(blk, pinum), 1);
+			goto found_object;
 		}
 #ifndef FAST
-		if (DISK16(current->d_reclen) > DIRBLKSIZ)
+		if (DISK16(current->d_reclen) > DIRBLKSIZ) {
+			PRINT2(("INCON: dir corrupt: reclen %d > DIRBLKSIZ\n",
+				DISK16(current->d_reclen)));
+			superblock->fs_ronly = 1;
 			return(0);
+		}
 #endif
-		current = (struct direct *) ((char *) current + DISK16(current->d_reclen));
+		current = (struct direct *)
+			  ((char *) current + DISK16(current->d_reclen));
 	    }
 	}
 
-	PRINT2(("** Unable to find inode %d in %d to change to %d\n",
+	PRINT2(("** Unable to find inode %u in %u to change to %u\n",
 		pinum, finum, tinum));
 	return(0);
 
-	breakloop:
+found_object:
 	current->d_ino = DISK32(tinum);
 	return(1);
 }
@@ -647,12 +660,13 @@ dir_name_search(ULONG pinum, const char *name)
 	char	*buf;
 	ULONG	inum = 0;
 	struct	icommon *pinode;
-	struct	direct  *dirent;
+	struct	direct  *current;
 	struct	direct  *bend;
 
 	pinode = inode_read(pinum);
 	if ((DISK16(pinode->ic_mode) & IFMT) != IFDIR) {
 		PRINT2(("INCON: Not a directory i=%d n=%s\n", pinum, name));
+		superblock->fs_ronly = 1;
 		return(0);
 	}
 
@@ -668,48 +682,47 @@ dir_name_search(ULONG pinum, const char *name)
 		return(0);
 	    }
 #endif
-	    dirent = (struct direct *) buf;
-	    bend   = (struct direct *) (buf + ((blk < fblks - 1) ? FSIZE :
-			(spill ? spill : FSIZE)));
+	    current = (struct direct *) buf;
+	    bend    = (struct direct *)
+		      (buf + ((spill && (blk == fblks - 1)) ? spill : FSIZE));
 
-	    while (dirent < bend) {
-/*		PRINT((";%s", dirent->d_name)); */
-		if (dirent->d_ino && !strcmp(dirent->d_name, name)) {
-		    inum = DISK32(dirent->d_ino);
+	    while (current < bend) {
+/*		PRINT((";%s", current->d_name)); */
+		if (current->d_ino && !strcmp(current->d_name, name)) {
+		    inum = DISK32(current->d_ino);
 		    goto breakloop;
 		}
 #ifndef FAST
-		if (DISK16(dirent->d_reclen) > DIRBLKSIZ) {
+		if (DISK16(current->d_reclen) > DIRBLKSIZ) {
 			PRINT2(("** dir reclen %d > BLKSIZ\n",
-				DISK16(dirent->d_reclen)));
+				DISK16(current->d_reclen)));
 			return(0);
 		}
-		if (dirent->d_reclen == 0) {
+		if (current->d_reclen == 0) {
 			PRINT2(("** panic, dir record size 0 at offset %d\n",
-				(ULONG)((char *)dirent - buf)));
+				(ULONG)((char *)current - buf)));
 			return(0);
 		}
 #endif
-		dirent = (struct direct *) ((char *) dirent +
-					    DISK16(dirent->d_reclen));
+		current = (struct direct *) ((char *) current +
+					    DISK16(current->d_reclen));
 	    }
 	}
 
-	if ((inum == 0) && case_independent) {
+	if ((inum == 0) && (case_dependent == 0)) {
 	    /* Search again, this time ignoring case */
 	    for (blk = fblks - 1; blk >= 0; blk--) {
 		buf = cache_frag(ridisk_frag(blk, pinum));
-	        dirent = (struct direct *) buf;
-		bend   = (struct direct *) (buf + ((blk < fblks - 1) ? FSIZE :
-			(spill ? spill : FSIZE)));
-
-		while (dirent < bend) {
-		    if (streqv(dirent->d_name, name)) {
-			inum = DISK32(dirent->d_ino);
+	        current = (struct direct *) buf;
+		bend    = (struct direct *)
+			  (buf + ((spill && (blk == fblks - 1)) ? spill : FSIZE));
+		while (current < bend) {
+		    if (streqv(current->d_name, name)) {
+			inum = DISK32(current->d_ino);
 			goto breakloop;
 		    }
-		    dirent = (struct direct *) ((char *) dirent +
-						DISK16(dirent->d_reclen));
+		    current = (struct direct *) ((char *) current +
+						DISK16(current->d_reclen));
 		}
 	    }
 	}
@@ -720,7 +733,7 @@ dir_name_search(ULONG pinum, const char *name)
 	PRINT(("returning i=%d\n", inum)); */
 
 	if (inum)
-		global.Poffset	= blk * FSIZE + ((char *) dirent - buf);
+		global.Poffset	= blk * FSIZE + ((char *) current - buf);
 
 	return(inum);
 }
@@ -740,7 +753,7 @@ dir_inum_search(ULONG pinum, int inum)
 	int	blk;
 	char	*buf;
 	struct	icommon *pinode;
-	struct	direct  *dirent;
+	struct	direct  *current;
 	struct	direct  *bend;
 
 	pinode = inode_read(pinum);
@@ -758,24 +771,26 @@ dir_inum_search(ULONG pinum, int inum)
 		return(0);
 	    }
 #endif
-	    dirent = (struct direct *) buf;
-	    bend   = (struct direct *) (buf + ((blk < fblks - 1) ? FSIZE :
-			(spill ? spill : FSIZE)));
-	    while (dirent < bend) {
-		if (DISK32(dirent->d_ino) == inum)
+	    current = (struct direct *) buf;
+	    bend    = (struct direct *)
+		      (buf + ((spill && (blk == fblks - 1)) ? spill : FSIZE));
+
+	    while (current < bend) {
+		if (DISK32(current->d_ino) == inum)
 		    goto breakloop;
 #ifndef FAST
-		if (DISK16(dirent->d_reclen) > DIRBLKSIZ)
+		if (DISK16(current->d_reclen) > DIRBLKSIZ)
 		    return(0);
 #endif
-		dirent = (struct direct *) ((char *) dirent + DISK16(dirent->d_reclen));
+		current = (struct direct *) ((char *) current +
+			   DISK16(current->d_reclen));
 	    }
 	}
 
 	breakloop:
 
 	if (blk != fblks)
-		return(blk * DIRBLKSIZ + ((char *) dirent - buf));
+		return(blk * DIRBLKSIZ + ((char *) current - buf));
 
 	return(0);
 }

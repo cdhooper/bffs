@@ -33,8 +33,16 @@ const char *version = "\0$VER: rdb 1.2 (19-Jan-2018) © Chris Hooper";
 #define CTOB(x) ((x)>>2)
 
 #ifndef TD_SECTOR
-#define TD_SECTOR 512
+#define TD_SECTOR   512
 #endif
+#ifndef TD_SECSHIFT
+#define TD_SECSHIFT 9
+#endif
+
+#define TD_READ64   24
+#define TD_WRITE64  25
+#define TD_SEEK64   26
+#define TD_FORMAT64 27
 
 #define strcasecmp stricmp
 
@@ -88,7 +96,7 @@ int	disk_unit = 0;
 int	disk_flags = 0;
 int	autofix = 0;
 int	globalfix = 0;
-int	maxaccess = 0;
+ULONG	maxaccess = 0;
 int	editpart = 0;
 int	editrigid = 0;
 int	createpart = 0;
@@ -439,13 +447,14 @@ main(int argc, char *argv[])
 			disk_device, disk_unit);
 
 	if (reportmax)
-		printf("Next block available=%d\n", maxaccess + 1);
+		printf("Next block available=%u\n", maxaccess + 1);
 
 	if (index < RDB_LOCATION_LIMIT)
 		do_creations();
 
 	free(buffer);
 	close_device();
+	exit(0);
 }
 
 static int
@@ -489,30 +498,75 @@ close_device(void)
 		DeleteExtIO((struct IORequest *)trackIO);
 }
 
+static int use_td64 = -1;
+
 static long
 blk_read(void *buf, ULONG blk)
 {
+	ULONG high32 = blk >> (32 - TD_SECSHIFT);
+
 	if (blk > maxaccess)
 		maxaccess = blk;
 
-	trackIO->iotd_Req.io_Command = CMD_READ;	/* read data */
+	if (high32) {
+	    if (use_td64 == 0) {
+		printf("Can't address blk %u with 32-bit only device\n", blk);
+                return (1);
+            }
+	    trackIO->iotd_Req.io_Command = TD_READ64;	/* read data */
+            trackIO->iotd_Req.io_Actual  = blk >> (32 - TD_SECSHIFT);
+	} else {
+	    trackIO->iotd_Req.io_Command = CMD_READ;	/* read data */
+	}
 	trackIO->iotd_Req.io_Length = TD_SECTOR;	/* one sector */
-	trackIO->iotd_Req.io_Offset = TD_SECTOR * blk;	/* sector addr */
-	trackIO->iotd_Req.io_Data = buf;		/* memory addr */
-	return (DoIO((struct IORequest *)trackIO));
+	trackIO->iotd_Req.io_Offset = blk << TD_SECSHIFT; /* sector addr */
+	trackIO->iotd_Req.io_Data   = buf;		/* memory addr */
+
+	if (DoIO((struct IORequest *)trackIO)) {
+            if (high32 && use_td64 == -1) {
+                use_td64 = 0;
+                return (blk_read(buf, blk));
+            }
+	    return (1);
+	}
+        if (high32 && use_td64 == -1)
+            use_td64 = 1;
+
+	return (0);
 }
 
 static long
 blk_write(void *buf, ULONG blk)
 {
+	ULONG high32 = blk >> (32 - TD_SECSHIFT);
+
 	if (blk > maxaccess)
 		maxaccess = blk;
 
-	trackIO->iotd_Req.io_Command = CMD_WRITE;	/* write data */
+	if (high32) {
+	    if (use_td64 == 0) {
+		printf("Can't address blk %u with 32-bit only device\n", blk);
+                return (1);
+            }
+	    trackIO->iotd_Req.io_Command = TD_WRITE64;	/* write data */
+            trackIO->iotd_Req.io_Actual  = blk >> (32 - TD_SECSHIFT);
+	} else {
+	    trackIO->iotd_Req.io_Command = CMD_WRITE;	/* write data */
+	}
 	trackIO->iotd_Req.io_Length = TD_SECTOR;	/* one sector */
-	trackIO->iotd_Req.io_Offset = TD_SECTOR * blk;	/* sector addr */
-	trackIO->iotd_Req.io_Data = buf;		/* memory addr */
-	return (DoIO((struct IORequest *)trackIO));
+	trackIO->iotd_Req.io_Offset = blk << TD_SECSHIFT; /* sector addr */
+	trackIO->iotd_Req.io_Data   = buf;		/* memory addr */
+
+	if (DoIO((struct IORequest *)trackIO)) {
+            if (high32 && use_td64 == -1) {
+                use_td64 = 0;
+                return (blk_write(buf, blk));
+            }
+	    return (1);
+	}
+        if (high32 && use_td64 == -1)
+            use_td64 = 1;
+	return (0);
 }
 
 static void

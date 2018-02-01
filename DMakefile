@@ -21,7 +21,7 @@
 #
 # Top level Makefile to build BFFS Filesystem and all associated tools
 #
-DIRS=bffstool dcp disklabel dump dumpfs chmod chown edumpfs fs fsck ln ls mknod newfs rdb restore test touch tunefs umount
+DIRS=bffstool cmp dcp disklabel dump dumpfs chmod chown edumpfs fs fsck ln ls mknod newfs rdb restore sync touch tunefs umount test
 DUMMYDIRS=$(DIRS:"*":"*.dummy")
 CLEANDIRS=$(DIRS:"*":"*.clean")
 

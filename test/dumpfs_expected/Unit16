@@ -1,0 +1,68 @@
+magic	11954	time	Mon Apr 08 00:40:31 1996
+UFS V1
+cylgrp	dynamic	inodes	4.2/4.3BSD
+nbfree	20	ndir	27	nifree	310	nffree	39
+ncg	2	ncyl	160	size	2880	blocks	2623
+bsize	4096	shift	12	mask	0xfffff000
+fsize	512	shift	9	mask	0xfffffe00
+frag	8	shift	3	fsbtodb	0
+cpg	80	bpg	180	fpg	1440	ipg	352
+minfree	13%	optim	time	maxcontig 1	maxbpg	1024
+rotdelay 4ms	headswitch 0us	trackseek 0us	rps	60
+ntrak	2	nsect	9	npsect	9	spc	18
+symlinklen 0	trackskew 0	interleave 1	contigsumsize 0
+nindir	1024	inopb	32	nspf	1
+sblkno	32	cblkno	48	iblkno	56	dblkno	144
+sbsize	1536	cgsize	2048	cgoffset 16	cgmask	0xfffffffe
+csaddr	144	cssize	512	shift	8	mask	0xffffff00
+cgrotor	0	fmod	0	ronly	0
+blocks available in each of 8 rotational positions
+cylinder number 0:
+   position 0:	    0
+   position 6:	    2
+   position 7:	    1
+cylinder number 1:
+   position 4:	    4
+   position 5:	    3
+cylinder number 2:
+   position 2:	    6
+   position 3:	    5
+cylinder number 3:
+   position 0:	    8
+   position 1:	    7
+cs[].cs_(nbfree,ndir,nifree,nffree):
+	(4,10,160,15) (16,17,150,24) 
+
+
+cg 0:
+magic	90255	tell	7	time	Sun Feb 06 06:28:16 2106
+cgx	0	ncyl	80	niblk	352	ndblk	1440
+nbfree	4	ndir	10	nifree	160	nffree	15
+rotor	0	irotor	212	frotor	0
+frsum	0	0	0	2	0	0	1
+sum of frsum: 15
+iused:	0-184, 186, 200, 206-207, 211-212, 214
+free:	580-591, 593-623, 668-671
+b:
+   c32:	(1)	 0 0 1
+   c33:	(2)	 1 1
+   c34:	(1)	 0 1
+
+cg 1:
+magic	90255	tell	7	time	Sun Feb 06 06:28:16 2106
+cgx	1	ncyl	0	niblk	352	ndblk	1440
+nbfree	16	ndir	17	nifree	150	nffree	24
+rotor	0	irotor	202	frotor	0
+frsum	2	1	0	0	0	1	2
+sum of frsum: 24
+iused:	0-192, 194-202
+free:	829-830, 873-879, 1191-1198, 1248-1261, 1263-1311, 1368-1439
+b:
+   c69:	(1)	 0 1
+   c70:	(2)	 1 1
+   c71:	(2)	 1 1
+   c72:	(2)	 1 0 1
+   c76:	(3)	 1 1 1
+   c77:	(2)	 1 1
+   c78:	(2)	 1 1
+   c79:	(2)	 1 1

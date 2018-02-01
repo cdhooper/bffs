@@ -1,6 +1,27 @@
-/* fs_thrash
- *      This program is Copyright 2018 Chris Hooper.  All code herein
- *      is freeware.  No portion of this code may be sold for profit.
+/*
+ * fs_thrash
+ *
+ * Copyright 2018 Chris Hooper <amiga@cdh.eebugs.com>
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted so long as any redistribution retains the
+ * above copyright notice, this condition, and the below disclaimer.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ * This test program creates, appends, seeks, reads, and deletes many
+ * files in the filesystem by writing a random amount at a different
+ * file offset each time.
  */
 
 const char *version = "\0$VER: fs_thrash 1.0 (19-Jan-2018) © Chris Hooper";
@@ -334,11 +355,12 @@ break_abort(void)
 }
 
 static void
-usage(void)
+usage(const char *progname)
 {
     fprintf(stderr,
 	    "Usage: %s [-v] <path>\n"
-	    "    -v is verbose mode\n");
+	    "    -v is verbose mode\n", progname);
+    exit(1);
 }
 
 int
@@ -358,15 +380,13 @@ main(int argc, char *argv[])
 			verbose = 1;
 		    } else {
 			fprintf(stderr, "Unknown argument -%s\n", ptr);
-			usage();
-			exit(1);
+			usage(argv[0]);
 		    }
 	    } else if (path != NULL) {
 		fprintf(stderr,
 			"Path \"%s\" specified -- \"%s\" is unknown\n",
 			path, argv[arg]);
-		usage();
-		exit(1);
+		usage(argv[0]);
 	    } else {
 		path = argv[arg];
 	    }
@@ -374,7 +394,7 @@ main(int argc, char *argv[])
 	if (path == NULL) {
 	    fprintf(stderr, "%s: Directory to thrash must be provided\n",
 		    argv[0]);
-	    exit(1);
+	    usage(argv[0]);
 	}
 
 	MKDIR(path, 0755);

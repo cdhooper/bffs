@@ -46,10 +46,6 @@
 		      timerIO->tr_time.tv_micro = 0;		\
 		      SendIO(&timerIO->tr_node)
 
-extern struct InterruptData {
-	struct	Task *sigTask;
-	ULONG	sigMask;
-} IntData;
 extern	int cache_item_dirty;
 
 static struct	Process		*BFFSTask;
@@ -73,7 +69,6 @@ int	receiving_packets = 1;
 
 extern int timer_secs;  /* delay seconds after write for cleanup */
 extern int timer_loops; /* maximum delays before forced cleanup */
-extern char *version;	/* BFFS version string */
 
 static void close_timer(int normal);
 static int  open_timer(void);
@@ -90,7 +85,7 @@ handler(void)
 {
     int    index = 0;
 
-    ULONG  signal;
+    ULONG  signalval;
     ULONG  dcsignal;
     ULONG  dossignal;
     ULONG  timersignal;
@@ -120,18 +115,18 @@ handler(void)
 
     if (open_timer()) {
 	close_timer(0);
-	PRINT2(("cannot open timer, unable to continue\n"));
+	PRINT2(("Cannot open timer, unable to continue\n"));
 	receiving_packets = 0;
 	goto ignore_packets;
     }
 
     if (open_dchange()) {
 	close_dchange(0);
+	PRINT(("Cannot open disk change service\n"));
 /*
  *  Don't consider it fatal that dchange is not supported
  *
 	close_timer(1);
-	PRINT2(("cannot open disk change service, unable to continue\n"));
 	receiving_packets = 0;
 	goto ignore_packets;
 */
@@ -140,7 +135,7 @@ handler(void)
     dossignal	= 1L << DosPort->mp_SigBit;
     timersignal	= 1L << timerPort->mp_SigBit;
     dcsignal	= IntData.sigMask;
-    signal	= dossignal | timersignal | dcsignal;
+    signalval	= dossignal | timersignal | dcsignal;
 
     timerIO->tr_node.io_Command = TR_ADDREQUEST;
     msghead = &(BFFSTask->pr_MsgPort.mp_MsgList.lh_Head);
@@ -151,14 +146,14 @@ handler(void)
     goto interpacket;
 
     while (receiving_packets) {
-	receivedsignal = Wait(signal);
+	receivedsignal = Wait(signalval);
 	msgtype = (*msghead)->ln_Type;
 
 	if (receivedsignal & timersignal) {
 		/* see below for the timer policy implemented */
 		if (cache_item_dirty > write_items) {
 		    if (write_delay <= 0) {
-			PRINT(("flush, motor off\n"));
+			PRINT(("Flush, motor off\n"));
 			PFlush();
 			timing = 0;
 		    } else {
@@ -168,8 +163,7 @@ handler(void)
 			timing = 1;
 		    }
 		} else {
-		    if (cache_item_dirty)
-			PFlush();
+		    PFlush();
 		    timing = 0;
 		}
 	}
@@ -237,6 +231,10 @@ handler(void)
         }
     }
 
+    close_files();
+    close_filesystem();
+    RemoveVolNode();
+
     /*
      * According to the RKM, it's not wise to disappear completely, so we
      * will "just say no" to anything sent to us.  Eventually, wait for
@@ -248,6 +246,7 @@ handler(void)
     UnNameHandler();
     strcpy(stat->disk_type, "Quiescent");
     PRINT(("Filesystem quiescent\n"));
+    inhibited = 1;
 
     while (1) {
 	pack = WaitPkt();
@@ -255,12 +254,13 @@ handler(void)
 	    case ACTION_FS_STATS:
 		inhibited = 0;
 		if (open_filesystem()) {
-			PRINT2(("cannot open filesystem\n"));
+			PRINT2(("Cannot open filesystem\n"));
 			continue;
 		}
+		NameHandler("unknown:");
 		if (open_timer()) {
 			close_timer(0);
-			PRINT2(("cannot open timer\n"));
+			PRINT2(("Cannot open timer\n"));
 			continue;
 		}
 		if (open_dchange())
@@ -270,12 +270,9 @@ handler(void)
 	    case ACTION_FREE_LOCK:
 		FreeLock((struct BFFSLock *) BTOC(pack->dp_Arg1));
 		goto ignore_packets;
-	    case ACTION_END: {
-		struct BFFSfh *fileh = (struct BFFSfh *) pack->dp_Arg1;
-		FreeLock(fileh->lock);
-		FreeMem(fileh, sizeof(struct BFFSfh));
+	    case ACTION_END:
+		PEnd();
 		goto ignore_packets;
-	    }
 	}
 	PRINT(("dead: p=%d, 1=%d 2=%d 3=%d 4=%d\n", pack->dp_Type,
 		pack->dp_Arg1, pack->dp_Arg2, pack->dp_Arg3, pack->dp_Arg4));
@@ -288,19 +285,19 @@ static int
 open_timer(void)
 {
 	if (!(timerPort = CreatePort("BFFSsync_timer", 0))) {
-		PRINT2(("unable to createport for timerIO\n"));
+		PRINT2(("Unable to CreatePort for timerIO\n"));
 		return(1);
 	}
 
 
 	if (!(timerIO = (struct timerequest *)
 			CreateExtIO(timerPort, sizeof(struct timerequest)))) {
-		PRINT2(("unable to createextio for timerIO\n"));
+		PRINT2(("Unable to CreateExtIO for timerIO\n"));
 		return(1);
 	}
 
 	if (OpenDevice(TIMERNAME, UNIT_VBLANK, &timerIO->tr_node, 0)) {
-		PRINT2(("unable to open timer device %s\n", TIMERNAME));
+		PRINT2(("Unable to open timer device %s\n", TIMERNAME));
 		return(1);
 	}
 

@@ -61,6 +61,18 @@ const char *version = "\0$VER: dcp 1.3 (19-Jan-2018) © Chris Hooper";
 #define dREAD   0
 #define dWRITE  1
 
+#ifndef TD_SECTOR
+#define TD_SECTOR   512
+#endif
+#ifndef TD_SECSHIFT
+#define TD_SECSHIFT 9
+#endif
+
+#define TD_READ64   24
+#define TD_WRITE64  25
+#define TD_SEEK64   26
+#define TD_FORMAT64 27
+
 /* BCPL conversion functions */
 #define BTOC(x) ((x)<<2)
 #define CTOB(x) ((x)>>2)
@@ -82,12 +94,13 @@ const char *version = "\0$VER: dcp 1.3 (19-Jan-2018) © Chris Hooper";
 
 
 struct file_info {
-	char	*name;		  /* filename as specified on cmdline */
-	int	dtype;		  /* NONE, DEVICE, FILE, or STDIO */
-	FILE	*strIO;		  /* stream file pointer */
-	struct	IOExtTD *trackIO; /* device packet pointer */
-	ULONG	currentblk;	  /* current read/write block in device/file */
-	ULONG	maxblk;		  /* maximum allowed read/write blk in dev/file */
+    char    *name;            /* filename as specified on cmdline */
+    int     dtype;            /* NONE, DEVICE, FILE, or STDIO */
+    FILE    *strIO;           /* stream file pointer */
+    struct  IOExtTD *trackIO; /* device packet pointer */
+    ULONG   currentblk;       /* current read/write block in device/file */
+    ULONG   maxblk;           /* maximum allowed read/write blk in dev/file */
+    int     use_td64;         /* 0=device doesn't support TD64 extensions */
 };
 
 
@@ -102,6 +115,7 @@ char	*buffer	= NULL;		/* buffer area for copy operations */
 int	buffer_blocks = 2000;	/* size of buffer area */
 int	verbose       = 0;	/* verbose mode  - default = off */
 int	dryrun        = 0;	/* dryrun mode   - default = off */
+int	open_failure  = 0;	/* a device or file failed to open */
 ULONG	maxblk        = 0;	/* maximum block - default = none */
 ULONG	source_start  = 0;	/* src start blk - default = zero */
 ULONG	dest_start    = 0;	/* dst start blk - default = zero */
@@ -192,6 +206,9 @@ do_close(struct file_info *fdes)
 	}
 }
 
+/* do_io() performs I/O to or from a device.  It returns 0 on success and
+ *	   non-zero on failure.
+ */
 static int
 do_io(struct file_info *fdes, int dtype)
 {
@@ -204,12 +221,13 @@ do_io(struct file_info *fdes, int dtype)
 		if (fdes->maxblk)
 			if ((fdes->maxblk - fdes->currentblk) < io_left)
 				io_left = fdes->maxblk - fdes->currentblk;
+#undef DEBUG
 #ifdef DEBUG
-		fprintf(stderr, "tran=R blocks=%d cur=%d max=%d left=%d\n",
+		fprintf(stderr, "tran=R blocks=%d cur=%u max=%u left=%d\n",
 			buffer_blocks, fdes->currentblk, fdes->maxblk, io_left);
 #endif
 		if (io_left < 1)
-			return(0);
+			return(1);
 	} else {
 		io_left = last_read_blocks;
 
@@ -217,16 +235,16 @@ do_io(struct file_info *fdes, int dtype)
 			if ((fdes->maxblk - fdes->currentblk) < io_left)
 				io_left = fdes->maxblk - fdes->currentblk;
 #ifdef DEBUG
-		fprintf(stderr, "tran=W blocks=%d cur=%d max=%d left=%d\n",
+		fprintf(stderr, "tran=W blocks=%d cur=%u max=%u left=%d\n",
 			buffer_blocks, fdes->currentblk, fdes->maxblk, io_left);
 #endif
 		if (io_left < 1)
-			return(0);
+			return(1);
 	}
 
-	if (verbose) {
+	if (verbose && (fdes->dtype != tNIL)) {
 		setvbuf(stderr, NULL, _IONBF, 0);
-		fprintf(stderr, "%s at %-7d  count=%d%5s\r",
+		fprintf(stderr, "%s at %-8d  count=%d%5s\r",
 			(dtype == dREAD) ? "Read " : "Write",
 			fdes->currentblk, io_left, "");
 #ifdef DEBUG
@@ -238,12 +256,50 @@ do_io(struct file_info *fdes, int dtype)
 	if (dtype == dREAD)
 		last_read_blocks = io_left;
 
-	if (!dryrun) switch(fdes->dtype) {
-	    case tDEVICE:
+	if (dryrun) {
+	    fdes->currentblk += io_left;
+	    return (0);
+	}
+
+	switch (fdes->dtype) {
+	    case tDEVICE: {
+		ULONG blk    = fdes->currentblk;
+		ULONG high32 = blk >> (32 - TD_SECSHIFT);
+
+		if (high32) {
+		    if (fdes->use_td64 == 0) {
+			printf("Can't address blk %u with 32-bit only "
+			       "device\n", blk);
+			return (1);
+		    }
+		    fdes->trackIO->iotd_Req.io_Command = TD_READ64;
+		    fdes->trackIO->iotd_Req.io_Actual =
+						blk >> (32 - TD_SECSHIFT);
+		}
+		if (dtype == dREAD) {
+		    if (high32)
+			fdes->trackIO->iotd_Req.io_Command = TD_READ64;
+		    else
+			fdes->trackIO->iotd_Req.io_Command = CMD_READ;
+		} else {
+		    if (high32)
+			fdes->trackIO->iotd_Req.io_Command = TD_WRITE64;
+		    else
+			fdes->trackIO->iotd_Req.io_Command = CMD_WRITE;
+		}
 		fdes->trackIO->iotd_Req.io_Length = io_left * TD_SECTOR;
-		fdes->trackIO->iotd_Req.io_Offset = fdes->currentblk * TD_SECTOR;
-		DoIO((struct IORequest *)fdes->trackIO);
+		fdes->trackIO->iotd_Req.io_Offset = blk << TD_SECSHIFT;
+		if (DoIO((struct IORequest *) fdes->trackIO)) {
+		    if (high32 && fdes->use_td64 == -1) {
+			fdes->use_td64 = 0;
+			return (do_io(fdes, dtype));
+		    }
+		    return (1);
+		}
+		if (high32 && fdes->use_td64 == -1)
+		    fdes->use_td64 = 1;
 		break;
+	    }
 	    case tFILE:
 	    case tSTDIO:
 		if (dtype == dREAD)
@@ -255,7 +311,7 @@ do_io(struct file_info *fdes, int dtype)
 			    fprintf(stderr, "destination full before source exhausted.\n");
 			else
 			    fprintf(stderr, "write did not finish normally: %d of %d blocks written\n", last_write_blks, io_left);
-			return(0);
+			return(1);
 		    }
 		}
 		break;
@@ -265,7 +321,7 @@ do_io(struct file_info *fdes, int dtype)
 
 	fdes->currentblk += io_left;
 
-	return(1);
+	return(0);
 
 #ifdef NOTHING
 	if ((fdes->dtype == tDEVICE) && !dryrun) {
@@ -278,19 +334,19 @@ do_io(struct file_info *fdes, int dtype)
 	    if (dtype == dREAD)
 		last_read_blocks = fread(buffer, TD_SECTOR, io_left, fdes->strIO);
 	    else if ((last_write_blks = fwrite(buffer, TD_SECTOR, io_left,
-		    			       fdes->strIO)) != io_left) {
+					       fdes->strIO)) != io_left) {
 		if (last_write_blks >= 0)
 		    fprintf(stderr, "destination full before source exhausted.\n");
 		else
 		    fprintf(stderr, "failure: write did not finish normally\n");
-		return(0);
+		return(1);
 	    }
 	} else if (dtype == dREAD)
 		last_read_blocks = io_left;
 
 	fdes->currentblk += io_left;
 
-	return(1);
+	return(0);
 #endif
 }
 
@@ -345,11 +401,12 @@ find_startup(char *name)
 	}
 
 	if (notfound) {
-		fprintf(stderr, "%s: is not mounted.\n", name);
-		exit(1);
+	    startup = NULL;
+	    open_failure++;
+	} else {
+	    startup = (struct FileSysStartupMsg *) BTOC(devinfo->dvi_Startup);
 	}
 
-	startup	= (struct FileSysStartupMsg *) BTOC(devinfo->dvi_Startup);
 	CloseLibrary((struct Library *)DosBase);
 	return(startup);
 }
@@ -363,6 +420,7 @@ do_open(struct file_info *fdes, int dtype)
 
 	fdes->currentblk = 0;		/* start at beginning */
 	fdes->maxblk = 0;		/* no maximum block */
+	fdes->use_td64 = -1;		/* probe for TD64 if required */
 
 	if (verbose)
 		if (dtype == dREAD)
@@ -403,12 +461,13 @@ do_open(struct file_info *fdes, int dtype)
 		fprintf(stderr, "Error opening file %s for %s.\n",
 			fdes->name, (dtype == dREAD) ? "read" : "write");
 		fdes->dtype = tNONE;
+		open_failure++;
 	    } else {
 		fdes->dtype = tFILE;
 		if (verbose) {
 		    fprintf(stderr, "file %-40s", fdes->name);
-		    fprintf(stderr, "start=%-7d  ", fdes->currentblk);
-		    fprintf(stderr, "end=%-7d\n", fdes->maxblk);
+		    fprintf(stderr, "start=%-7u  ", fdes->currentblk);
+		    fprintf(stderr, "end=%-7u\n", fdes->maxblk);
 		}
 	    }
 	} else {				/* must be a device */
@@ -431,18 +490,21 @@ do_open(struct file_info *fdes, int dtype)
 
 	    /* create port to use when talking with handler */
 	    temp = CreatePort(0, 0);
-	    if (temp)
-	        fdes->trackIO = (struct IOExtTD *)
-				CreateExtIO(temp, sizeof(struct IOExtTD));
-	    else {
-		fdes->trackIO = NULL;
-		DeletePort(temp);
+	    if (temp == NULL) {
+		fprintf(stderr, "Failed to create port for %s\n", fdes->name);
+		fdes->dtype = tNONE;
+		open_failure++;
+		return;
 	    }
 
+	    fdes->trackIO = (struct IOExtTD *)
+			    CreateExtIO(temp, sizeof(struct IOExtTD));
 	    if (fdes->trackIO == NULL) {
 		fprintf(stderr, "Failed to create trackIO %s%s\n",
 			"structure for ", fdes->name);
+		DeletePort(temp);
 		fdes->dtype = tNONE;
+		open_failure++;
 		return;
 	    }
 
@@ -458,17 +520,17 @@ do_open(struct file_info *fdes, int dtype)
 		    disk_unit = atoi(pos + 1);
 		    pos2 = strchr(pos + 1, ',');
 		    if (pos2)
-			if (!isalpha(*(pos2 + 1)))
+			if (!isalpha(*(pos2 + 1))) {
 				disk_flags = atoi(pos2 + 1);
-			else {
-				fprintf(stderr, "Error opening device %s for %s; flags=%s; flags must be an integer!\n", fdes->name, (dtype == dREAD) ? "read" : "write", pos2 + 1);
-				fdes->dtype = tNONE;
-				return;
+			} else {
+				fprintf(stderr, "Error opening device %s: for %s; flags=%s; flags must be an integer!\n", fdes->name, (dtype == dREAD) ? "read" : "write", pos2 + 1);
+				open_failure++;
+				goto failed_open;
 			}
 		} else {
 		    fprintf(stderr, "Error opening device %s for %s; you must specify a unit number!\n", fdes->name, (dtype == dREAD) ? "read" : "write");
-		    fdes->dtype = tNONE;
-		    return;
+		    open_failure++;
+		    goto failed_open;
 		}
 		fdes->currentblk = 0;
 		fdes->maxblk     = 0;
@@ -477,24 +539,23 @@ do_open(struct file_info *fdes, int dtype)
 		if (startup == NULL) {
 		    fprintf(stderr, "Error opening device %s for %s; does not exist\n",
 			    fdes->name, (dtype == dREAD) ? "read" : "write");
-		    fdes->dtype = tNONE;
-		    return;
+		    open_failure++;
+		    goto failed_open;
 		}
 
-/*
-printf("doing assignments\n");
-*/
 		disk_device      = ((char *) BTOC(startup->fssm_Device)) + 1;
 		disk_unit        = startup->fssm_Unit;
 		disk_flags       = startup->fssm_Flags;
 		envec            = (struct DosEnvec *) BTOC(startup->fssm_Environ);
-/*
-printf("doing more assignments\n");
-*/
-		fdes->currentblk = envec->de_LowCyl * envec->de_Surfaces *
-				   envec->de_BlocksPerTrack;
-		fdes->maxblk     = (envec->de_HighCyl + 1) * envec->de_Surfaces *
-				   envec->de_BlocksPerTrack;
+		fdes->currentblk  = envec->de_LowCyl * envec->de_Surfaces *
+				    envec->de_BlocksPerTrack;
+		fdes->maxblk      = (envec->de_HighCyl + 1) *
+		                    envec->de_Surfaces *
+		                    envec->de_BlocksPerTrack;
+		if (envec->de_SizeBlock * 4 > TD_SECTOR)
+		    fdes->maxblk *= (envec->de_SizeBlock * 4 / TD_SECTOR);
+		else
+		    fdes->maxblk /= (TD_SECTOR / envec->de_SizeBlock / 4);
 	    }
 
 	    if (verbose) {
@@ -503,28 +564,23 @@ printf("doing more assignments\n");
 		fprintf(stderr, "dev  %-21s ", buf);
 		fprintf(stderr, "unit=%-2d  ", disk_unit);
 		fprintf(stderr, "flag=%-2d  ", disk_flags);
-		fprintf(stderr, "start=%-7d  ", fdes->currentblk);
-		fprintf(stderr, "end=%-7d\n", fdes->maxblk);
+		fprintf(stderr, "start=%-7u  ", fdes->currentblk);
+		fprintf(stderr, "end=%-7u\n", fdes->maxblk);
 	    }
 
-/*
-printf("opening device %s\n", disk_device);
-*/
-	    if (OpenDevice(disk_device, disk_unit, (struct IORequest *)fdes->trackIO, disk_flags)) {
+	    if (OpenDevice(disk_device, disk_unit,
+	                   (struct IORequest *)fdes->trackIO, disk_flags)) {
 		fprintf(stderr, "fatal: Unable to open %s unit %d for %s.\n",
 			disk_device, disk_unit, fdes->name);
+failed_open:
 		DeletePort(fdes->trackIO->iotd_Req.io_Message.mn_ReplyPort);
 		DeleteExtIO((struct IORequest *)fdes->trackIO);
 		return;
 	    }
-/*
-printf("done opening device\n");
-*/
 
-	    fdes->trackIO->iotd_Req.io_Command  = (dtype == dREAD) ?
-						CMD_READ : CMD_WRITE;
-	    fdes->trackIO->iotd_Req.io_Data	    = buffer;
-
+	    fdes->trackIO->iotd_Req.io_Command = (dtype == dREAD) ?
+	                                         CMD_READ : CMD_WRITE;
+	    fdes->trackIO->iotd_Req.io_Data    = buffer;
 	    fdes->dtype = tDEVICE;
 
 	    if (pos)
@@ -544,17 +600,17 @@ set_limits(struct file_info *in, struct file_info *out)
 	if (maxblk) {
 		if ((in->maxblk - in->currentblk > maxblk) ||
 		    (in->maxblk == 0))
-			in->maxblk = maxblk - in->currentblk;
+			in->maxblk = in->currentblk + maxblk;
 		if ((out->maxblk - out->currentblk > maxblk) ||
 		    (out->maxblk == 0))
-			out->maxblk = maxblk - out->currentblk;
+			out->maxblk = out->currentblk + maxblk;
 	}
 
 	if (in->maxblk && (in->currentblk > in->maxblk))
-		in->dtype = tNONE;
+		open_failure++;
 
 	if (out->maxblk && (out->currentblk > out->maxblk))
-		out->dtype = tNONE;
+		open_failure++;
 
 	if (!dryrun && (in->dtype == tFILE) && (in->dtype != tNONE))
 		fseek(in->strIO, in->currentblk * TD_SECTOR, SEEK_SET);
@@ -634,18 +690,21 @@ main(int argc, char *argv[])
 	do_open(&in,  dREAD);
 	do_open(&out, dWRITE);
 
-	set_limits(&in, &out);
+	if (!open_failure)
+	    set_limits(&in, &out);
 
-	if ((in.dtype != tNONE) && (out.dtype != tNONE))
-		while (do_io(&in, dREAD)) {
-			chkabort();
-			if (do_io(&out, dWRITE) == 0)
-				break;
-			chkabort();
-		}
+	if (!open_failure) {
+	    if ((in.dtype != tNONE) && (out.dtype != tNONE))
+		    while (do_io(&in, dREAD) == 0) {
+			    chkabort();
+			    if (do_io(&out, dWRITE))
+				    break;
+			    chkabort();
+		    }
 
-	if (verbose)
-		fprintf(stderr, "\n");
+	    if (verbose)
+		    fprintf(stderr, "\n");
+	}
 
 	do_close(&in);
 	do_close(&out);

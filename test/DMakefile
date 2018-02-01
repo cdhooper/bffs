@@ -24,7 +24,7 @@ PROGS=$(BIN)/fs_thrash
 
 RM=-delete force >NIL:
 CC=dcc
-CFLAGS=-O2 -r -proto
+CFLAGS=-O2 -ms -r -proto
 
 all: $(PROGS)
 

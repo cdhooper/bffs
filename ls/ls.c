@@ -182,21 +182,20 @@ listname(const char *name)
 	return;
     }
 
-    fib = (FileInfoBlock_3_t *)
-		    AllocMem(sizeof (FileInfoBlock_3_t), MEMF_PUBLIC);
+    fib = (FileInfoBlock_3_t *) malloc(sizeof (FileInfoBlock_3_t));
     if (fib == NULL)
 	goto alloc_failure;
 
     fib->fib_OwnerUID = 0L;
     fib->fib_OwnerGID = 0L;
     if (has_ExObject) {
-	fattr = (fileattr_t *) AllocMem(sizeof (fileattr_t), MEMF_PUBLIC);
+	fattr = (fileattr_t *) malloc(sizeof (fileattr_t));
 	if (fattr != NULL) {
 	    if (PExObject(lock, fib, fattr, 0) == 0) {
 		/* (fattr != NULL) only in this case */
 		fmode = fattr->fa_mode;
 	    } else {
-		FreeMem(fattr, sizeof (fileattr_t));
+		free(fattr);
 		fattr = NULL;
 	    }
 	}
@@ -225,8 +224,8 @@ listname(const char *name)
 
 examine_failure:
     if (fattr != NULL)
-	FreeMem(fattr, sizeof (fileattr_t));
-    FreeMem(fib, sizeof (FileInfoBlock_3_t));
+	free(fattr);
+    free(fib);
 alloc_failure:
     UnLock(lock);
 }
@@ -732,14 +731,13 @@ print_fibnames(BPTR plock, FileInfoBlock_3_t *pfib, const char *name)
     while (1) {
 	fattr = NULL;
 	if (has_ExObject) {
-	    fattr = (fileattr_t *)
-		    AllocMem(sizeof (fileattr_t), MEMF_PUBLIC);
+	    fattr = (fileattr_t *) malloc(sizeof (fileattr_t));
 	    if (fattr != NULL) {
 		if (PExObject((BPTR)plock, pfib, fattr, 1) == 0) {
 		    /* (fattr != NULL) only in this case */
 		    fmode = fattr->fa_mode;
 		} else {
-		    FreeMem(fattr, sizeof (fileattr_t));
+		    free(fattr);
 		    fattr = NULL;
 		}
 	    }
@@ -797,8 +795,7 @@ PExObject(BPTR lock, FileInfoBlock_3_t *fib, fileattr_t *attr, int next)
 	}
 
 	packet = (struct StandardPacket *)
-		 AllocMem(sizeof (struct StandardPacket),
-			  MEMF_CLEAR | MEMF_PUBLIC);
+		 calloc(sizeof (struct StandardPacket), 1);
 
 	if (packet == NULL) {
 		fprintf(stderr, "Unable to allocate memory\n");
@@ -830,7 +827,7 @@ PExObject(BPTR lock, FileInfoBlock_3_t *fib, fileattr_t *attr, int next)
 	    fib->fib_FileName[len] = '\0';
 	}
 
-        FreeMem(packet, sizeof (struct StandardPacket));
+        free(packet);
         DeletePort(replyport);
 
 	return (rc);
@@ -860,8 +857,7 @@ GetPerms(const char *name, ulong *mode)
 	}
 
 	packet = (struct StandardPacket *)
-		 AllocMem(sizeof (struct StandardPacket),
-			  MEMF_CLEAR | MEMF_PUBLIC);
+		 calloc(sizeof (struct StandardPacket), 1);
 
 	if (packet == NULL) {
 		fprintf(stderr, "Unable to allocate memory\n");
@@ -890,7 +886,7 @@ GetPerms(const char *name, ulong *mode)
         } else
 	    *mode = packet->sp_Pkt.dp_Res2;
 
-        FreeMem(packet, sizeof (struct StandardPacket));
+        free(packet);
         DeletePort(replyport);
 
 	return(rc);
@@ -925,8 +921,7 @@ GetTimes(const char *name, int which, unix_timeval_t *timevalue)
 	}
 
 	packet = (struct StandardPacket *)
-		 AllocMem(sizeof (struct StandardPacket),
-			  MEMF_CLEAR | MEMF_PUBLIC);
+		 calloc(sizeof (struct StandardPacket), 1);
 
 	if (packet == NULL) {
 		fprintf(stderr, "Unable to allocate memory\n");
@@ -954,7 +949,7 @@ GetTimes(const char *name, int which, unix_timeval_t *timevalue)
 	if (packet->sp_Pkt.dp_Res1 == DOSFALSE)
 	    rc = packet->sp_Pkt.dp_Res2;
 
-        FreeMem(packet, sizeof (struct StandardPacket));
+        free(packet);
         DeletePort(replyport);
 
 	return(rc);
@@ -1022,7 +1017,7 @@ sortlist_add(const char *filename, const char *shortname, ulong mode,
 	printf("sortlist_add %s %o\n", filename, mode);
 */
 
-	temp = (sort_node_t *) AllocMem(sizeof (sort_node_t), MEMF_PUBLIC);
+	temp = (sort_node_t *) malloc(sizeof (sort_node_t));
 	if (temp == NULL)
 	    return;
 
@@ -1030,17 +1025,17 @@ sortlist_add(const char *filename, const char *shortname, ulong mode,
 	if (namelen > max_namelength)
 	    max_namelength = namelen;
 
-	temp->name = (char *) AllocMem(strlen(filename) + 1, MEMF_PUBLIC);
+	temp->name = (char *) malloc(strlen(filename) + 1);
 	if (temp->name == NULL) {
-	    FreeMem(temp, sizeof (sort_node_t));
+	    free(temp);
 	    return;
 	}
 	strcpy(temp->name, filename);
 
-	temp->shortname = (char *) AllocMem(strlen(shortname) + 1, MEMF_PUBLIC);
+	temp->shortname = (char *) malloc(strlen(shortname) + 1);
 	if (temp->shortname == NULL) {
-	    FreeMem(temp->name, strlen(temp->name) + 1);
-	    FreeMem(temp, sizeof (sort_node_t));
+	    free(temp->name + 1);
+	    free(temp);
 	    return;
 	}
 	strcpy(temp->shortname, shortname);
@@ -1075,12 +1070,11 @@ sortlist_add(const char *filename, const char *shortname, ulong mode,
 	temp->date = fib->fib_Date.ds_Days * 24 * 60 * 60 +
 		     fib->fib_Date.ds_Minute * 60 +
 		     fib->fib_Date.ds_Tick / TICKS_PER_SECOND;
-	temp->fib = (FileInfoBlock_3_t *)
-			AllocMem(sizeof (FileInfoBlock_3_t), MEMF_PUBLIC);
+	temp->fib = (FileInfoBlock_3_t *) malloc(sizeof (FileInfoBlock_3_t));
 	if (temp->fib == NULL) {
-	    FreeMem(temp->shortname, strlen(temp->shortname) + 1);
-	    FreeMem(temp->name, strlen(temp->name) + 1);
-	    FreeMem(temp, sizeof (sort_node_t));
+	    free(temp->shortname);
+	    free(temp->name);
+	    free(temp);
 	    return;
 	}
 	memcpy(temp->fib, fib, sizeof (FileInfoBlock_3_t));
@@ -1170,11 +1164,11 @@ static void
 free_sortnode(sort_node_t *node)
 {
     if (node->fattr != NULL)
-	FreeMem(node->fattr, sizeof (fileattr_t));
-    FreeMem(node->fib, sizeof (FileInfoBlock_3_t));
-    FreeMem(node->name, strlen(node->name) + 1);
-    FreeMem(node->shortname, strlen(node->shortname) + 1);
-    FreeMem(node, sizeof (sort_node_t));
+	free(node->fattr);
+    free(node->fib);
+    free(node->name);
+    free(node->shortname);
+    free(node);
 }
 
 static void
@@ -1339,20 +1333,19 @@ sortlist_or_rlist_add(const char *name)
     /* Always reset this flag when handling a new path from the cmdline */
     has_ExObject = 1;
 
-    fib = (FileInfoBlock_3_t *)
-	   AllocMem(sizeof (FileInfoBlock_3_t), MEMF_PUBLIC);
+    fib = (FileInfoBlock_3_t *) malloc(sizeof (FileInfoBlock_3_t));
     lock = Lock((char *)name, ACCESS_READ);
     if (lock == 0) {
 	fprintf(stderr, "%s not found\n", name);
 	return;
     }
     if (has_ExObject) {
-	fattr = (fileattr_t *) AllocMem(sizeof (fileattr_t), MEMF_PUBLIC);
+	fattr = (fileattr_t *) malloc(sizeof (fileattr_t));
 	if (fattr != NULL) {
 	    if (PExObject(lock, fib, fattr, 0) == 0) {
 		fmode = fattr->fa_mode;
 	    } else {
-		FreeMem(fattr, sizeof (fileattr_t));
+		free(fattr);
 		fattr = NULL;
 	    }
 	}
@@ -1381,8 +1374,8 @@ sortlist_or_rlist_add(const char *name)
 	/* Found a directory */
 	rlist_add(name);
 	if (fattr != NULL)
-	    FreeMem(fattr, sizeof (fileattr_t));
-	FreeMem(fib, sizeof (FileInfoBlock_3_t));
+	    free(fattr);
+	free(fib);
     } else {  /* Otherwise, treat it as a file in the sort list */
 	sortlist_add(name, fib->fib_FileName, fmode, fib, fattr);
     }
@@ -1402,6 +1395,9 @@ main(int argc, char *argv[])
 	    listed++;
 	    continue;
 	}
+	if (strcmp(ptr, "--help") == 0)
+	    print_usage(argv[0]);
+
 	for (ptr++; *ptr != '\0'; ptr++) {
 	    switch (*ptr) {
 		case '1':
@@ -1469,6 +1465,7 @@ main(int argc, char *argv[])
 		    break;
 		default:
 		    fprintf(stderr, "flag %c not implemented\n", *ptr);
+		    print_usage(argv[0]);
 		    break;
 	    }
 	}
