@@ -21,12 +21,12 @@
 #ifndef _REQUEST_H
 #define _REQUEST_H
 
-#define REQUEST_BFFS_INTERNAL	0
-#define REQUEST_YOU_MUST	1
-#define REQUEST_BLOCK_BAD_R	2
-#define REQUEST_BLOCK_BAD_W	3
-#define REQUEST_RUN_FSCK_D	4
-#define REQUEST_RUN_FSCK_F	5
+#define REQUEST_BFFS_INTERNAL   0
+#define REQUEST_YOU_MUST        1
+#define REQUEST_BLOCK_BAD_R     2
+#define REQUEST_BLOCK_BAD_W     3
+#define REQUEST_RUN_FSCK_D      4
+#define REQUEST_RUN_FSCK_F      5
 
 BOOL do_request(int type, ULONG data1, ULONG data2, char *str);
 

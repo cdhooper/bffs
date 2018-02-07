@@ -28,7 +28,7 @@
  * BFFS could be enhanced to support them in the future.
  */
 
-const char *version = "\0$VER: fs_sparse 1.9 (19-Jan-2018) © Chris Hooper";
+const char *version = "\0$VER: fs_sparse 1.0 (08-Feb-2018) © Chris Hooper";
 
 #include <stdio.h>
 #include <fcntl.h>
@@ -51,7 +51,7 @@ char *path = "tdev:run";
 char *path = "run";
 #endif
 
-#define	DELETE
+#define DELETE
 
 #define NAMEMASK 127
 
@@ -77,104 +77,104 @@ unsigned long end;
 void
 pickname(void)
 {
-	sprintf(filename, "%s/%d", path, (rand() >> 8) & NAMEMASK);
+    sprintf(filename, "%s/%d", path, (rand() >> 8) & NAMEMASK);
 }
 
 int
 createfile(void)
 {
-	int fd;
-	int rc = 0;
-	size_t start_len = (rand() >> 4) & BUFMASK;
-	size_t tail_len  = (rand() >> 4) & BUFMASK;
-	long   tail_pos  = (rand() >> 4) & FSIZEMASK;
-	creates++;
-	pickname();
+    int fd;
+    int rc = 0;
+    size_t start_len = (rand() >> 4) & BUFMASK;
+    size_t tail_len  = (rand() >> 4) & BUFMASK;
+    long   tail_pos  = (rand() >> 4) & FSIZEMASK;
+    creates++;
+    pickname();
 
-	if (!verbose)
-		write(1, "c", 1);
-	printf("open(%s)", filename);
-	fd = open(filename, O_CREAT | O_RDWR);
-	if (fd < 0) {
-		printf("\nCould not open %s for create\n", filename);
-		return (1);
-	}
+    if (!verbose)
+        write(1, "c", 1);
+    printf("open(%s)", filename);
+    fd = open(filename, O_CREAT | O_RDWR);
+    if (fd < 0) {
+        printf("\nCould not open %s for create\n", filename);
+        return (1);
+    }
 
-	printf("write(%d)", start_len);
-	if (write(fd, wbuffer, start_len) < 0) {
-		printf("\nWrite %s len %d at 0 failed\n", filename, start_len);
-		rc = 1;
-		goto failure;
-	}
-	printf("seek(%u)", tail_pos);
-	if (lseek(fd, tail_pos, SEEK_SET) < 0) {
-		printf("\nlseek %d failed\n", filename, tail_pos);
-		rc = 1;
-		goto failure;
-	}
-	printf("write(%u)", tail_len);
-	if (write(fd, wbuffer, tail_len) < 0) {
-		printf("\nWrite %s len %d at %d failed\n",
-			filename, tail_len, tail_pos);
-		rc = 1;
-	}
+    printf("write(%d)", start_len);
+    if (write(fd, wbuffer, start_len) < 0) {
+        printf("\nWrite %s len %d at 0 failed\n", filename, start_len);
+        rc = 1;
+        goto failure;
+    }
+    printf("seek(%u)", tail_pos);
+    if (lseek(fd, tail_pos, SEEK_SET) < 0) {
+        printf("\nlseek %d failed\n", filename, tail_pos);
+        rc = 1;
+        goto failure;
+    }
+    printf("write(%u)", tail_len);
+    if (write(fd, wbuffer, tail_len) < 0) {
+        printf("\nWrite %s len %d at %d failed\n",
+                filename, tail_len, tail_pos);
+        rc = 1;
+    }
 failure:
-	if (close(fd) < 0) {
-		printf("\nClose %s failed after write %d\n",
-			filename, tail_len);
-		rc = 1;
-	}
-	return (rc);
+    if (close(fd) < 0) {
+        printf("\nClose %s failed after write %d\n",
+                filename, tail_len);
+        rc = 1;
+    }
+    return (rc);
 }
 
 int
 delete(void)
 {
-	int rc = 0;
+    int rc = 0;
 #ifdef DELETE
-	deletes++;
-	write(1, "d", 1);
-	pickname();
-	(void) unlink(filename);
+    deletes++;
+    write(1, "d", 1);
+    pickname();
+    (void) unlink(filename);
 #endif
-	return (rc);
+    return (rc);
 }
 
 void
 printdiv(int num, int den)
 {
-	int whole;
-	int rem;
+    int whole;
+    int rem;
 
-	whole = num / den;
-	rem = num - whole * den;
-	printf("%d.%02d", whole, 100 * rem / num);
+    whole = num / den;
+    rem = num - whole * den;
+    printf("%d.%02d", whole, 100 * rem / num);
 }
 
 void
 printstats(void)
 {
-	int clock;
-	int total = 0;
+    int clock;
+    int total = 0;
 
-	clock = end - start;
+    clock = end - start;
 
-	printf("\n");
+    printf("\n");
 
-	printf("create=");
-	PRINTCLOCK(creates, clock);
-	printf(" ");
-	total += creates;
+    printf("create=");
+    PRINTCLOCK(creates, clock);
+    printf(" ");
+    total += creates;
 
 #ifdef DELETE
-	printf("delete=");
-	PRINTCLOCK(deletes, clock);
-	printf(" ");
-	total += deletes;
+    printf("delete=");
+    PRINTCLOCK(deletes, clock);
+    printf(" ");
+    total += deletes;
 #endif
-	printf("\ntime=%d  total=%d ops [", clock, total);
-	printdiv(total, clock);
-	printf(" ops/sec]\n");
+    printf("\ntime=%d  total=%d ops [", clock, total);
+    printdiv(total, clock);
+    printf(" ops/sec]\n");
 }
 
 #ifdef AMIGA
@@ -185,48 +185,48 @@ void
 break_abort(int sig)
 #endif
 {
-	time(&end);
-	printstats();
-	exit(0);
+    time(&end);
+    printstats();
+    exit(0);
 }
 
 int
 main(int argc, char *argv[])
 {
-	int index;
-	time(&start);
+    int index;
+    time(&start);
 #if 0
-	srand(start);
+    srand(start);
 #endif
 
-	if (argc > 1)
-		path = argv[1];
-	else {
-		fprintf(stderr, "%s: Must provide directory for sparse files\n",
-			argv[0]);
-		exit(1);
-	}
+    if (argc > 1) {
+        path = argv[1];
+    } else {
+        fprintf(stderr, "%s: Must provide directory for sparse files\n",
+                argv[0]);
+        exit(1);
+    }
 
-	MKDIR(path, 0755);
+    MKDIR(path, 0755);
 
-	for (index = 0; index < BUFMAX; index++)
-		wbuffer[index] = rand() & 0xff;
+    for (index = 0; index < BUFMAX; index++)
+        wbuffer[index] = rand() & 0xff;
 
-	time(&start);
+    time(&start);
 #ifdef AMIGA
-	onbreak(break_abort);
+    onbreak(break_abort);
 #else
-	signal(SIGINT, break_abort);
+    signal(SIGINT, break_abort);
 #endif
-	for (index = 0; index < OPS - 1; index++) {
-		if (createfile()) {
-			printf("Failed: file=%s", filename);
-			index = OPS;
-			break;
-		}
-	}
+    for (index = 0; index < OPS - 1; index++) {
+        if (createfile()) {
+            printf("Failed: file=%s", filename);
+            index = OPS;
+            break;
+        }
+    }
 
-	time(&end);
-	printstats();
-	exit(0);
+    time(&end);
+    printstats();
+    exit(0);
 }

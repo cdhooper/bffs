@@ -21,44 +21,41 @@
 #ifndef _CACHE_H
 #define _CACHE_H
 
-extern	int cache_size;			/* max frags allowed in cache */
-extern	int cache_cg_size;		/* max cgs in cg cache */
-char   *cache_frag(ULONG blk);		/* get buffer for specified frag */
+extern int cache_size;                 /* max frags allowed in cache */
+extern int cache_cg_size;              /* max cgs in cg cache */
 
-/* get buffer for frag, mark dirty */
-char   *cache_frag_write(ULONG blk, int readflag);
+void open_cache(void);                 /* allocate cache buffers */
+void close_cache(void);                /* deallocate cache buffers */
+void cache_adjust(void);               /* handle cache size change */
+void cache_cg_adjust(void);            /* handle cache cg size change */
+void cache_full_invalidate(void);      /* eliminate all cached frags */
+void cache_invalidate(ULONG blk);      /* throw out a cache entry (no flush) */
+void cache_frag_move(ULONG to_blk, ULONG from_blk);  /* Zero-copy move frag */
+int  cache_flush(void);                /* write out all dirty frags in cache */
+int  cache_cg_flush(void);             /* write out the cg summary cache */
+char *cache_frag(ULONG blk);           /* get buffer for specified frag */
+char *cache_frag_write(ULONG blk, int readflag);  /* get frag buf, mark dirty */
+char *cache_available(ULONG blk);      /* get buffer if in cache, else NULL */
 
-char   *cache_available(ULONG blk);	/* get buffer if in cache, else NULL */
-struct	cg *cache_cg(ULONG cgx);	/* get buffer for specified cg */
-struct	cg *cache_cg_write(ULONG cgx);	/* get buffer for cg, mark dirty */
-void	cache_adjust(void);		/* handle cache size change */
-void	cache_cg_adjust(void);		/* handle cache cg size change */
-int	cache_flush(void);		/* write out all dirty frags in cache */
-int	cache_cg_flush(void);		/* write out the cg summary cache */
-void    cache_full_invalidate(void);    /* eliminate all cached frags */
-void    cache_invalidate(ULONG blk);    /* throw out a cache entry (no flush) */
-void    open_cache(void);
-void    close_cache(void);
-
-/* Reassign cached frag to a different block address */
-void	cache_frag_move(ULONG to_blk, ULONG from_blk);
+struct cg *cache_cg(ULONG cgx);        /* get buffer for specified cg */
+struct cg *cache_cg_write(ULONG cgx);  /* get buffer for cg, mark dirty */
 
 /* This is the basic node for the cache routines */
-struct cache_set {
-	ULONG blk;			/* disk frag address of node */
-	int flags;			/* frag node flags (see below) */
-	char *buf;			/* memory buffer address */
-	struct cache_set *stack_up;	/* older cache nodes */
-	struct cache_set *stack_down;	/* newer cache nodes */
-	struct cache_set *hash_up;	/* hash chain parent */
-	struct cache_set *hash_down;	/* hash chain child  */
-	struct cache_set *next;		/* sorted order higher address */
-};
+typedef struct cache_set {
+    ULONG             blk;             /* disk frag address of node */
+    int               flags;           /* frag node flags (see below) */
+    char             *buf;             /* memory buffer address */
+    struct cache_set *stack_up;        /* older cache nodes */
+    struct cache_set *stack_down;      /* newer cache nodes */
+    struct cache_set *hash_up;         /* hash chain parent */
+    struct cache_set *hash_down;       /* hash chain child  */
+    struct cache_set *next;            /* sorted order higher address */
+} cache_set_t;
 
 /* cache frag node flags */
-#define CACHE_CLEAN   0			/* frag clean	   */
-#define CACHE_DIRTY   1			/* frag dirty	   */
-#define CACHE_LOCKED  2			/* locked in cache */
+#define CACHE_CLEAN   0                /* frag clean      */
+#define CACHE_DIRTY   1                /* frag dirty      */
+#define CACHE_LOCKED  2                /* locked in cache */
 
 #ifndef NULL
 #define NULL 0

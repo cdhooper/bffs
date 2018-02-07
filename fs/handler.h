@@ -38,10 +38,10 @@ extern struct stat        *stat;
 extern struct DeviceNode  *DevNode;
 extern struct global       global;
 
-extern int		   inhibited;
-extern int		   dev_openfail;
-extern int		   receiving_packets;
-extern int		   motor_is_on;
+extern int                 inhibited;
+extern int                 dev_openfail;
+extern int                 receiving_packets;
+extern int                 motor_is_on;
 
 /* C pointer to BCPL pointer */
 #ifdef CTOB

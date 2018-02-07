@@ -25,8 +25,9 @@
 
 long GMT = -8;  /* GMT offset for localtime */
 
-/* unix_time_to_amiga_ds()
- *	Convert UNIX time to Amiga DateStamp format
+/*
+ * unix_time_to_amiga_ds()
+ *      Convert UNIX time to Amiga DateStamp format
  */
 void
 unix_time_to_amiga_ds(ULONG timeval, struct DateStamp *ds)
@@ -41,7 +42,7 @@ unix_time_to_amiga_ds(ULONG timeval, struct DateStamp *ds)
 
 /*
  * amiga_ds_to_unix_time()
- *	Convert Amiga DateStamp to UNIX time format (UTC seconds since 1970).
+ *      Convert Amiga DateStamp to UNIX time format (UTC seconds since 1970).
  */
 ULONG
 amiga_ds_to_unix_time(struct DateStamp *ds)
@@ -57,8 +58,9 @@ amiga_ds_to_unix_time(struct DateStamp *ds)
     return (timeval);
 }
 
-/* unix_time()
- *	Acquire current system time in UNIX format (UTC seconds since 1970).
+/*
+ * unix_time()
+ *      Acquire current system time in UNIX format (UTC seconds since 1970).
  */
 ULONG
 unix_time(void)

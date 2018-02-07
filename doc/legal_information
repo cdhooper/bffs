@@ -1,42 +1,42 @@
 DISCLAIMER
 ----------
 This BSD filesystem for AmigaDOS was derived in part from the 1983
-BSD 4.2 paper, "A Fast File System for UNIX" - Marshall Kirk McKusick, 
+BSD 4.2 paper, "A Fast File System for UNIX" - Marshall Kirk McKusick,
 William N. Joy, Samuel J. Leffler, Robert S. Fabry of the University
-of California at Berkeley (Computer Systems Research Group).  It has
-since been improved to take advantage of, and to support the
+of California at Berkeley (Computer Systems Research Group).  In 1994,
 enhancements made to the FFS implementation in the BSD 4.4 Fast File
-System.
+System.  As of 2018, it now also supports the BSD FFS V1 filesystem,
+in either big endian or little endian mode.
 
 A modified version of the Berkeley BSD Tahoe (and NetBSD current)
-include files are used as part of this program.  However, at no point
-during development was the Berkeley ufs filesystem source code consulted
-for ideas, techniques, algorithms, or other such aid in the development
-of this filesystem.  Because of this, the filesystem is claimed to be
-compatible only with regard to data structure and not necessarily
-organization nor algorithmic policies.
+include files are used as part of this program.  However, not until
+2018 was the Berkeley ufs filesystem source code consulted for ideas,
+techniques, algorithms, or other such aid in the development of this
+filesystem.  Because of this, the filesystem is claimed to be compatible
+only with regard to data structure and not necessarily organization nor
+algorithmic policies.
 
-The programs fsck, newfs, dump, dumpfs, disklabel, and tunefs were ported
-from NetBSD source dated November 4, 1994.  Restore was ported from
-NetBSD source dated October 1, 1995.  All software ports to AmigaOS were
-done by solely by Chris Hooper.  The programs were modified heavily to
-accommodate AmigaDOS devices and reduce the system stack requirements.
+The programs fsck, newfs, dump, dumpfs, disklabel, and tunefs were
+ported from NetBSD source dated November 4, 1994.  Restore was ported
+from NetBSD source dated October 1, 1995.  All software ports to AmigaOS
+were done by solely by Chris Hooper.  The programs were modified heavily
+to accommodate AmigaDOS devices and reduce the system stack requirements.
 Because of this, a warning must be observed that the operation of these
-programs may not be identical to that of their original sources, and may
-perform incorrectly with respect to the original implementation.
+programs may not be identical to that of their original sources, and
+may perform incorrectly with respect to the original implementation.
 
-The programs BFFStool, chmod, chown, dbprint, dcp, edumpfs, eln, els,
-mknod, rdb, touch, and umount are utilities created originally to
-support development of the filesystem.  Much effort has been placed on
-the implementations to operate in the "expected" manner for users coming
-from a UNIX platform.  As with the rest of the software in this
+The programs BFFStool, chown, chmod, dbprint, dcp, edumpfs, ln, ls,
+mknod, rdb, sync, touch, and umount are utilities created originally
+to support development of the filesystem.  Much effort has been placed
+on the implementations to operate in the "expected" manner for users
+coming from a UNIX platform.  As with the rest of the software in this
 distribution it is not expressed or implied these utilities will perform
 to any standards or set expectations.
 
-All aforementioned programs may do more harm than good to affected
-media.  I, in no way, guarantee correctness of the product and will
-not be held responsible for its use (or misuse).  This includes all
-damages incurred, including loss of business or property.
+All aforementioned programs may do more harm than good to affected media.
+I, in no way, guarantee correctness of the product and will not be held
+responsible for its use (or misuse).  This includes all damages incurred,
+including loss of business or property.
 
 This package and support utilities represent a culmination (much off
 and much on) of more than five years work on my part.  All development
@@ -69,21 +69,21 @@ Terms of distribution
     2. All files included in the distribution of this package are
        redistributed together unmodified as the same package.
     3. No fee other than reasonable repackaging is charged for this
-       product.  Organizations that wish to charge for this package
-       or include any part of this package in their own for sale
-       package must contact me and obtain approval.  The following
-       are granted exclusive unlimited distribution rights.  They
-       may charge what they see fit with no royalties.
+       product.  Organizations that wish to charge for this package or
+       include any part of this package in their own for sale package
+       must contact me and obtain approval.  The following are granted
+       exclusive unlimited distribution rights.  They may charge what
+       they see fit with no royalties.
             Ty Sarna for inclusion in any NetBSD distribution
             Markus Wild for inclusion in any NetBSD distribution
             Fred Fish for inclusion in any Fish disk distribution
             Aminet Internet free software archive
 
-Thank you to the Internet community for enriching my life and
-providing such lofty programming challenges.  Thank you especially
-to those people who have helped as Beta testers and others that
-helped make my programs better.  Special thanks to Ken Dyke and
-Randell Jesup of the past Commodore.
+Thank you to the Internet community for enriching my life and providing
+such lofty programming challenges.  Thank you especially to those people
+who have helped as Beta testers and others that helped make my programs
+better.  Special thanks to Ken Dyke and Randell Jesup of the past Commodore
+Business Machines.
 
 
 Chris Hooper  (amiga@cdh.eebugs.com)

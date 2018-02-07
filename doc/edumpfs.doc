@@ -3,7 +3,7 @@ Version 1.5 of edumpfs
 ------------------------------------------------------------------------
 
 edumpfs - a program to display metadata pertaining to one or more
- 	  Berkeley Fast File Systems in the specified AmigaDOS device.
+          Berkeley Fast File Systems in the specified AmigaDOS device.
 
 
 The edumpfs utility enables the user to discover file system low level
@@ -21,6 +21,14 @@ you want edumpfs to show, only that partition will be displayed.  This is
 done by providing the partition letter (or number) following the AmigaDOS
 device name.  Example:
     edumpfs bf0:c
+
+You may also specify a device by the driver name and unit number.
+Example:
+    edumpfs uaehf.device,0
+
+Full syntax for this format is
+    <driver>,<unit>,<flags>,<sectorsize>,<startsector>,<lastsector>
+Other BFFS commands accepting an Amiga disk device also support this format.
 
 edumpfs will display summary help text by running edumpfs with no parameters.
 For more help, you can type "edumpfs -h"

@@ -1,4 +1,21 @@
-/* 8-Oct-96 CDH */
+/*
+ * Copyright (c) 1982, 1986 Regents of the University of California.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms are permitted
+ * provided that the above copyright notice and this paragraph are
+ * duplicated in all such forms and that any documentation,
+ * advertising materials, and other materials related to such
+ * distribution and use acknowledge that the software was developed
+ * by the University of California, Berkeley.  The name of the
+ * University may not be used to endorse or promote products derived
+ * from this software without specific prior written permission.
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
+ * WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * Modified 8-Oct-96 CDH
+ */
 
 /*
  * The I node is the focus of all local file activity in UNIX.
@@ -43,14 +60,16 @@ struct	icommon {
 	long	dl_spare[2];	/* 120: Reserved; currently unused */
 };
 
-
-
 struct	dinode {
 	union {
 		struct	icommon di_icom;
 		char	di_size[128];
 	} di_un;
 };
+
+typedef struct icommon icommon_t;
+typedef struct dinode dinode_t;
+
 
 #define	i_mode		i_ic.ic_mode
 #define	i_nlink		i_ic.ic_nlink

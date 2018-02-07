@@ -21,18 +21,14 @@
 #ifndef _ALLOC_H
 #define _ALLOC_H
 
-#define bit_set(ptr, index)	ptr[(index) >> 3] |= 1<<((index) & 7)
-#define bit_clr(ptr, index)	ptr[(index) >> 3] &= ~(1<<((index) & 7))
-#define bit_val(ptr, index)	(ptr[(index) >> 3] & 1<<((index) & 7)) ? 1 : 0
-#define bit_chk(ptr, index)	(ptr[(index) >> 3] & 1<<((index) & 7))
+#define bit_set(ptr, index)   (ptr[(index) >> 3] |= 1<<((index) & 7))
+#define bit_clr(ptr, index)   (ptr[(index) >> 3] &= ~(1<<((index) & 7)))
+#define bit_val(ptr, index)  ((ptr[(index) >> 3] & 1<<((index) & 7)) ? 1 : 0)
+#define bit_chk(ptr, index)  ((ptr[(index) >> 3] & 1<<((index) & 7)))
 
-/* allocation optimization, time is default */
-#define OPT_TIME  0
-#define OPT_SPACE 1
-
-int   block_avail(unsigned char *map, ULONG fpos);
+int   frags_left_are_free(uint8_t *map, ULONG frag);
+int   block_avail(uint8_t *map, ULONG fpos);
 int   block_fragblock_find(struct cg *mycg, ULONG preferred, int min_frags);
-int   rest_is_free(unsigned char *map, ULONG frag);
 ULONG block_allocate(ULONG nearblock);
 void  block_deallocate(ULONG block);
 int   frags_allocate(ULONG fragstart, ULONG frags);

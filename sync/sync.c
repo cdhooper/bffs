@@ -31,7 +31,7 @@
 #include <clib/dos_protos.h>
 #include <clib/exec_protos.h>
 
-const char *version = "\0$VER: sync 1.0 (19-Jan-2018) © Chris Hooper";
+const char *version = "\0$VER: sync 1.0 (08-Feb-2018) © Chris Hooper";
 
 #define BTOC(x) ((x)<<2)
 
@@ -43,22 +43,22 @@ sync_filesystem(const char *path)
     struct MsgPort        *msgport;
     struct MsgPort        *replyport;
     struct StandardPacket *packet;
-    int			   rc = 0;
+    int                    rc = 0;
 
     msgport = (struct MsgPort *) DeviceProc(path);
     if (msgport == NULL)
-	return(1);
+        return (1);
 
     replyport = (struct MsgPort *) CreatePort(NULL, 0);
     if (replyport == NULL)
-	return(1);
+        return (1);
 
     packet = (struct StandardPacket *)
-	     AllocMem(sizeof(struct StandardPacket), MEMF_CLEAR | MEMF_PUBLIC);
+             AllocMem(sizeof (struct StandardPacket), MEMF_CLEAR | MEMF_PUBLIC);
 
     if (packet == NULL) {
-	DeletePort(replyport);
-	return(1);
+        DeletePort(replyport);
+        return (1);
     }
 
     packet->sp_Msg.mn_Node.ln_Name = (char *)&(packet->sp_Pkt);
@@ -72,23 +72,23 @@ sync_filesystem(const char *path)
     GetMsg(replyport);
 
     if (packet->sp_Pkt.dp_Res1 == DOSFALSE)
-	rc = 1;
+        rc = 1;
 
-    FreeMem(packet, sizeof(struct StandardPacket));
+    FreeMem(packet, sizeof (struct StandardPacket));
     DeletePort(replyport);
 
     return (rc);
 }
 
 typedef struct pathlist {
-    char	    *path;
+    char            *path;
     struct pathlist *next;
 } pathlist_t;
 
 static int
 sync_all(void)
 {
-    int		     rc   = 0;
+    int              rc   = 0;
     pathlist_t      *head = NULL;
     pathlist_t      *cur;
     struct Library  *dosbase;
@@ -102,35 +102,35 @@ sync_all(void)
 
     /* Generate list of devices */
     Forbid();
-	devinfo = (struct DevInfo *) BTOC(dosinfo->di_DevInfo);
-	while (devinfo != NULL) {
-	    if ((devinfo->dvi_Type == DLT_DEVICE) &&
-	        (devinfo->dvi_Task != 0)) {
-		char *temp = (char *) BTOC(devinfo->dvi_Name);
-		cur = malloc(sizeof (*cur));
-		cur->path = malloc(*temp + 2);
-		sprintf(cur->path, "%.*s:", *temp, temp + 1);
-		cur->next = head;
-		head = cur;
-	    }
-	    devinfo = (struct DeviceList *) BTOC(devinfo->dvi_Next);
-	}
+        devinfo = (struct DevInfo *) BTOC(dosinfo->di_DevInfo);
+        while (devinfo != NULL) {
+            if ((devinfo->dvi_Type == DLT_DEVICE) &&
+                (devinfo->dvi_Task != 0)) {
+                char *temp = (char *) BTOC(devinfo->dvi_Name);
+                cur = malloc(sizeof (*cur));
+                cur->path = malloc(*temp + 2);
+                sprintf(cur->path, "%.*s:", *temp, temp + 1);
+                cur->next = head;
+                head = cur;
+            }
+            devinfo = (struct DeviceList *) BTOC(devinfo->dvi_Next);
+        }
     Permit();
     CloseLibrary(dosbase);
 
     for (cur = head; cur != NULL; cur = cur->next) {
-	int fail = sync_filesystem(cur->path);
-	if (vflag)
-	    printf("%s %s\n", cur->path, fail ? "Failure" : "Success");
-	rc |= fail;
+        int fail = sync_filesystem(cur->path);
+        if (vflag)
+            printf("%s %s\n", cur->path, fail ? "Failure" : "Success");
+        rc |= fail;
     }
 
     cur = head;
     while (cur != NULL) {
-	pathlist_t *next = cur->next;
-	free(cur->path);
-	free(cur);
-	cur  = next;
+        pathlist_t *next = cur->next;
+        free(cur->path);
+        free(cur);
+        cur  = next;
     }
     return (rc);
 }
@@ -139,11 +139,11 @@ static void
 print_usage(const char *progname)
 {
     printf("%s\n"
-	   "usage: %s [<options>] [<device>...]\n"
-	   "options:\n"
+           "usage: %s [<options>] [<device>...]\n"
+           "options:\n"
            "   -h = display this help text\n"
            "   -v = verbose mode\n",
-	   version + 7, progname);
+           version + 7, progname);
     exit(1);
 }
 
@@ -155,33 +155,33 @@ main(int argc, char *argv[])
     int count = 0;
 
     for (arg = 1 ; arg < argc; arg++) {
-	char *ptr = argv[arg];
-	if (*ptr == '-') {
-	    while (*(++ptr) != '\0') {
-		if (strcmp(ptr, "--help") == 0)
-		    print_usage(argv[0]);
-		switch (*ptr) {
-		    case 'v':
-			vflag++;
-			break;
-		    case 'h':
-			print_usage(argv[0]);
-		    default:
-			printf("Unknown argument -%s\n\n", ptr);
-			print_usage(argv[0]);
-			break;
-		}
-	    }
-	} else {
-	    int fail = sync_filesystem(ptr);
-	    if (vflag)
-		printf("%s %s\n", ptr, fail ? "Failure" : "Success");
-	    rc |= fail;
-	    count++;
-	}
+        char *ptr = argv[arg];
+        if (*ptr == '-') {
+            while (*(++ptr) != '\0') {
+                if (strcmp(ptr, "--help") == 0)
+                    print_usage(argv[0]);
+                switch (*ptr) {
+                    case 'v':
+                        vflag++;
+                        break;
+                    case 'h':
+                        print_usage(argv[0]);
+                    default:
+                        printf("Unknown argument -%s\n\n", ptr);
+                        print_usage(argv[0]);
+                        break;
+                }
+            }
+        } else {
+            int fail = sync_filesystem(ptr);
+            if (vflag)
+                printf("%s %s\n", ptr, fail ? "Failure" : "Success");
+            rc |= fail;
+            count++;
+        }
     }
     if (count == 0)
-	exit(sync_all());
+        exit(sync_all());
 
     exit(rc);
 }

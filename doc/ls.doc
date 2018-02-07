@@ -10,39 +10,83 @@ same command line arguments.
 
 
 Usage:
-        ls [<options>] <filename> [<filename>...]
+    ls [<options>] <filename> [<filename>...]
 
 Where 
-        device is the optional device where the file exists
+    device is the optional device where the file exists
 
-        filename is the name of the file to show
+    filename is the name of the file to show
 
-
-        You may specify as many filenames as you want to list.
+    You may specify as many filenames as you want to list.
 
 
 Briefly, the command line options this program supports are:
 
-        -a is show files which begin with a '.'
-        -A is show AmigaDOS (not UNIX) permissions
-        -c is sort by last inode change time
-        -d is do not examine directory contents
-        -f is do not sort, show all entries
-        -F is add indicator for file type
-        -g is show file groups
-        -h is show this help
-        -i is show file inode number
-        -l is show long listing
-        -n is show numerical userid and group
-        -p is put slash after directory names
-        -r is reverse sort order
-        -R is show recursive listing of directory
-        -s is show file sizes in blocks
-        -t is sort by last modify time
-        -T is show full time (yyyy-mm-dd hh:mm:ss)
-        -u is sort by last access time
-        -1 is list one file per line
- 
+    -a is show files which begin with a '.'
+    -A is show AmigaDOS (not UNIX) permissions
+    -c is sort by last inode change time
+    -d is do not examine directory contents
+    -f is do not sort, show all entries
+    -F is add indicator for file type
+    -g is show file groups
+    -h is show human-readable sizes
+    -H is show this help
+    -i is show file inode number
+    -l is show long listing
+    -n is show numerical userid and group
+    -p is put slash after directory names
+    -r is reverse sort order
+    -R is show recursive listing of directory
+    -s is show file sizes in blocks
+    -S is sort by file size
+    -t is sort by last modify time
+    -T is show full time (yyyy-mm-dd hh:mm:ss)
+    -u is sort by last access time
+    -1 is list one file per line
+
+Examples
+    1> ls -lh
+    -rwxrwxrwx root     1.5K Jan 31 20:50 DMakefile 
+    -rwxrwxrwx root     1.3K Feb  5 01:04 ln.c 
+    -rwxrwxrwx root      470 Jan  7 13:49 Makefile.vc 
+    drwxrwxrwx root     4.0K Feb  5 01:49 obj 
+
+    1> ls -lS bffs:bigfiles
+    -rwxr-xr-x root    2100000000 Feb  6 11:18 2G-file
+    -rwxr-xr-x root      10430464 Feb  6 10:47 10M-file
+    -rwxr-xr-x root       9972736 Feb  6 10:56 9.9M_file
+    -rwxr-xr-x root       1001472 Feb  6 11:24 1M
+    -rwxr-xr-x root        995328 Feb  6 11:31 999k
+    -rwxr-xr-x root         89088 Feb  6 12:24 89k
+    -rwxr-xr-x root         10022 Feb  6 10:02 _small
+    -rwxr-xr-x root             1 Feb  6 10:01 _onebyte
+
+    1> ls -l bffs:bigfiles/_*
+    -rwxr-xr-x root        1 Feb  6 10:01 _onebyte
+    -rwxr-xr-x root    10022 Feb  6 10:02 _small
+
+
+Files
+    A user name mapping file is located in the following order:
+        ENV:passwd
+        S:passwd
+        DEVS:passwd
+        INET:db/passwd
+    A group name mapping file is located in the following order:
+        ENV:group
+        S:group
+        DEVS:group
+        INET:db/group
+
+    Entries may be separated by vertical bar (|) or colon (:)
+
+    Example passwd file:
+        root|*|65535|6535|Root|sys:|shell
+        cdh|*|1640|10|Chris Hooper|sys:|shell
+    Example group file:
+        sys:2
+        bin:3
+
 ------------------------------------------------------------------------
 
 

@@ -45,14 +45,11 @@
 #ifndef _UFS_FS_H
 #define	_UFS_FS_H
 
+#include "stdint.h"
+
 #define howmany(x, y)   (((x)+((y)-1))/(y))
 #define quad            quad_t
-typedef unsigned char	uint8_t;
-typedef int		int32_t;
-typedef unsigned int	uint32_t;
 typedef struct          _quad_t { long val[2]; } quad_t;
-typedef long		int64_t[2];
-typedef unsigned long   uint64_t[2];
 typedef short           dev_t;
 typedef long            off_t;
 typedef long            daddr_t;

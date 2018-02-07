@@ -13,58 +13,58 @@ you don't know what you are doing, I don't recommend you use this program.
 
 
 Usage:
-	rdb <disk.device> <unit> [<option> | <keyword>=<value> ...]
+    rdb <disk.device> <unit> [<option> | <keyword>=<value> ...]
 
 Where 
-	disk.device is the physical disk device driver
+    disk.device is the physical disk device driver
 
-	unit is the physical disk unit on that driver
+    unit is the physical disk unit on that driver
 
-	option can be any of:
-		-rigid = edit fields in the Rigid Disk Block
-		-part NAME = modify partition table parameters of NAME
-		-newpart NAME = add new partition NAME to the RDB
-		-promote NAME = make partition NAME first to be mounted
-		-extract DOSTYPE = extract filesystem to a file 
-		-avail = report next available block in RDB
-		-seglist = show seglist addresses for filesystems
-		-help = give more help
-		
-	keyword can be any of:
-	    Fields in the RDB disk header
-		HostID BlockBytes RigidFlags BadBlockList PartitionList
-		FileSysHeaderList DriveInit Cylinders Sectors Heads
-		Interleave Park WritePreComp ReducedWrite StepRate
-		RDBBlocksLo RDBBlocksHi LoCylinder HiCylinder CylBlocks
-		AutoParkSeconds DiskVendor DiskProduct DiskRevision
-		ControllerVendor ControllerProduct ControllerRev
-	    Fields in the Partition header
-		Next Flags DevFlags DriveName Surfaces BlocksPerTrack
-		Reserved PreAlloc Interleave LowCyl HighCyl NumBuffers
-		BufMemType MaxTransfer Mask BootPri DosType
+    option can be any of:
+        -rigid = edit fields in the Rigid Disk Block
+        -part NAME = modify partition table parameters of NAME
+        -newpart NAME = add new partition NAME to the RDB
+        -promote NAME = make partition NAME first to be mounted
+        -extract DOSTYPE = extract filesystem to a file 
+        -avail = report next available block in RDB
+        -seglist = show seglist addresses for filesystems
+        -help = give more help
+        
+    keyword can be any of:
+        Fields in the RDB disk header
+            HostID BlockBytes RigidFlags BadBlockList PartitionList
+            FileSysHeaderList DriveInit Cylinders Sectors Heads
+            Interleave Park WritePreComp ReducedWrite StepRate
+            RDBBlocksLo RDBBlocksHi LoCylinder HiCylinder CylBlocks
+            AutoParkSeconds DiskVendor DiskProduct DiskRevision
+            ControllerVendor ControllerProduct ControllerRev
+        Fields in the Partition header
+            Next Flags DevFlags DriveName Surfaces BlocksPerTrack
+            Reserved PreAlloc Interleave LowCyl HighCyl NumBuffers
+            BufMemType MaxTransfer Mask BootPri DosType
 
 
 Lackage:
-	The program is able to dump filesystem handlers from the
-	rdb area to a regular DOS file.  It should also allow
-	transfers in the opposite direction.  ie: Installation of
-	a new filesystem handler in the rdb area.  It doesn't allow
-	this today.
+    The program is able to dump filesystem handlers from the
+    rdb area to a regular DOS file.  It should also allow
+    transfers in the opposite direction.  ie: Installation of
+    a new filesystem handler in the rdb area.  It doesn't allow
+    this today.
 
 
 Coolness:
-	rdb is able to repair damaged RDB areas (well, it can fix
-	the checksum on RDB blocks for you).
+    rdb is able to repair damaged RDB areas (well, it can fix
+    the checksum on RDB blocks for you).
 
-	Parameters to rdb may appear in any order and are case-
-	insensitive.  Also, the "=" is optional for settings. Rdb
-	will ask before making any changes to your disk structure.
+    Parameters to rdb may appear in any order and are case-
+    insensitive.  Also, the "=" is optional for settings. Rdb
+    will ask before making any changes to your disk structure.
 
 
 Example:
-	You want to change the boot priority of DH0: on your machine
-	using scsi.device, unit 6
-		rdb scsi.device 6 -part DH0 bootpri=10
+    You want to change the boot priority of DH0: on your machine
+    using scsi.device, unit 6
+        rdb scsi.device 6 -part DH0 bootpri=10
 
 ------------------------------------------------------------------------
 

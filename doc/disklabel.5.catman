@@ -82,10 +82,10 @@ DESCRIPTION
              char    d_packname[16];         /* pack identifier */
      #else
              union {
-                     char    un_d_packname[16];      /* pack identifier */
+                     char    un_d_packname[16]; /* pack identifier */
                      struct {
-                             char *un_d_boot0;       /* primary bootstrap name */
-                             char *un_d_boot1;       /* secondary bootstrap name */
+                             char *un_d_boot0;  /* primary bootstrap name */
+                             char *un_d_boot1;  /* secondary bootstrap name */
                      } un_b;
              } d_un;
 
@@ -140,7 +140,7 @@ DESCRIPTION
              u_long  d_trkseek;      /* track-to-track seek, usec */
              u_long  d_flags;        /* generic flags */
      #define NDDATA 5
-             u_long  d_drivedata[NDDATA];    /* drive-type specific information */
+             u_long  d_drivedata[NDDATA]; /* drive-type specific information */
      #define NSPARE 5
              u_long  d_spare[NSPARE];        /* reserved for future use */
              u_long  d_magic2;       /* the magic number (again) */
@@ -152,9 +152,9 @@ DESCRIPTION
              u_long  d_sbsize;       /* max size of fs superblock, bytes */
              struct  partition {     /* the partition table */
                      u_long  p_size; /* number of sectors in partition */
-                     u_long  p_offset;       /* starting sector */
-                     u_long  p_fsize;        /* filesystem basic fragment size */
-                     u_char  p_fstype;       /* filesystem type, see below */
+                     u_long  p_offset;    /* starting sector */
+                     u_long  p_fsize;     /* filesystem basic fragment size */
+                     u_char  p_fstype;    /* filesystem type, see below */
                      u_char  p_frag; /* filesystem fragments per block */
                      u_short p_cpg;  /* filesystem cylinders per group */
              } d_partitions[MAXPARTITIONS];  /* actually may be more */

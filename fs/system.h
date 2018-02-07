@@ -22,23 +22,23 @@
 #define _SYSTEM_H
 
 typedef struct {
-        ULONG   fa_type;
-        ULONG   fa_mode;
-        ULONG   fa_nlink;
-        ULONG   fa_uid;
-        ULONG   fa_gid;
-        ULONG   fa_size;
-        ULONG   fa_blocksize;
-        ULONG   fa_rdev;
-        ULONG   fa_blocks;
-        ULONG   fa_fsid;
-        ULONG   fa_fileid;
-        ULONG   fa_atime;
-        ULONG   fa_atime_us;
-        ULONG   fa_mtime;
-        ULONG   fa_mtime_us;
-        ULONG   fa_ctime;
-        ULONG   fa_ctime_us;
+    ULONG   fa_type;
+    ULONG   fa_mode;
+    ULONG   fa_nlink;
+    ULONG   fa_uid;
+    ULONG   fa_gid;
+    ULONG   fa_size;
+    ULONG   fa_blocksize;
+    ULONG   fa_rdev;
+    ULONG   fa_blocks;
+    ULONG   fa_fsid;
+    ULONG   fa_fileid;
+    ULONG   fa_atime;
+    ULONG   fa_atime_us;
+    ULONG   fa_mtime;
+    ULONG   fa_mtime_us;
+    ULONG   fa_ctime;
+    ULONG   fa_ctime_us;
 } fileattr_t;
 
 /*
@@ -46,40 +46,33 @@ typedef struct {
  * NFFIFO and higher come from NetBSD's nfsproto.h header.
  */
 typedef enum {
-        NFNON = 0,
-        NFREG = 1,
-        NFDIR = 2,
-        NFBLK = 3,
-        NFCHR = 4,
-        NFLNK = 5,
-        NFSOCK = 6,
-        NFFIFO = 7,
-        NFATTRDIR = 8,
-        NFNAMEDATTR = 9,
+    NFNON = 0,
+    NFREG = 1,
+    NFDIR = 2,
+    NFBLK = 3,
+    NFCHR = 4,
+    NFLNK = 5,
+    NFSOCK = 6,
+    NFFIFO = 7,
+    NFATTRDIR = 8,
+    NFNAMEDATTR = 9,
 } fileattr_type_t;
 
 extern char *volumename;
-extern int   og_perm_invert;  /* invert permissions on other/group */
 
 void NewVolNode(void);
 void RemoveVolNode(void);
 void close_files(void);
-void truncate_file(struct BFFSfh *fileh);
+void truncate_file(BFFSfh_t *fileh);
 int  ResolveColon();
 int  print_stats();
 int  print_hash();
-void FillInfoBlock();
-void FillAttrBlock(fileattr_t *attr, struct icommon *finode);
 int  open_filesystem(void);
 void close_filesystem(void);
 
-void UnNameHandler(void);
-void NameHandler(const char *name);
-void InitStats(void);
-void FillInfoBlock(FileInfoBlock_3_t *fib, struct BFFSLock *lock,
-                   struct icommon *finode, struct direct *dir_ent);
-ULONG parent_parse(struct BFFSLock *lock, char *path, char **name);
-ULONG path_parse(struct BFFSLock *lock, char *path);
-struct BFFSLock *CreateLock(ULONG key, int mode, ULONG pinum, ULONG poffset);
+void stats_init(void);
+ULONG parent_parse(BFFSLock_t *lock, char *path, char **name);
+ULONG path_parse(BFFSLock_t *lock, char *path);
+BFFSLock_t *CreateLock(ULONG key, int mode, ULONG pinum, ULONG poffset);
 
 #endif /* _SYSTEM_H */

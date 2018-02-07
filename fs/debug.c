@@ -27,36 +27,35 @@
 
 #ifdef DEBUG
 
-#define	DEBUG
-#define	DEBUG1
+#define DEBUG
+#define DEBUG1
 #define DEBUG2
 
 #define STRING_LEN 256
 
-struct dbMessage  {
+typedef struct {
     struct Message header;
-    char buf[STRING_LEN];
-};
+    char           buf[STRING_LEN];
+} dbmessage_t;
 
 int debug_level = 0;
 
 static void
 debug(int this_level, const char *fmt, va_list va)
 {
-    struct MsgPort   *dbport;
-    struct dbMessage *message;
+    struct MsgPort *dbport;
+    dbmessage_t    *message;
 
     if (debug_level > this_level)
-	return;
+        return;
 
     Forbid();
     if ((dbport = (struct MsgPort *) FindPort("BFFSDebug")) != NULL) {
-	message = (struct dbMessage *)
-		AllocMem(sizeof(struct dbMessage), MEMF_PUBLIC);
-	if (message != NULL) {
-	    vsprintf(message->buf, fmt, va);
-	    PutMsg(dbport, &message->header);
-	}
+        message = (dbmessage_t *) AllocMem(sizeof (dbmessage_t), MEMF_PUBLIC);
+        if (message != NULL) {
+            vsprintf(message->buf, fmt, va);
+            PutMsg(dbport, &message->header);
+        }
     }
     Permit();
 }

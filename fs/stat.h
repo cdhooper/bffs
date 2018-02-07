@@ -22,14 +22,14 @@
 #define _STAT_H
 
 /*
- *	Update statistics only when FAST mode is off
+ * Update statistics only when FAST mode is off
  */
 #ifdef FAST
-#define UPSTAT(x) /* (x) */
-#define UPSTATVALUE(x,y) /* (x,y) */
+#define UPSTAT(x)         /* (x) */
+#define UPSTATVALUE(x, y) /* (x, y) */
 #else
-#define UPSTAT(x) stat->x++
-#define UPSTATVALUE(x,y) stat->x += y
+#define UPSTAT(x)         stat->x++
+#define UPSTATVALUE(x, y) stat->x += y
 #endif
 
 

@@ -21,19 +21,21 @@
 #ifndef _INODE_H
 #define _INODE_H
 
-/* Return inode structure from cache (for read) */
-struct icommon *inode_read(int inum);
+icommon_t *inode_read(int inum);    /* inode struct from cache (for read) */
+icommon_t *inode_modify(int inum);  /* inode struct from cache (for write) */
 
-/* Return inode struct from cache (for write) */
-struct icommon *inode_modify(int inum);
-
-int inum_new(int parent, int type);
+int  inum_new(int parent, int type);
 void inum_free(ULONG inum);
 void inum_sane(ULONG inum, int type);
-int is_writable(ULONG inum);
-int is_readable(ULONG inum);
+int  is_writable(ULONG inum);
+int  is_readable(ULONG inum);
 ULONG ridisk_frag(ULONG file_frag_num, ULONG inum);
 ULONG widisk_frag(ULONG file_frag_num, ULONG inum);
 ULONG cidisk_frag(ULONG file_frag_num, ULONG inum, ULONG newblk);
+
+#ifdef BOTHENDIAN
+void adjust_ic_size(icommon_t *inode, int adjust);
+void adjust_ic_blks(icommon_t *inode, int adjust);
+#endif
 
 #endif /* _INODE_H */

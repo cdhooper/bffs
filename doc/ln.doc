@@ -9,20 +9,18 @@ This program acts nearly identical to the UNIX "ln" command.
 
 
 Type:
-	ln [-s] <destination> <source> [<source>...]
+    ln [-s] <destination> <source> [<source>...]
 
 Where
-	-s means create a soft link
-		otherwise, a hard link to the destination is created
+    -s means create a soft link
+        otherwise, a hard link to the destination is created
 
-	destination is the required object which will be pointed to
-		by the link.
+    destination is the required object which will be pointed to by the link.
 
-	source is the name of the link which will point to the
-		destination.
+    source is the name of the link which will point to the destination.
 
-	You are allowed to name as many link names as you want to
-		point at a single destination.
+    You are allowed to name as many link names as you want to point at a
+    single destination.
 
 
 ------------------------------------------------------------------------

@@ -6,9 +6,10 @@
 
 /*
  * This structure was created purely from examination of a BSD boot sector.
+ * It was later updated struct info from the BSD 4.4 disklabel header file.
  * I guarantee nothing.
  */
-struct bsd44_label {
+typedef struct {
     u_long  bb_magic;
     short   bb_dtype;
     short   bb_dsubtype;
@@ -50,6 +51,6 @@ struct bsd44_label {
         u_char  fs_frag;       /* Filesystem frags per block            */
         u_short fs_cpg;        /* Filesystem cylinders per group        */
     } bb_part[MAX_PART];
-};
+} bsd44_label_t;
 
 #endif /* _BSD_LABEL_H */

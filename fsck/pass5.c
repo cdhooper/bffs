@@ -544,7 +544,7 @@ pass5()
 		   fs->fs_cstotal.cs_nifree, fs->fs_cstotal.cs_ndir);
 
 #ifdef UFS_V1
-	if (sblock.fs_flags & FS_FLAGS_UPDATED)
+	if (sblock.fs_flags & FS_FLAGS_UPDATED) {
 	    if ((cstotal.cs_ndir !=
 		 fs->fs_new_cstotal.cs_ndir[is_big_endian]) ||
 		(cstotal.cs_nbfree !=
@@ -558,19 +558,21 @@ pass5()
 			    cstotal.cs_nffree, cstotal.cs_nbfree,
 			    cstotal.cs_nifree, cstotal.cs_ndir);
 		if (dofix(&idesc[0], "FREE BLK COUNT(S) WRONG IN SUPERBLK")) {
-		    cstotal.cs_ndir = fs->fs_new_cstotal.cs_ndir[is_big_endian];
-		    cstotal.cs_nbfree =
-			fs->fs_new_cstotal.cs_nbfree[is_big_endian];
-		    cstotal.cs_nifree =
-			fs->fs_new_cstotal.cs_nifree[is_big_endian];
-		    cstotal.cs_nffree =
-			fs->fs_new_cstotal.cs_nffree[is_big_endian];
+		    bcopy((char *)&cstotal, (char *)&fs->fs_cstotal,
+		          sizeof *cs);
+		    fs->fs_new_cstotal.cs_ndir[is_big_endian] = cstotal.cs_ndir;
+		    fs->fs_new_cstotal.cs_nbfree[is_big_endian] =
+			cstotal.cs_nbfree;
+		    fs->fs_new_cstotal.cs_nifree[is_big_endian] =
+			cstotal.cs_nifree;
+		    fs->fs_new_cstotal.cs_nffree[is_big_endian] =
+			cstotal.cs_nffree;
 		    fs->fs_ronly = 0;
 		    fs->fs_fmod = 0;
 		    sbdirty();
 		}
 	    }
-	else if ((sblock.fs_flags & FS_FLAGS_UPDATED) == 0)
+	} else if ((sblock.fs_flags & FS_FLAGS_UPDATED) == 0)
 #endif
 	if (bcmp((char *)&cstotal, (char *)&fs->fs_cstotal, sizeof *cs) != 0) {
 	    if (verbose)

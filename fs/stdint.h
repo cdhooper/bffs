@@ -18,21 +18,16 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _SUPERBLOCK_H
-#define _SUPERBLOCK_H
+#ifndef _STDINT_H
+#define _STDINT_H
 
-#define MAXFRAG         8     /* Superblock frsum count (max frags/block) */
+typedef char            int8_t;
+typedef unsigned char   uint8_t;
+typedef short           int16_t;
+typedef unsigned short  uint16_t;
+typedef int             int32_t;
+typedef unsigned int    uint32_t;
+typedef long            int64_t[2];
+typedef unsigned long   uint64_t[2];
 
-#include "ufs/fs.h"
-
-#define BOOT_BLOCK      0     /* Physical position of disk boot block */
-#define SUPER_BLOCK     16    /* Position of superblock in fs */
-
-#define FBSIZE bsize          /* FS basic block size */
-#define FSIZE  fsize          /* FS fragment block size */
-extern long bsize;            /* FS basic block size */
-extern long fsize;            /* FS fragment block size */
-
-extern struct fs *superblock; /* current superblock */
-
-#endif /* _SUPERBLOCK_H */
+#endif

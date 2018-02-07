@@ -1,8 +1,8 @@
-/*	$NetBSD: ffs_tables.c,v 1.2 1994/06/29 06:46:35 cgd Exp $	*/
+/*      $NetBSD: ffs_tables.c,v 1.2 1994/06/29 06:46:35 cgd Exp $       */
 
 /*
  * Copyright (c) 1982, 1986, 1993
- *	The Regents of the University of California.  All rights reserved.
+ *      The Regents of the University of California.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -14,8 +14,8 @@
  *    documentation and/or other materials provided with the distribution.
  * 3. All advertising materials mentioning features or use of this software
  *    must display the following acknowledgement:
- *	This product includes software developed by the University of
- *	California, Berkeley and its contributors.
+ *      This product includes software developed by the University of
+ *      California, Berkeley and its contributors.
  * 4. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
@@ -32,7 +32,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- *	@(#)ffs_tables.c	8.1 (Berkeley) 6/11/93
+ *      @(#)ffs_tables.c        8.1 (Berkeley) 6/11/93
  */
 
 #include <sys/param.h>
@@ -54,7 +54,7 @@ int inside[9] = {
  *
  * used as:
  * if ((1 << (size - 1)) & fragtbl[fs->fs_frag][map] {
- *	at least one fragment of the indicated size is available
+ *      at least one fragment of the indicated size is available
  * }
  *
  * These tables are used by the scanc instruction on the VAX to

@@ -22,8 +22,8 @@
 #define _TABLE_H
 
 /* check for inhibit? */
-#define NOCHK		0
-#define CHECK		1
+#define NOCHK           0
+#define CHECK           1
 
 typedef void (*packet_func_t)(void);
 

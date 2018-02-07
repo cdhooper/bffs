@@ -28,8 +28,10 @@ BEGIN {
 	    break;
     }
     while (docline()) {
-	if (LINE == "")
+	if (LINE == "") {
+            print LINE;
 	    break;
+        }
 	SECTION=substr(LINE, 23);
 	SEARCH=toupper(SECTION);
 	gsub(" ", "", SEARCH);

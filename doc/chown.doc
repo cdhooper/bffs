@@ -9,20 +9,20 @@ This program acts nearly identical to the Unix command of the same name.
 
 
 Usage:
-        chown owner.group <filename> [<filename>...]
+    chown owner.group <filename> [<filename>...]
 
 Where 
-        owner is the uid of the file owner
+    owner is the uid of the file owner
 
-        group is the gid of the file group
+    group is the gid of the file group
 
-        filename is the name of the file to modify
+    filename is the name of the file to modify
 
 
-        You are allowed to name as many names as you want to
-                change to the specified group.
+    You are allowed to name as many names as you want to
+            change to the specified group.
 
-        This command does not currently handle recursive operation.
+    This command does not currently handle recursive operation.
 
 ------------------------------------------------------------------------
 

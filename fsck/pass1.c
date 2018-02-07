@@ -64,6 +64,9 @@ pass1()
 	 * Set file system reserved blocks in used block map.
 	 */
 	for (c = 0; c < sblock.fs_ncg; c++) {
+#ifdef AMIGA
+		chkabort();  /* Check for ^C entered */
+#endif
 		cgd = cgdmin(&sblock, c);
 		if (c == 0) {
 			i = cgbase(&sblock, c);
@@ -83,6 +86,9 @@ pass1()
 	n_files = n_blks = 0;
 	resetinodebuf();
 	for (c = 0; c < sblock.fs_ncg; c++) {
+#ifdef AMIGA
+		chkabort();  /* Check for ^C entered */
+#endif
 		for (i = 0; i < sblock.fs_ipg; i++, inumber++) {
 			if (inumber < ROOTINO)
 				continue;

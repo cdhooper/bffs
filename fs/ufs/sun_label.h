@@ -7,7 +7,7 @@
  * This structure was created purely from examination of a Sun boot sector.
  * I guarantee nothing.
  */
-struct sun_label {
+typedef struct {
     char    bb_mfg_label[416]; /* Written by label cmd in format        */
     u_long  bb_reserved1;      /* Dunno                                 */
     u_short bb_rpm;            /* Disk rotational speed per minute      */
@@ -28,6 +28,6 @@ struct sun_label {
 
     u_short bb_magic;          /* magic number - 0xDABE                 */
     u_short bb_csum;           /* checksum                              */
-};
+} sun_label_t;
 
 #endif /* _SUN_LABEL_H */

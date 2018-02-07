@@ -54,6 +54,8 @@ struct	odirect {
 	char	d_name[MAXNAMLEN + 1];	/* name must be no longer than this */
 };
 
+typedef struct direct direct_t;
+
 
 /*
  * File types

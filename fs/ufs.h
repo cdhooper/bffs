@@ -21,45 +21,44 @@
 #ifndef _UFS_H
 #define _UFS_H
 
-#define ID_BFFS_DISK	(0x42464653L)  /* 'BFFS' filesystem */
+#define ID_BFFS_DISK    (0x42464653L)  /* 'BFFS' filesystem */
 #if 0
-#define ID_BFFS_DISK	ID_FFS_DISK
-#define ID_BFFS_DISK	ID_OFS_DISK
+#define ID_BFFS_DISK    ID_FFS_DISK
+#define ID_BFFS_DISK    ID_OFS_DISK
 #endif
 
-#define STARTUPMSG	((struct FileSysStartupMsg *) BTOC(DevNode->dn_Startup))
-#define ENVIRONMENT	((struct DosEnvec *) BTOC(STARTUPMSG->fssm_Environ))
+#define STARTUPMSG      ((struct FileSysStartupMsg *) BTOC(DevNode->dn_Startup))
+#define ENVIRONMENT     ((struct DosEnvec *) BTOC(STARTUPMSG->fssm_Environ))
 
-#define DISK_DEVICE	((char *) BTOC(STARTUPMSG->fssm_Device)) + 1
-#define DISK_UNIT	STARTUPMSG->fssm_Unit
-#define DISK_FLAGS	STARTUPMSG->fssm_Flags
+#define DISK_DEVICE     ((char *) BTOC(STARTUPMSG->fssm_Device)) + 1
+#define DISK_UNIT       STARTUPMSG->fssm_Unit
+#define DISK_FLAGS      STARTUPMSG->fssm_Flags
 
-#define BOOT_BLOCK	0	/* Physical position of disk boot block */
-#define SUPER_BLOCK	16	/* Position of superblock in fs         */
-#define MAX_PART	8	/* Number disk partitions supported     */
+#define BOOT_BLOCK      0         /* Physical position of disk boot block */
+#define SUPER_BLOCK     16        /* Position of superblock in fs         */
+#define MAX_PART        8         /* Number disk partitions supported     */
 
 
 typedef struct {
-	struct	Task *sigTask;
-	ULONG	sigMask;
+    struct Task *sigTask;
+    ULONG        sigMask;
 } intdata_t;
-extern  intdata_t IntData;
+extern intdata_t IntData;
 
-extern	int	bsd44fs;		/* 0 = 4.3 BSD, 1 = 4.4 BSD	  */
-extern	int	fs_partition;		/* current partition number	  */
-extern	struct	fs *superblock;		/* current superblock		  */
-extern	struct	IOExtTD *trackIO;	/* pointer to trackdisk IORequest */
-extern	ULONG	phys_sectorsize;	/* physical disk sector size, env */
-extern	ULONG	psectoffset;		/* disk partition start sector    */
-extern	ULONG	psectmax;		/* disk partition end sector      */
-extern	ULONG	tranmask;		/* device DMA transfer mask	  */
-
-extern	ULONG	pfragshift;		/* pointers in a frag		  */
-extern	ULONG	pfragmask;		/* mask current pointer in frag	  */
-extern	ULONG	fblkshift;		/* frags in a block		  */
-extern	ULONG	fblkmask;		/* mask current frag in block	  */
-extern  ULONG	fs_lfmask;		/* quick mask, bits flipped ala q */
-extern  ULONG	fs_lbmask;		/* quick mask, bits flipped ala q */
+extern struct fs *superblock;    /* current filesystem superblock  */
+extern struct IOExtTD *trackIO;  /* pointer to trackdisk IORequest */
+extern int   bsd44fs;            /* 0 = 4.3 BSD, 1 = 4.4 BSD       */
+extern int   fs_partition;       /* current partition number       */
+extern ULONG phys_sectorsize;    /* physical disk sector size, env */
+extern ULONG psectoffset;        /* disk partition start sector    */
+extern ULONG psectmax;           /* disk partition end sector      */
+extern ULONG tranmask;           /* device DMA transfer mask       */
+extern ULONG pfragshift;         /* pointers in a frag             */
+extern ULONG pfragmask;          /* mask current pointer in frag   */
+extern ULONG fblkshift;          /* frags in a block               */
+extern ULONG fblkmask;           /* mask current frag in block     */
+extern ULONG fs_lfmask;          /* quick mask, bits flipped ala q */
+extern ULONG fs_lbmask;          /* quick mask, bits flipped ala q */
 
 #ifndef NULL
 #define NULL 0
@@ -71,10 +70,10 @@ int  open_dchange(void);
 void close_dchange(int normal);
 void motor_off(void);
 void motor_on(void);
-int  superblock_flush(void);
 void close_device(void);
 int  open_device(void);
 int  find_superblock(void);
+int  superblock_flush(void);
 void superblock_destroy(void);
 int  data_read(void *buf, ULONG num, ULONG size);
 int  data_write(void *buf, ULONG num, ULONG size);

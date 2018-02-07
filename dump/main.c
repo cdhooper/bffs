@@ -33,7 +33,7 @@
  * SUCH DAMAGE.
  */
 
-const char *version = "\0$VER: dump 1.6 (19-Jan-2018) © UCB";
+const char *version = "\0$VER: dump 1.6 (08-Feb-2018) © UCB";
 
 #ifndef lint
 static char copyright[] =

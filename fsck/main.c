@@ -31,7 +31,7 @@
  * SUCH DAMAGE.
  */
 
-const char *version = "\0$VER: fsck 1.13 (19-Jan-2018) © UCB";
+const char *version = "\0$VER: fsck 1.13 (08-Feb-2018) © UCB";
 
 #ifndef lint
 static char copyright[] =

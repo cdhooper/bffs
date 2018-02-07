@@ -12,8 +12,8 @@
  *    documentation and/or other materials provided with the distribution.
  * 3. All advertising materials mentioning features or use of this software
  *    must display the following acknowledgement:
- *	This product includes software developed by the University of
- *	California, Berkeley and its contributors.
+ *      This product includes software developed by the University of
+ *      California, Berkeley and its contributors.
  * 4. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
@@ -32,7 +32,7 @@
  */
 
 #if defined(LIBC_SCCS) && !defined(lint)
-static char sccsid[] = "@(#)disklabel.c	5.17 (Berkeley) 2/23/91";
+static char sccsid[] = "@(#)disklabel.c 5.17 (Berkeley) 2/23/91";
 #endif /* LIBC_SCCS and not lint */
 
 #define DKTYPENAMES
@@ -46,13 +46,13 @@ static char sccsid[] = "@(#)disklabel.c	5.17 (Berkeley) 2/23/91";
 #include <err.h>
 #endif
 
-static	char *dgetstr();
-static	dgetent();
-static	dnamatch();
-static	dgetnum();
-static	dgetflag();
-static	gettype();
-static	error();
+static  char *dgetstr();
+static  dgetent();
+static  dnamatch();
+static  dgetnum();
+static  dgetflag();
+static  gettype();
+static  error();
 char bootarea[BBSIZE];
 
 /* next block added by cdh */
@@ -66,16 +66,16 @@ struct disklabel *
 getdiskbyname(char *name)
 /* const removed by cdh */
 {
-	static struct	disklabel disk;
-	static char	boot[BUFSIZ];
-	char	*buf;
-	char	*localbuf;
-	char	*cp, *cq;	/* can't be register */
-	register struct	disklabel *dp = &disk;
+	static struct   disklabel disk;
+	static char     boot[BUFSIZ];
+	char    *buf;
+	char    *localbuf;
+	char    *cp, *cq;       /* can't be register */
+	register struct disklabel *dp = &disk;
 	register struct partition *pp;
-	char	p, max, psize[3], pbsize[3],
+	char    p, max, psize[3], pbsize[3],
 		pfsize[3], poffset[3], ptype[3];
-	u_long	*dx;
+	u_long  *dx;
 
 	buf = (char *) malloc(BUFSIZ);
 	if (buf == NULL) {
@@ -181,9 +181,9 @@ getdiskbyname(char *name)
 
 #include <ctype.h>
 
-static	char *tbuf;
-static	char *dskip();
-static	char *ddecode();
+static  char *tbuf;
+static  char *dskip();
+static  char *ddecode();
 
 /*
  * Get an entry for disk name in buffer bp,
@@ -204,7 +204,7 @@ dgetent(bp, name)
 	tf = open(_PATH_DISKTAB, 0);
 	if (tf < 0) {
 		perror(_PATH_DISKTAB);
-/*		error(errno); */
+/*              error(errno); */
 		return (-1);
 	}
 
@@ -221,7 +221,7 @@ dgetent(bp, name)
 				cnt = read(tf, ibuf, BUFSIZ); /* disktab file */
 				if (cnt <= 0) {
 					perror("read");
-/*					error(errno); */
+/*                                      error(errno); */
 					close(tf);
 					free(ibuf);
 					return (0);
@@ -304,7 +304,7 @@ dskip(bp)
 /*
  * Return the (numeric) option id.
  * Numeric options look like
- *	li#80
+ *      li#80
  * i.e. the option string is separated from the numeric value by
  * a # character.  If the option is not found we return -1.
  * Note that we handle octal numbers beginning with 0.
@@ -365,7 +365,7 @@ dgetflag(id)
 /*
  * Get a string valued option.
  * These are given as
- *	cl=^Z
+ *      cl=^Z
  * Much decoding is done on the strings, and the strings are
  * placed in area, which is a ref parameter which is updated.
  * No checking on area overflow.
@@ -495,19 +495,19 @@ int readlabel(lpp)
 	    goto autosize_partition;
 
 	bcopy(lp, lpp, sizeof(struct disklabel));
-	return(0);
+	return (0);
 
 	autosize_partition:
 	force_autolabel = 0;
 #ifdef AMIGA
 	if (dio_label(lpp))
 		if (file_label(lpp))
-			return(1);
-	return(0);
+			return (1);
+	return (0);
 #else
 	if (file_label(lpp))
-		return(1);
-	return(0);
+		return (1);
+	return (0);
 #endif
 }
 

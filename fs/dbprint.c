@@ -30,30 +30,33 @@
 #define STRING_LEN 256
 #define BFFSDEBUG "BFFSDebug"
 
-const char *version = "\0$VER: dbprint 1.1 (19-Jan-2018) © Chris Hooper";
+const char *version = "\0$VER: dbprint 1.1 (08-Feb-2018) © Chris Hooper";
 
 /*  Define our own message structure... */
-struct dbMessage  {
-    struct Message msg;
-    char buf[STRING_LEN];
-};
+typedef struct {
+    struct Message header;
+    char           buf[STRING_LEN];
+} dbmessage_t;
+
+static void
+drain_messages(void)
+{
+    dbmessage_t    *message;
+    struct MsgPort *incoming;
+
+    Forbid();
+    while (incoming = FindPort(BFFSDEBUG)) {
+        while ((message = (dbmessage_t *) GetMsg(incoming)) != NULL)
+            FreeMem(message, sizeof (dbmessage_t));
+        DeletePort(incoming);
+    }
+    Permit();
+}
 
 int
 break_abort(void)
 {
-    struct dbMessage *message;
-    struct MsgPort   *incoming;
-
-    Forbid();
-    while (incoming = FindPort(BFFSDEBUG)) {
-	while (message = (struct dbMessage *)
-	    GetMsg(incoming))
-	FreeMem(message, sizeof(struct dbMessage));
-	DeletePort(incoming);
-    }
-    Permit();
-
-printf("clean\n");
+    drain_messages();
     exit(0);
 }
 
@@ -68,65 +71,93 @@ output_string(FILE *fp, char *str)
     }
 }
 
+static void
+print_usage(const char *progname)
+{
+    fprintf(stderr, "%s\n"
+            "usage: %s [-fh] [<filename>]\n"
+            "       where -f may be used force open of existing debug port\n"
+            "             -h displays this help text\n"
+            "       if <filename> is specified, it will be used for the log\n",
+            version + 7, progname);
+    exit(1);
+}
+
 int
 main(int argc, char *argv[])
 {
-    struct dbMessage *message;
-    struct MsgPort   *incoming;
-    FILE *fp;
-    ULONG signals;
-    ULONG sigmask;
-    int force = 0;
+    dbmessage_t    *message;
+    struct MsgPort *incoming;
+    FILE           *fp;
+    ULONG           signals;
+    ULONG           sigmask;
+    int             force = 0;
+    int             arg;
+    const char     *filename = NULL;
 
-    if (argc > 1 && strcmp(argv[1], "-f") == 0) {
-	argc--;
-	argv++;
-	force++;
+    for (arg = 1; arg < argc; arg++) {
+        char *ptr = argv[arg];
+        if (*ptr == '-') {
+            while (*(++ptr) != '\0') {
+                switch (*ptr) {
+                    case 'f':
+                        force++;
+                        break;
+                    case 'h':
+                        print_usage(argv[0]);
+                        break;
+                    default:
+                        printf("Error: Unknown argument -%s\n", ptr);
+                        print_usage(argv[0]);
+                        break;
+                }
+            }
+        } else {
+            if (filename != NULL) {
+                printf("Two debug output files specified: \"%s\" and \"%s\"\n",
+                       filename, argv[arg]);
+                print_usage(argv[0]);
+            }
+            filename = argv[arg];
+        }
     }
-    if (argc > 1)
-	fp = fopen(argv[1], "w");
+    if (filename != NULL)
+        fp = fopen(filename, "w");
     else
-	fp = NULL;
+        fp = NULL;
 
     onbreak(break_abort);
     Forbid();
     incoming = FindPort(BFFSDEBUG);
     Permit();
     if (incoming != NULL) {
-	if (!force) {
-	    output_string(fp, "Debug port already open\n");
-	    goto clean_up;
-	}
+        if (!force) {
+            output_string(fp, "Debug port already open\n");
+            goto clean_up;
+        }
     } else {
-	/* Let's create a port that everyone can talk to... */
-	incoming = CreatePort((UBYTE *)BFFSDEBUG, 10L);
-	if (incoming == NULL) {
-	    output_string(fp, "Unable to create debug port\n");
-	    goto clean_up;
-	}
+        /* Let's create a port that everyone can talk to... */
+        incoming = CreatePort((UBYTE *)BFFSDEBUG, 10L);
+        if (incoming == NULL) {
+            output_string(fp, "Unable to create debug port\n");
+            goto clean_up;
+        }
     }
 
     sigmask = (1 << incoming->mp_SigBit) | SIGBREAKF_CTRL_C;
 
     while ((signals = Wait(sigmask)) & ~SIGBREAKF_CTRL_C) {
-	while (message = (struct dbMessage *) GetMsg(incoming)) {
+        while (message = (dbmessage_t *) GetMsg(incoming)) {
             output_string(fp, message->buf);
-	    FreeMem(message, sizeof(struct dbMessage));
-	}
+            FreeMem(message, sizeof (dbmessage_t));
+        }
     }
 
-    Forbid();
-    while (incoming = FindPort(BFFSDEBUG)) {
-	while (message = (struct dbMessage *)
-	    GetMsg(incoming))
-	FreeMem(message, sizeof(struct dbMessage));
-	DeletePort(incoming);
-    }
-    Permit();
+    drain_messages();
 
 clean_up:
-    if (fp)
-	fclose(fp);
+    if (fp != NULL)
+        fclose(fp);
 
     exit(0);
 }

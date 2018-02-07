@@ -12,7 +12,7 @@ an "assign dismount" of the device.
 
 
 Usage:
-	umount <device:>
+    umount <device:>
 
 
 ------------------------------------------------------------------------

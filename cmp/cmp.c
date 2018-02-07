@@ -22,7 +22,7 @@
  * Simple file compare utility.
  */
 
-const char *version = "\0$VER: cmp 1.0 (19-Jan-2018) © Chris Hooper";
+const char *version = "\0$VER: cmp 1.0 (08-Feb-2018) © Chris Hooper";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,11 +33,11 @@ static void
 print_usage(const char *prog)
 {
     fprintf(stderr, "%s %.3s by Chris Hooper on %.11s\n"
-	    "\n"
-	    "This program performs a binary comparison of two files\n"
-	    "Usage: %s <file1> <file2>\n"
-	    "     Exit code will be zero if the files are identical\n",
-	    prog, version + 11, version + 16, prog);
+            "\n"
+            "This program performs a binary comparison of two files\n"
+            "Usage: %s <file1> <file2>\n"
+            "     Exit code will be zero if the files are identical\n",
+            prog, version + 11, version + 16, prog);
     exit(1);
 }
 
@@ -53,34 +53,34 @@ cmp(const char *file1, const char *file2)
     int rc;
 
     if ((fp1 = fopen(file1, "r")) == NULL) {
-	fprintf(stderr, "Failed to open %s\n", file1);
-	if ((fp2 = fopen(file2, "r")) == NULL)
-	    return (0);
-	fclose(fp2);
-	return (-1);
+        fprintf(stderr, "Failed to open %s\n", file1);
+        if ((fp2 = fopen(file2, "r")) == NULL)
+            return (0);
+        fclose(fp2);
+        return (-1);
     }
     if ((fp2 = fopen(file2, "r")) == NULL) {
-	fclose(fp1);
-	fprintf(stderr, "Failed to open %s\n", file2);
-	return (1);
+        fclose(fp1);
+        fprintf(stderr, "Failed to open %s\n", file2);
+        return (1);
     }
     buf1 = malloc(CMP_BLOCK);
     buf2 = malloc(CMP_BLOCK);
     do {
-	size1 = fread(buf1, sizeof (buf1), 1, fp1);
-	size2 = fread(buf2, sizeof (buf2), 1, fp2);
-	if (size1 == 0)
-	    break;
-	while (size1 > 0) {
-	    if (size2 <= 0)
-		break;
-	    size1--;
-	    size2--;
-	    if (buf1[size1] != buf2[size2]) {
-		rc = (buf1[size1] - buf2[size2]);
-		goto cleanup;
-	    }
-	}
+        size1 = fread(buf1, sizeof (buf1), 1, fp1);
+        size2 = fread(buf2, sizeof (buf2), 1, fp2);
+        if (size1 == 0)
+            break;
+        while (size1 > 0) {
+            if (size2 <= 0)
+                break;
+            size1--;
+            size2--;
+            if (buf1[size1] != buf2[size2]) {
+                rc = (buf1[size1] - buf2[size2]);
+                goto cleanup;
+            }
+        }
     } while (size1 == size2);
 
     rc = size1 - size2;
@@ -90,7 +90,7 @@ cleanup:
     fclose(fp1);
     fclose(fp2);
     if (rc != 0)
-	printf("files differ\n");
+        printf("files differ\n");
     return (rc);
 }
 
@@ -98,6 +98,6 @@ int
 main(int argc, char *argv[])
 {
     if ((argc < 3) || (argc > 3))
-	print_usage(argv[0]);
+        print_usage(argv[0]);
     exit(cmp(argv[1], argv[2]) ? 20 : 0);
 }

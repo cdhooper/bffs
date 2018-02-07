@@ -1,20 +1,20 @@
-/* A sample MountList entry for a BFFS floppy  (unit 0) */
+/* A sample MountList entry for a BFFS floppy (Floppy unit 0) */
 
 BF0:
     FileSystem = L:BFFSFileSystem      /* Use BFFSFileSystem in L:        */
     Device = mfm.device   /* You can also use messydisk.device if it's new*/
-    Unit  = 0		  /* Disk unit number - HDToolBox will tell this  */
-    Flags = 0		  /* This is passed to the device                 */
-    Mount = 1		  /* 1 = Mount immediately                        */
-    Stacksize = 512	  /* Required stack is allocated at runtime       */
+    Unit  = 0             /* Disk unit number - HDToolBox will tell this  */
+    Flags = 0             /* This is passed to the device                 */
+    Mount = 1             /* 1 = Mount immediately                        */
+    Stacksize = 512       /* Required stack is allocated at runtime       */
     BlocksPerTrack = 9    /* Disk Sectors/Track - 9 or 18 for floppies    */
-    Surfaces = 2	  /* Disk heads - HDToolBox MUST agree!           */
-    LowCyl   = 0	  /* This MUST be what HDToolBox gives you!       */
-    HighCyl  = 79	  /* This MUST be what HDToolBox gives you!       */
-    Priority = 5	  /* This should be fine at 5 for floppies        */
-    GlobVec  = -1	  /* BCPL device vector - do no change            */
-    Buffers  = 16;	  /* Use 16k for disk buffers                     */
-    Reserved = -1;	  /* Unix partition (-1 = no disk label)          */
+    Surfaces = 2          /* Disk heads - HDToolBox MUST agree!           */
+    LowCyl   = 0          /* This MUST be what HDToolBox gives you!       */
+    HighCyl  = 79         /* This MUST be what HDToolBox gives you!       */
+    Priority = 5          /* This should be fine at 5 for floppies        */
+    GlobVec  = -1         /* BCPL device vector - do no change            */
+    Buffers  = 16;        /* Use 16k for disk buffers                     */
+    Reserved = -1;        /* Unix partition (-1 = no disk label)          */
     PreAlloc = 0;         /* BFFS startup flags, see doc                  */
     DosType  = 0x42464653 /* 'BFFS' - use another type if you want        */
 #
@@ -26,17 +26,17 @@ BF0:
 BH0:
     FileSystem = L:BFFSFileSystem      /* Use BFFSFileSystem in L:        */
     Device = scsi.device  /* This is for 2091.  You may have to change it */
-    Unit  = 0		  /* Disk unit number - HDToolBox will tell this  */
-    Flags = 0		  /* This is passed to the device                 */
-    Mount = 1		  /* 1 = Mount immediately                        */
-    Stacksize = 512	  /* Required stack is allocated at runtime       */
+    Unit  = 0             /* Disk unit number - HDToolBox will tell this  */
+    Flags = 0             /* This is passed to the device                 */
+    Mount = 1             /* 1 = Mount immediately                        */
+    Stacksize = 512       /* Required stack is allocated at runtime       */
     BlocksPerTrack = 17   /* Disk Sectors/Track - HDToolBox MUST agree!   */
-    Surfaces = 4	  /* Disk heads - HDToolBox MUST agree!           */
-    LowCyl   = 0	  /* This MUST be what HDToolBox gives you!       */
-    HighCyl  = 640	  /* This MUST be what HDToolBox gives you!       */
-    Priority = 5	  /* You may want to set this to 10               */
-    GlobVec  = -1	  /* BCPL device vector - do no change            */
-    Buffers  = 50;	  /* Use 50k for disk buffers                     */
+    Surfaces = 4          /* Disk heads - HDToolBox MUST agree!           */
+    LowCyl   = 0          /* This MUST be what HDToolBox gives you!       */
+    HighCyl  = 640        /* This MUST be what HDToolBox gives you!       */
+    Priority = 5          /* You may want to set this to 10               */
+    GlobVec  = -1         /* BCPL device vector - do no change            */
+    Buffers  = 50;        /* Use 50k for disk buffers                     */
     Reserved = -1;        /* Unix partition (-1 = no disk label)          */
     PreAlloc = 0;         /* BFFS startup flags, see doc                  */
     DosType  = 0x42464653 /* 'BFFS' - use another type if you want        */

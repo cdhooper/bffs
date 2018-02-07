@@ -24,7 +24,7 @@
  * file offset each time.
  */
 
-const char *version = "\0$VER: fs_thrash 1.0 (19-Jan-2018) © Chris Hooper";
+const char *version = "\0$VER: fs_thrash 1.0 (08-Feb-2018) © Chris Hooper";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,13 +41,13 @@ const char *version = "\0$VER: fs_thrash 1.0 (19-Jan-2018) © Chris Hooper";
 
 char *path = NULL;
 
-#define	CREATE
-#define	READIT
-#define	APPEND
-#define	MODIFY
-#define	DELETE
-#define	NEWDIR
-#define	STATIT
+#define CREATE
+#define READIT
+#define APPEND
+#define MODIFY
+#define DELETE
+#define NEWDIR
+#define STATIT
 
 
 /* max files is 128 */
@@ -86,382 +86,381 @@ FILE *fp = NULL;
 void
 pickname(void)
 {
-	sprintf(filename, "%s/%d", dirname, (rand() >> 8)  & NAMEMASK);
+    sprintf(filename, "%s/%d", dirname, (rand() >> 8)  & NAMEMASK);
 }
 
 void
 pickdir(void)
 {
-	sprintf(dirname, "%s/%d", path, (rand() >> 8) & DIRMASK);
+    sprintf(dirname, "%s/%d", path, (rand() >> 8) & DIRMASK);
 }
 
 void
 open_it(char *type)
 {
-	pickname();
-	fp = fopen(filename, type);
+    pickname();
+    fp = fopen(filename, type);
 }
 
 int
 close_it(void)
 {
-	int rc = 0;
-	if (fp == NULL)
-		return (0);
-	if (fclose(fp))
-		rc = 0;  /* Not sure why, but I get close errors */
-	fp = NULL;
-	return (rc);
+    int rc = 0;
+    if (fp == NULL)
+        return (0);
+    if (fclose(fp))
+        rc = 0;  /* Not sure why, but I get close errors */
+    fp = NULL;
+    return (rc);
 }
 
 int
 create(void)
 {
-	int rc = 0;
+    int rc = 0;
 #ifdef CREATE
-	size_t len = (rand() >> 4) & BUFMASK;
-	creates++;
-	if (verbose)
-	    write(1, "c", 1);
-	open_it("w");
-	if (fp == NULL) {
-		printf("\nCould not open %s for create\n", filename);
-		return (1);
-	}
-	if (fwrite(wbuffer, len, 1, fp) < 0) {
-		printf("\nWrite %s len %d failed\n", filename, len);
-		rc = 1;
-	} else if (fflush(fp) < 0) {
-		printf("\nfflush %s len %d failed\n", filename, len);
-		rc = 1;
-	}
-	if (close_it()) {
-		printf("\nClose %s failed after write %d\n", filename, len);
-		rc = 1;
-	}
+    size_t len = (rand() >> 4) & BUFMASK;
+    creates++;
+    if (verbose)
+        write(1, "c", 1);
+    open_it("w");
+    if (fp == NULL) {
+        printf("\nCould not open %s for create\n", filename);
+        return (1);
+    }
+    if (fwrite(wbuffer, len, 1, fp) < 0) {
+        printf("\nWrite %s len %d failed\n", filename, len);
+        rc = 1;
+    } else if (fflush(fp) < 0) {
+        printf("\nfflush %s len %d failed\n", filename, len);
+        rc = 1;
+    }
+    if (close_it()) {
+        printf("\nClose %s failed after write %d\n", filename, len);
+        rc = 1;
+    }
 #endif
-	return (rc);
+    return (rc);
 }
 
 int
 modify(void)
 {
-	int rc = 0;
+    int rc = 0;
 #ifdef MODIFY
-	int    pos = (rand() >> 4) & FSIZEMASK;
-	size_t len = (rand() >> 6) & BUFMASK;
-	modifies++;
-	if (verbose)
-	    write(1, "m", 1);
-	open_it("r+");
-	if (fp == NULL)
-		return (0);
-	if (fseek(fp, pos, 0) >= 0) {
-	    if (fwrite(wbuffer, len, 1, fp) < 0) {
-		printf("\nWrite %s %d at %d failed\n", filename, len, pos);
-		rc = 1;
-	    } else if (fflush(fp) < 0) {
-		printf("\nfflush %s len %d failed\n", filename, len);
-		rc = 1;
-	    }
-	}
-	if (close_it()) {
-		printf("\nClose %s failed after write %d at %d\n",
-			filename, len, pos);
-		rc = 1;
-	}
+    int    pos = (rand() >> 4) & FSIZEMASK;
+    size_t len = (rand() >> 6) & BUFMASK;
+    modifies++;
+    if (verbose)
+        write(1, "m", 1);
+    open_it("r+");
+    if (fp == NULL)
+            return (0);
+    if (fseek(fp, pos, 0) >= 0) {
+        if (fwrite(wbuffer, len, 1, fp) < 0) {
+            printf("\nWrite %s %d at %d failed\n", filename, len, pos);
+            rc = 1;
+        } else if (fflush(fp) < 0) {
+            printf("\nfflush %s len %d failed\n", filename, len);
+            rc = 1;
+        }
+    }
+    if (close_it()) {
+        printf("\nClose %s failed after write %d at %d\n",
+                filename, len, pos);
+        rc = 1;
+    }
 #endif
-	return (rc);
+    return (rc);
 }
 
 int
 append(void)
 {
-	int rc = 0;
+    int rc = 0;
 #ifdef APPEND
-	int len = (rand() >> 3) & BUFMASK;
-	appends++;
-	if (verbose)
-	    write(1, "a", 1);
-	open_it("a");
-	if (fp == NULL) {
-		printf("\nCould not open %s for append\n", filename);
-		return;
-	}
-	if (fwrite(wbuffer, len, 1, fp) < 0) {
-		printf("\nfwrite %s len %d failed\n", filename, len);
-		rc = 1;
-	} else if (fflush(fp) < 0) {
-		printf("\nfflush %s len %d failed\n", filename, len);
-		rc = 1;
-	}
-	if (close_it()) {
-		printf("\nClose %s failed after write %d\n", filename, len);
-		rc = 1;
-	}
+    int len = (rand() >> 3) & BUFMASK;
+    appends++;
+    if (verbose)
+        write(1, "a", 1);
+    open_it("a");
+    if (fp == NULL) {
+        printf("\nCould not open %s for append\n", filename);
+        return;
+    }
+    if (fwrite(wbuffer, len, 1, fp) < 0) {
+        printf("\nfwrite %s len %d failed\n", filename, len);
+        rc = 1;
+    } else if (fflush(fp) < 0) {
+        printf("\nfflush %s len %d failed\n", filename, len);
+        rc = 1;
+    }
+    if (close_it()) {
+        printf("\nClose %s failed after write %d\n", filename, len);
+        rc = 1;
+    }
 #endif
-	return (rc);
+    return (rc);
 }
 
 int
 delete(void)
 {
-	int rc = 0;
+    int rc = 0;
 #ifdef DELETE
-	deletes++;
-	if (verbose)
-	    write(1, "d", 1);
-	pickname();
-	(void) unlink(filename);
+    deletes++;
+    if (verbose)
+        write(1, "d", 1);
+    pickname();
+    (void) unlink(filename);
 #endif
-	return (rc);
+    return (rc);
 }
 
 int
 makedir(void)
 {
-	int rc = 0;
+    int rc = 0;
 #ifdef NEWDIR
-	newdirs++;
-	if (verbose)
-	    write(1, "/", 1);
-	pickdir();
-	if (MKDIR(dirname, 0755) < 0)
-		rc = 1;
+    newdirs++;
+    if (verbose)
+        write(1, "/", 1);
+    pickdir();
+    if (MKDIR(dirname, 0755) < 0)
+        rc = 1;
 #endif
-	return (0);
+    return (0);
 }
 
 int
 statit(void)
 {
-	int rc = 0;
+    int rc = 0;
 #ifdef STATIT
-	if (verbose)
-	    write(1, "s", 1);
-	stats++;
-	open_it("r");
-	if (fp == NULL)
-		return (0);
-	if (close_it()) {
-		printf("\nClose %s failed\n", filename);
-		rc = 1;
-	}
+    if (verbose)
+        write(1, "s", 1);
+    stats++;
+    open_it("r");
+    if (fp == NULL)
+        return (0);
+    if (close_it()) {
+        printf("\nClose %s failed\n", filename);
+        rc = 1;
+    }
 #endif
-	return (rc);
+    return (rc);
 }
 
 int
 readit(void)
 {
-	int rc = 0;
+    int rc = 0;
 #ifdef READIT
-	long   pos = (rand() >> 4) & FSIZEMASK;
-	size_t len = (rand() >> 6) & BUFMASK;
-	if (verbose)
-	    write(1, "r", 1);
-	reads++;
-	open_it("r");
-	if (fp == NULL)
-		return (0);
-	if ((fseek(fp, pos, 0) >= 0) &&
-	    (fread(rbuffer, len, 1, fp) < 0)) {
-		printf("\nRead %s %d at %d failed\n", filename, len, pos);
-		rc = 1;
-	}
-	if (close_it()) {
-		printf("\nClose %s failed after read %d at %d\n",
-			filename, len, pos);
-		rc = 1;
-	}
+    long   pos = (rand() >> 4) & FSIZEMASK;
+    size_t len = (rand() >> 6) & BUFMASK;
+    if (verbose)
+        write(1, "r", 1);
+    reads++;
+    open_it("r");
+    if (fp == NULL)
+        return (0);
+    if ((fseek(fp, pos, 0) >= 0) &&
+        (fread(rbuffer, len, 1, fp) < 0)) {
+        printf("\nRead %s %d at %d failed\n", filename, len, pos);
+        rc = 1;
+    }
+    if (close_it()) {
+        printf("\nClose %s failed after read %d at %d\n",
+               filename, len, pos);
+        rc = 1;
+    }
 #endif
-	return (rc);
+    return (rc);
 }
 
 void
 printdiv(int num, int den)
 {
-	int whole;
-	int rem;
+    int whole;
+    int rem;
 
-	whole = num / den;
-	rem = num - whole * den;
-	printf("%d.%02d", whole, 100 * rem / num);
+    whole = num / den;
+    rem = num - whole * den;
+    printf("%d.%02d", whole, 100 * rem / num);
 }
 
 void
 printstats(void)
 {
-	int clock;
-	int total = 0;
+    int clock;
+    int total = 0;
 
-	clock = end - start;
+    clock = end - start;
 
-	printf("\n");
+    printf("\n");
 
 #ifdef CREATE
-	printf("create=");
-	PRINTCLOCK(creates, clock);
-	printf(" ");
-	total += creates;
+    printf("create=");
+    PRINTCLOCK(creates, clock);
+    printf(" ");
+    total += creates;
 #endif
 #ifdef MODIFY
-	printf("modify=");
-	PRINTCLOCK(modifies, clock);
-	printf(" ");
-	total += modifies;
+    printf("modify=");
+    PRINTCLOCK(modifies, clock);
+    printf(" ");
+    total += modifies;
 #endif
 #ifdef APPEND
-	printf("append=");
-	PRINTCLOCK(appends, clock);
-	printf(" ");
-	total += appends;
+    printf("append=");
+    PRINTCLOCK(appends, clock);
+    printf(" ");
+    total += appends;
 #endif
 #ifdef DELETE
-	printf("delete=");
-	PRINTCLOCK(deletes, clock);
-	printf(" ");
-	total += deletes;
+    printf("delete=");
+    PRINTCLOCK(deletes, clock);
+    printf(" ");
+    total += deletes;
 #endif
 #ifdef NEWDIR
-	printf("newdir=");
-	PRINTCLOCK(newdirs, clock);
-	printf(" ");
-	total += newdirs;
+    printf("newdir=");
+    PRINTCLOCK(newdirs, clock);
+    printf(" ");
+    total += newdirs;
 #endif
 #ifdef STATIT
-	printf("stat=");
-	PRINTCLOCK(stats, clock);
-	printf(" ");
-	total += stats;
+    printf("stat=");
+    PRINTCLOCK(stats, clock);
+    printf(" ");
+    total += stats;
 #endif
 #ifdef READIT
-	printf("read=");
-	PRINTCLOCK(reads, clock);
-	printf(" ");
-	total += reads;
+    printf("read=");
+    PRINTCLOCK(reads, clock);
+    printf(" ");
+    total += reads;
 #endif
-	printf("\ntime=%d  total=%d ops [", clock, total);
-	printdiv(total, clock);
-	printf(" ops/sec]\n");
+    printf("\ntime=%d  total=%d ops [", clock, total);
+    printdiv(total, clock);
+    printf(" ops/sec]\n");
 }
 
 int
 break_abort(void)
 {
-	time(&end);
-	printstats();
-	exit(0);
+    time(&end);
+    printstats();
+    exit(0);
 }
 
 static void
-usage(const char *progname)
+print_usage(const char *progname)
 {
     fprintf(stderr,
-	    "Usage: %s [-v] <path>\n"
-	    "    -v is verbose mode\n", progname);
+            "Usage: %s [-v] <path>\n"
+            "    -v is verbose mode\n", progname);
     exit(1);
 }
 
 int
 main(int argc, char *argv[])
 {
-	int arg;
-	int index;
-/*	srand(1); */
-	time(&start);
-	srand(start);
+    int arg;
+    int index;
+/*  srand(1); */
+    time(&start);
+    srand(start);
 
-	for (arg = 1; arg < argc; arg++) {
-	    if (*argv[arg] == '-') {
-		char *ptr;
-		for (ptr = argv[arg] + 1; *ptr != '\0'; ptr++)
-		    if (*ptr == 'v') {
-			verbose = 1;
-		    } else {
-			fprintf(stderr, "Unknown argument -%s\n", ptr);
-			usage(argv[0]);
-		    }
-	    } else if (path != NULL) {
-		fprintf(stderr,
-			"Path \"%s\" specified -- \"%s\" is unknown\n",
-			path, argv[arg]);
-		usage(argv[0]);
-	    } else {
-		path = argv[arg];
-	    }
-	}
-	if (path == NULL) {
-	    fprintf(stderr, "%s: Directory to thrash must be provided\n",
-		    argv[0]);
-	    usage(argv[0]);
-	}
+    for (arg = 1; arg < argc; arg++) {
+        if (*argv[arg] == '-') {
+            char *ptr;
+            for (ptr = argv[arg] + 1; *ptr != '\0'; ptr++)
+                if (*ptr == 'v') {
+                    verbose = 1;
+                } else {
+                    fprintf(stderr, "Unknown argument -%s\n", ptr);
+                    print_usage(argv[0]);
+                }
+        } else if (path != NULL) {
+            fprintf(stderr,
+                    "Path \"%s\" specified -- \"%s\" is unknown\n",
+                    path, argv[arg]);
+            print_usage(argv[0]);
+        } else {
+            path = argv[arg];
+        }
+    }
+    if (path == NULL) {
+        fprintf(stderr, "%s: Directory to thrash must be provided\n",
+                argv[0]);
+        print_usage(argv[0]);
+    }
 
-	MKDIR(path, 0755);
+    MKDIR(path, 0755);
 
 #ifdef DELETE
-	makedir();
+    makedir();
 #else
-	pickdir();
-	MKDIR(dirname, 0755);
+    pickdir();
+    MKDIR(dirname, 0755);
 #endif
-	for (index = 0; index < BUFMAX; index++)
-		wbuffer[index] = rand() & 0xff;
+    for (index = 0; index < BUFMAX; index++)
+        wbuffer[index] = rand() & 0xff;
 
-	time(&start);
+    time(&start);
 #ifdef AMIGA
-	onbreak(break_abort);
+    onbreak(break_abort);
 #else
-	signal(SIGINT, break_abort);
+    signal(SIGINT, break_abort);
 #endif
-	for (index = 0; index < OPS - 1; index++) {
-		switch ((rand() >> 5) & 15) {
-			case 0:
-				if (create()) {
+    for (index = 0; index < OPS - 1; index++) {
+        switch ((rand() >> 5) & 15) {
+            case 0:
+                if (create()) {
 failure:
-					printf("Failed: file=%s dir=%s",
-						filename, dirname);
-					index = OPS;
-				}
-				break;
-			case 1:
-			case 2:
-				if (modify())
-					goto failure;
-				break;
-			case 3:
-			case 4:
-			case 5:
-				if (append())
-					goto failure;
-				break;
-			case 6:
-			case 7:
-				if (delete())
-					goto failure;
-				break;
-			case 8:
-				if (makedir())
-					goto failure;
-				break;
-			case 9:
-			case 10:
-			case 11:
-			case 12:
-				if (statit())
-					goto failure;
-				break;
-			case 13:
-			case 14:
-			case 15:
-				if (readit())
-					goto failure;
-				break;
-		}
-		chkabort();
-	}
+                    printf("Failed: file=%s dir=%s", filename, dirname);
+                    index = OPS;
+                }
+                break;
+            case 1:
+            case 2:
+                if (modify())
+                    goto failure;
+                break;
+            case 3:
+            case 4:
+            case 5:
+                if (append())
+                    goto failure;
+                break;
+            case 6:
+            case 7:
+                if (delete())
+                    goto failure;
+                break;
+            case 8:
+                if (makedir())
+                    goto failure;
+                break;
+            case 9:
+            case 10:
+            case 11:
+            case 12:
+                if (statit())
+                    goto failure;
+                break;
+            case 13:
+            case 14:
+            case 15:
+                if (readit())
+                    goto failure;
+                break;
+        }
+        chkabort();  /* Check for break - ^C */
+    }
 terminate:
-	time(&end);
-	printstats();
-	exit(0);
+    time(&end);
+    printstats();
+    exit(0);
 }

@@ -3,7 +3,7 @@
  *      is freeware.  No portion of this code may be sold for profit.
  */
 
-const char *version = "\0$VER: umount 1.0 (19-Jan-2018) © Chris Hooper";
+const char *version = "\0$VER: umount 1.0 (08-Feb-2018) © Chris Hooper";
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,31 +38,31 @@ device_exists(const char *name)
     int             len = strlen(name);
 
     if (len >= sizeof (buf) - 1)  {
-	if (quiet < 3)
-	    fprintf(stderr, "\"%s\" is invalid\n", name);
+        if (quiet < 3)
+            fprintf(stderr, "\"%s\" is invalid\n", name);
         return (0);
     }
 
     strcpy(buf, name);
     pos = strchr(buf, ':');
     if ((pos == NULL) || (pos[1] != '\0'))  {
-	if (quiet < 3)
-	    fprintf(stderr, "\"%s\" is invalid - "
-		    "device name must end with colon\n", name);
+        if (quiet < 3)
+            fprintf(stderr, "\"%s\" is invalid - "
+                    "device name must end with colon\n", name);
         return (0);
     }
     *pos = '\0';
 
     if ((doslist = LockDosList(LDF_DEVICES | LDF_READ)) == NULL) {
-	if (quiet < 3)
-	    fprintf(stderr, "Failed to lock DOS List\n");
+        if (quiet < 3)
+            fprintf(stderr, "Failed to lock DOS List\n");
         return (0);
     }
 
     if (FindDosEntry(doslist, buf, LDF_DEVICES) == NULL) {
-	UnLockDosList(LDF_DEVICES | LDF_READ);
-	if (quiet < 3)
-	    fprintf(stderr, "Failed to locate %s for die\n", name);
+        UnLockDosList(LDF_DEVICES | LDF_READ);
+        if (quiet < 3)
+            fprintf(stderr, "Failed to locate %s for die\n", name);
         return (0);
     }
 
@@ -78,51 +78,51 @@ device_dismount(const char *name)
     char           *pos;
     char            buf[512];
     int             len = strlen(name);
-    int	            removed = 0;
-    int	            failed = 0;
+    int             removed = 0;
+    int             failed = 0;
 
     if (len >= sizeof (buf) - 1)  {
-	fprintf(stderr, "\"%s\" is invalid\n", name);
+        fprintf(stderr, "\"%s\" is invalid\n", name);
         return (0);
     }
 
     strcpy(buf, name);
     pos = strchr(buf, ':');
     if ((pos == NULL) || (pos[1] != '\0'))  {
-	if (quiet < 3)
-	    fprintf(stderr, "\"%s\" is invalid - "
-		    "device name must end with colon\n", name);
+        if (quiet < 3)
+            fprintf(stderr, "\"%s\" is invalid - "
+                    "device name must end with colon\n", name);
         return (0);
     }
     *pos = '\0';
 
     doslist = LockDosList(LDF_DEVICES | LDF_VOLUMES | LDF_WRITE);
     if (doslist == NULL) {
-	if (quiet < 3)
-	    fprintf(stderr, "Failed to lock DOS List\n");
+        if (quiet < 3)
+            fprintf(stderr, "Failed to lock DOS List\n");
         return (0);
     }
 
     while ((entry = FindDosEntry(doslist, buf, LDF_DEVICES)) != NULL) {
-	if (RemDosEntry(entry)) {
-	    removed++;
-	} else {
-	    if (failed++ > 10)
-		break;
-	}
+        if (RemDosEntry(entry)) {
+            removed++;
+        } else {
+            if (failed++ > 10)
+                break;
+        }
     }
     UnLockDosList(LDF_DEVICES | LDF_VOLUMES | LDF_WRITE);
 
     if ((removed == 0) && (failed == 0)) {
-	if (quiet < 2)
-	    fprintf(stderr, "Failed to locate %s for dismount\n", name);
+        if (quiet < 2)
+            fprintf(stderr, "Failed to locate %s for dismount\n", name);
         return (0);
     }
 
     if ((quiet < 1) && (removed))
-	printf("Dismounted %s\n", name);
+        printf("Dismounted %s\n", name);
     if ((quiet < 2) && (removed == 0))
-	printf("Failed to dismount %s\n", name);
+        printf("Failed to dismount %s\n", name);
     return (1);
 }
 
@@ -137,28 +137,28 @@ Action_Die(const char *name)
     char                   buf[512];
 
     if (device_exists(name) == FALSE)
-	return (1);
+        return (1);
 
     msgport = (struct MsgPort *) DeviceProc(name);
     if (msgport == NULL) {
-	if (quiet < 3)
-	    fprintf(stderr, "Failed to open MessagePort of %s\n", name);
+        if (quiet < 3)
+            fprintf(stderr, "Failed to open MessagePort of %s\n", name);
         return (1);
     }
 
     replyport = (struct MsgPort *) CreatePort(NULL, 0);
     if (!replyport) {
-	if (quiet < 3)
-	    fprintf(stderr, "Failed to create reply port\n");
+        if (quiet < 3)
+            fprintf(stderr, "Failed to create reply port\n");
         return (1);
     }
 
     packet = (struct StandardPacket *)
-         AllocMem(sizeof(struct StandardPacket), MEMF_CLEAR | MEMF_PUBLIC);
+         AllocMem(sizeof (struct StandardPacket), MEMF_CLEAR | MEMF_PUBLIC);
 
     if (packet == NULL) {
-	if (quiet < 3)
-	    fprintf(stderr, "Failed to allocate memory\n");
+        if (quiet < 3)
+            fprintf(stderr, "Failed to allocate memory\n");
         DeletePort(replyport);
         return (1);
     }
@@ -181,17 +181,17 @@ Action_Die(const char *name)
     GetMsg(replyport);
 
     if (packet->sp_Pkt.dp_Res1 == DOSFALSE) {
-	if (quiet < 2)
-	    fprintf(stderr, "DIE failed for %s: %d\n",
-		    name, packet->sp_Pkt.dp_Res2);
-	err = 1;
+        if (quiet < 2)
+            fprintf(stderr, "DIE failed for %s: %d\n",
+                    name, packet->sp_Pkt.dp_Res2);
+        err = 1;
     }
 
-    FreeMem(packet, sizeof(struct StandardPacket));
+    FreeMem(packet, sizeof (struct StandardPacket));
     DeletePort(replyport);
 
     if (quiet < 1)
-	printf("DIE sent to %s\n", name);
+        printf("DIE sent to %s\n", name);
 
     return (err);
 }
@@ -203,11 +203,11 @@ print_usage(const char *progname)
             "%s\n"
             "usage:  %s [-dq] <device>\n"
             "        This program sends ACTION_DIE to the specified device,"
-		" which for most\n"
-	    "        filesystems will quiesce all operation.\n"
-	    "        -d  don't dismount the device\n",
-	    "        -q  quiet (don't display on success)\n",
-            version + 8, progname);
+                " which for most\n"
+            "        filesystems will quiesce all operation.\n"
+            "        -d  don't dismount the device\n"
+            "        -q  quiet (don't display on success)\n",
+            version + 7, progname);
     exit(1);
 }
 
@@ -218,29 +218,29 @@ main(int argc, char *argv[])
     int rc = 0;
 
     if (argc < 2)
-	print_usage(argv[0]);
+        print_usage(argv[0]);
 
     for (arg = 1; arg < argc; arg++) {
-	const char *name = argv[arg];
-	if (*name == '-') {
-	    while (*(++name) != '\0') {
-		if (*name == 'd')
-		    do_dismount = !do_dismount;
-		else if (*name == 'q')
-		    quiet++;
-		else
-		    print_usage(argv[0]);
-	    }
-	}
+        const char *name = argv[arg];
+        if (*name == '-') {
+            while (*(++name) != '\0') {
+                if (*name == 'd')
+                    do_dismount = !do_dismount;
+                else if (*name == 'q')
+                    quiet++;
+                else
+                    print_usage(argv[0]);
+            }
+        }
     }
 
     for (arg = 1; arg < argc; arg++) {
-	const char *name = argv[arg];
-	if (*name != '-') {
-	    rc |= Action_Die(name);
-	    if (do_dismount)
-		rc |= device_dismount(name);
-	}
+        const char *name = argv[arg];
+        if (*name != '-') {
+            rc |= Action_Die(name);
+            if (do_dismount)
+                rc |= device_dismount(name);
+        }
     }
 
     exit(rc);

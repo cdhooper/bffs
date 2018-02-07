@@ -9,14 +9,14 @@ This is a very simplified version of the UNIX cmp program.
 
 
 Usage:
-	cmp <file1> <file2>
+    cmp <file1> <file2>
 
 Exit status
-	If the files are identical, no output will be generated,
-	and the program will exit with normal (0) status.
-	If the files differ in length or content, a "files differ"
-        message will be displayed and a non-zero exit status will
-        be generated.
+    If the files are identical, no output will be generated,
+    and the program will exit with normal (0) status.
+    If the files differ in length or content, a "files differ"
+    message will be displayed and a non-zero exit status will
+    be generated.
 
 ------------------------------------------------------------------------
 

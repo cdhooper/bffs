@@ -23,13 +23,13 @@
 
 struct direct *dir_next(ULONG inum, ULONG offset);
 ULONG dir_name_search(ULONG pinum, const char *name);
+ULONG dir_inum_search(ULONG pinum, int inum);
+int   dir_inum_change(ULONG pinum, ULONG finum, ULONG tinum);
+int   dir_name_is_illegal(const char *name);
 int   dir_create(ULONG pinum, char *name, ULONG inum, int type);
 int   dir_offset_delete(ULONG pinum, ULONG offset, int check);
 int   dir_rename(ULONG frominum, char *fromname, ULONG toinum, char *toname,
                  int isdir, int type);
-int   dir_inum_change(ULONG pinum, ULONG finum, ULONG tinum);
-ULONG dir_inum_search(ULONG pinum, int inum);
-int   dir_name_is_illegal(const char *name);
 int   streqv(const char *str1, const char *str2);
 
 #endif /* _DIR_H */

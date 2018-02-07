@@ -9,20 +9,20 @@ This program acts nearly identical to the Unix command of the same name.
 
 
 Usage:
-	mknod <type> <major> <minor> <filename> [<filename>...]
+    mknod <type> <major> <minor> <filename> [<filename>...]
 
 Where 
-	type is either b (block special) or c (character special)
+    type is either b (block special) or c (character special)
 
-	major is the major device number (0 to 16M)
+    major is the major device number (0 to 16M)
 
-	minor is the minor device number (0 to 255)
+    minor is the minor device number (0 to 255)
 
-	devname is the name of the special file to create
+    devname is the name of the special file to create
 
 
-	You are allowed to name as many files as you want to create
-	with the same device attributes.
+    You are allowed to name as many files as you want to create
+    with the same device attributes.
 
 ------------------------------------------------------------------------
 

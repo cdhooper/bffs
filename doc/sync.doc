@@ -10,11 +10,11 @@ It will tell the specified (or all) Amiga filesystem handlers to flush
 dirty data out to disk.
 
 Usage:
-	sync [<options>] [<device>...]
+    sync [<options>] [<device>...]
 
 Options
-	-h display help
-	-v verbose mode
+    -h display help
+    -v verbose mode
 
 
 When no device is specified on the command line, all filesystem

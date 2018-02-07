@@ -19,8 +19,8 @@
 #
 
 BIN=/bin
-PROGS=$(BIN)/fs_thrash
-#PROGS=$(BIN)/fs_thrash $(BIN)/fs_sparse
+PROGS=$(BIN)/fs_thrash $(BIN)/fs_file_verify
+#PROGS=$(BIN)/fs_thrash $(BIN)/fs_file_verify $(BIN)/fs_sparse
 
 RM=-delete force >NIL:
 CC=dcc
@@ -32,6 +32,9 @@ $(BIN)/fs_thrash: thrash.c
 	$(CC) $(CFLAGS) %(right) -o %(left)
 
 $(BIN)/fs_sparse: sparse.c
+	$(CC) $(CFLAGS) %(right) -o %(left)
+
+$(BIN)/fs_file_verify: file_verify.c
 	$(CC) $(CFLAGS) %(right) -o %(left)
 
 clean:

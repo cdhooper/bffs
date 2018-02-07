@@ -4,7 +4,7 @@ Cache
     Cache cgs the same as regular blocks?
 	Or add cgs with addbuffers +-10000 and value to documentation
 
-    Cache speedup with write-behind
+    Cache flush speedup with write-behind
 	Add async nature to blocks in cache - cache should wait if async
 	pending.  If previous block already in cache, then sync request
 	current block and async request next block.
@@ -83,16 +83,13 @@ From Todd Vierling
  - The ability to stale a file, deleting underneath a lock?
 
 From Bernardo Innocenti
- - Please support Sun's UFS.  I have a SparcStation 4
-   at home and I'd like to be able to read its hard disk
-   on my Amiga.
+ - Please support Sun's UFS.  I have a SparcStation 4 at home and I'd like
+   to be able to read its hard disk on my Amiga.
 
- - Compile it with SAS/C: code isn't as optimized as
-   the one produced by GCC, but SAS/C is much more clever
-   with Amiga register calls to libraries.
+ - Compile it with SAS/C: code isn't as optimized as the one produced by
+   GCC, but SAS/C is much more clever with Amiga register calls to libraries.
 
  - What about a 020 version?  Would it help?
 
- - Please support the shutdown.library.  It would come
-   useful for syncing the filesystem when user hits
-   Control-Amiga-Amiga.
+ - Please support the shutdown.library.  It would come useful for syncing
+   the filesystem when user hits Control-Amiga-Amiga.

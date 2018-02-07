@@ -3,7 +3,7 @@ Version 1.2 of touch
 ------------------------------------------------------------------------
 
 touch - Update the timestamp of a file, creating the file if it
-	does not exist.
+        does not exist.
 
 
 This program performs a similar function to the UNIX command of
@@ -12,26 +12,26 @@ the current time or a time specified on the command line.
 
 
 Usage:
-	touch [<options>] [[cc]yy][mmddhhmm[.ss]] <file> [<file>...]
+    touch [<options>] [[cc]yy][mmddhhmm[.ss]] <file> [<file>...]
 
 Command line options:
-	-a is set only the file access time
-	-c is set only the file inode change time
-	-C is just create file (don't update all timestamps)
-	-m is set only the file modification time
-	-p is print current times for a file (do not modify)
+    -a is set only the file access time
+    -c is set only the file inode change time
+    -C is just create file (don't update all timestamps)
+    -m is set only the file modification time
+    -p is print current times for a file (do not modify)
 
 Example showing file creation:
-	1> touch bf0:ts_file   
-	1> ls -lTc bf0:ts_file
-	-rwxr-xr-x root            0 2018-01-07 15:14:14 ts_file 
+    1> touch bf0:ts_file   
+    1> ls -lTc bf0:ts_file
+    -rwxr-xr-x root            0 2018-01-07 15:14:14 ts_file 
 
 Example showing update of just inode change timestamp of a file:
-	1> touch -c 201801191234.56 bf0:ts_file
-	1> ls -lTc bf0:ts_file
-	-rwxr-xr-x root            0 2018-01-19 12:34:56 ts_file 
-	1> ls -lT bf0:ts_file 
-	-rwxr-xr-x root            0 2018-01-07 15:14:14 ts_file 
+    1> touch -c 201801191234.56 bf0:ts_file
+    1> ls -lTc bf0:ts_file
+    -rwxr-xr-x root            0 2018-01-19 12:34:56 ts_file 
+    1> ls -lT bf0:ts_file 
+    -rwxr-xr-x root            0 2018-01-07 15:14:14 ts_file 
 
 ------------------------------------------------------------------------
 

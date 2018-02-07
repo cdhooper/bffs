@@ -20,7 +20,7 @@
  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-const char *version = "\0$VER: disklabel 5.19 (19-Jan-2018) © UCB";
+const char *version = "\0$VER: disklabel 5.19 (08-Feb-2018) © UCB";
 
 #ifndef lint
 char copyright[] =

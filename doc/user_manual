@@ -24,6 +24,7 @@
       662       19     Appendix D: Differences between BFFS and Amiga FFS
       699       20     Appendix E: Information useful to programmers
       760       21     Appendix F: Troubleshooting Suggestions
+
 INTRODUCTION:
 
     First, a definition is in order.  The major portion of this
@@ -99,27 +100,27 @@ filesystem types follow:
         BSD 4.3 and BSD 4.4 FFS should not have a problem reading
         BFFS-written filesystems.
     BSD UFS V1
-	Newer versions of BSD, including NetBSD circa 1994 introduced
-	changes in the filesystem called V1.  These include structural
-	changes in the superblock and cylinder group areas to add 64-bit
+        Newer versions of BSD, including NetBSD circa 1994 introduced
+        changes in the filesystem called V1.  These include structural
+        changes in the superblock and cylinder group areas to add 64-bit
         support for summary information.  The BFFS 1.6 FileSystem has been
         enhanced to detect and update these fields on a newer filesystem.
         Most of the command tools (newfs, dump, etc), do not know how to
         deal with the changes.  The only exception is fsck, which was
-	modified to be able to use the proper summary information if the
-	filesystem is UFS V1.  Since the newfs shipped with BFFS does not
-	support this version, it will still create filesystems prior to
-	the V1 format.  Newer versions of NetBSD's UFS and fsck can
-	up-convert filesystems to the V1 format.  On current NetBSD, use
-	the following arguments when creating a filesystem for best
-	performance with BFFS:
-	    newfs -B be -O 1 <device>
-	When creating a multiple-GB filesystem, you may also want to add
+        modified to be able to use the proper summary information if the
+        filesystem is UFS V1.  Since the newfs shipped with BFFS does not
+        support this version, it will still create filesystems prior to
+        the V1 format.  Newer versions of NetBSD's UFS and fsck can
+        up-convert filesystems to the V1 format.  On current NetBSD, use
+        the following arguments when creating a filesystem for best
+        performance with BFFS:
+            newfs -B be -O 1 <device>
+        When creating a multiple-GB filesystem, you may also want to add
         the "-n <inode-count>" option to limit the number of inodes.
 
     BSD UFS V2
-	BFFS can detect this version and will force the filesystem to
-	read-only mode.
+        BFFS can detect this version and will force the filesystem to
+        read-only mode.
 
     ENDIAN NOTES:  Use BFFSFilesystem to read and write both 68k and x86
         BSD Fast filesystems.  This version automatically handles detecting
