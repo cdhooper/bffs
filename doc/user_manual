@@ -10,20 +10,21 @@
 
      Line #   Page #   Section
    ----------------------------------------
-       28        2     Introduction
-       58        3     Compatibility
-      139        5     Building a MountList entry
-      167        6     Using HDToolBox to automatically mount partitions
-      249        8     Maintenance Utilities
-      398       11     Expert Setup
-      416       12     Credits and Acknowledgements
-      443       13     Known Bugs
-      459       14     Appendix A: MountList.BFFS information
-      540       16     Appendix B: Implementation Information
-      601       17     Appendix C: The BSD 4.2 File System
-      662       19     Appendix D: Differences between BFFS and Amiga FFS
-      699       20     Appendix E: Information useful to programmers
-      760       21     Appendix F: Troubleshooting Suggestions
+       29        2     Introduction
+       59        3     Compatibility
+      145        5     Building a MountList entry
+      173        6     Using HDToolBox to automatically mount partitions
+      255        8     Maintenance Utilities
+      404       11     Quick Demo
+      445       12     Expert Setup
+      463       13     Credits and Acknowledgements
+      490       14     Known Bugs
+      506       15     Appendix A: MountList.BFFS information
+      587       17     Appendix B: Implementation Information
+      648       18     Appendix C: The BSD 4.2 File System
+      709       20     Appendix D: Differences between BFFS and Amiga FFS
+      746       21     Appendix E: Information useful to programmers
+      807       22     Appendix F: Troubleshooting Suggestions
 
 INTRODUCTION:
 
@@ -132,6 +133,11 @@ filesystem types follow:
         The command line tools (newfs, fsck, dumpfs, etc) do not understand
         little endian filesystems.  A new port of the current version of
         these utilities would enable that support.
+
+    LARGE MEDIA:  BFFSFilesystem supports large media through the use of
+        a driver supporting TD64 commands.  Note that disk media is still
+        probably limited to 1 TB maximum even with TD64 due to the fact
+        the code only implements 32-bit math for filesystem block access.
 
     See Appendix A for information on selecting an Amiga device driver
     and appropriate filesystem handler.
@@ -395,6 +401,47 @@ o  umount
         by sending the "ACTION_DIE" packet to the device and then removing
         the device from the DOS LockList (similar to "assign dismount <dev>").
 
+QUICK DEMO
+
+The below steps will guide you through installing and testing that
+BFFS is working as expected.
+
+1. Download the latest version of BFFS from Aminet (misc/emu/bffs16_src.lha)
+      wget http://aminet.net/misc/emu/bffs16_src.lha
+
+2. Download the latest version of FMS from Aminet (disk/misc/fms_20.lha)
+      wget http://aminet.net/disk/misc/fms_20.lha
+
+3. Download a sample UFS filesystem floppy image
+      wget http://cdh.eebugs.com/bffs/bffs_sample_floppy.lha
+
+4. Extract the sample UFS filesystem floppy image
+      lha x bffs_sample_floppy.lha
+      assign FMS: `cd`/bffs
+
+5. Extract and install FmsDisk:
+      lha x fms_20.lha
+      copy FmsDisk/Devs/fmsdisk68000.device devs:fmsdisk.device
+
+6. Extract and install BFFS, then mount the sample image
+      lha x bffs16_src.lha
+      cd bffs_1.6
+      copy l/BFFSFileSystem L:
+      Path add `cd`/bin
+      mount BFMS: from doc/MountList.BFFS
+
+7. Inspect the filesystem and try changing a file
+      ls -l BFMS:doc
+      type BFMS:doc/chmod.doc
+      ls -lg BFMS:
+      chown 123.456 BFMS:emptyfile
+      ls -lg BFMS:
+      fsck BFMS:
+
+8. Unmount the filesystem (not required as "sync" is automatic)
+      umount BFMS:
+
+
 EXPERT SETUP
 
 For those with previous experience with setting up BFFS or other
@@ -449,8 +496,8 @@ Disk volume nodes aren't fully supported.  This mainly affects
 removable media.  Basically, if you intend on removing the disk,
 make SURE there are no AmigaDOS locks on that volume.
 
-BFFS does not support newer filesystems than FFS from 4.4 BSD.
-Specifically NetBSD UFS v2 and Sun Solaris FFS contain enhancements
+BFFS does not support newer filesystems than NetBSD UFS v1 (after
+BSD 4.4 FFS).  NetBSD UFS v2 and Sun Solaris FFS contain enhancements
 (such as journaling) which are not supported.  BFFS might be able
 to mount and read filesystem images from these newer operating systems,
 but I do not recommend trying to write to them.

@@ -7,7 +7,6 @@ mknod - create Unix special device nodes
 
 This program acts nearly identical to the Unix command of the same name.
 
-
 Usage:
     mknod <type> <major> <minor> <filename> [<filename>...]
 
@@ -20,12 +19,10 @@ Where
 
     devname is the name of the special file to create
 
-
     You are allowed to name as many files as you want to create
     with the same device attributes.
 
 ------------------------------------------------------------------------
-
 
 This program was created by Chris Hooper (amiga@cdh.eebugs.com)
 ------------------------------------------------------------------------

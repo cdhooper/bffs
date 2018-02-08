@@ -10,13 +10,10 @@ the same name.  In the case of the Amiga, it will send an ACTION_DIE
 message to the filesystem handler, followed by the equivalent of
 an "assign dismount" of the device.
 
-
 Usage:
     umount <device:>
 
-
 ------------------------------------------------------------------------
-
 
 This program was created by Chris Hooper (amiga@cdh.eebugs.com)
 ------------------------------------------------------------------------

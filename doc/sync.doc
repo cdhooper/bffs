@@ -16,14 +16,12 @@ Options
     -h display help
     -v verbose mode
 
-
 When no device is specified on the command line, all filesystem
 handlers are told to flush.  Otherwise, only the specified filesystem
 will be flushed.  The <device> may be a device or volume name (with colon)
 or any filename on that device.
 
 ------------------------------------------------------------------------
-
 
 This program was created by Chris Hooper (amiga@cdh.eebugs.com)
 ------------------------------------------------------------------------

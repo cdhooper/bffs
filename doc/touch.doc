@@ -10,7 +10,6 @@ This program performs a similar function to the UNIX command of
 the same name.  It will update the timestamp of a file to either
 the current time or a time specified on the command line.
 
-
 Usage:
     touch [<options>] [[cc]yy][mmddhhmm[.ss]] <file> [<file>...]
 
@@ -34,7 +33,6 @@ Example showing update of just inode change timestamp of a file:
     -rwxr-xr-x root            0 2018-01-07 15:14:14 ts_file 
 
 ------------------------------------------------------------------------
-
 
 This program was created by Chris Hooper (amiga@cdh.eebugs.com)
 ------------------------------------------------------------------------

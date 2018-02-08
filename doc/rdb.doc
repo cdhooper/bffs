@@ -11,7 +11,6 @@ TrumpCard is one such beast.  The rdb utility allows you to tweak most
 RDB parameters (including those HDToolBox won't let you touch), so if
 you don't know what you are doing, I don't recommend you use this program.
 
-
 Usage:
     rdb <disk.device> <unit> [<option> | <keyword>=<value> ...]
 
@@ -43,14 +42,12 @@ Where
             Reserved PreAlloc Interleave LowCyl HighCyl NumBuffers
             BufMemType MaxTransfer Mask BootPri DosType
 
-
 Lackage:
     The program is able to dump filesystem handlers from the
     rdb area to a regular DOS file.  It should also allow
     transfers in the opposite direction.  ie: Installation of
     a new filesystem handler in the rdb area.  It doesn't allow
     this today.
-
 
 Coolness:
     rdb is able to repair damaged RDB areas (well, it can fix
@@ -67,7 +64,6 @@ Example:
         rdb scsi.device 6 -part DH0 bootpri=10
 
 ------------------------------------------------------------------------
-
 
 This program was created by Chris Hooper (amiga@cdh.eebugs.com)
 ------------------------------------------------------------------------

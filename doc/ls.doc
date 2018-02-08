@@ -8,7 +8,6 @@ ls - A simple directory list utility
 This program acts similar to the UNIX ls command, taking many of the
 same command line arguments.
 
-
 Usage:
     ls [<options>] <filename> [<filename>...]
 
@@ -19,9 +18,7 @@ Where
 
     You may specify as many filenames as you want to list.
 
-
 Briefly, the command line options this program supports are:
-
     -a is show files which begin with a '.'
     -A is show AmigaDOS (not UNIX) permissions
     -c is sort by last inode change time
@@ -88,7 +85,6 @@ Files
         bin:3
 
 ------------------------------------------------------------------------
-
 
 This program was created by Chris Hooper (amiga@cdh.eebugs.com)
 ------------------------------------------------------------------------

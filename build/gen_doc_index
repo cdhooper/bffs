@@ -1,7 +1,7 @@
 #!/bin/sh
 
 DOC=doc/user_manual
-[ -d ../doc ] && DOC=../$DOC
+[ -f ../$DOC ] && DOC=../$DOC
 
 grep -A 1 -n  $DOC |
 sed -e 's///g' -e s/:$// -e 's/^[0-9]*-//' |

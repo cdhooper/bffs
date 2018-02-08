@@ -7,7 +7,6 @@ chmod - change file permissions
 
 This program acts nearly identical to the Unix command of the same name.
 
-
 Usage:
     chmod [<options>] <perms> <filename> [<filename>...]
 
@@ -30,9 +29,7 @@ Example (add AmigaOS Script attribute) to an executable script:
 Example (remove write permission for everyone on a file):
     chmod ugo-w ./ro_file
 
-
 ------------------------------------------------------------------------
-
 
 This program was created by Chris Hooper (amiga@cdh.eebugs.com)
 ------------------------------------------------------------------------
