@@ -1,0 +1,41 @@
+Short:        read/write BSD FFS/UFS filesystems
+Author:       amiga at cdh dot eebugs dot com (Chris Hooper)
+Uploader:     amiga@cdh.eebugs.com (Chris Hooper)
+Type:         disk/misc
+Version:      1.6
+Architecture: m68k-amigaos
+Distribution: Aminet
+
+BFFS is an AmigaOS filesystem with support utilities to read and write
+Berekeley Fast Filesystem (FFS/UFS) media.  Copyright 1991-2018 Chris Hooper.
+
+BFFSFilesystem allows you to mount (and use) Unix filesystems directly
+under AmigaDOS.  Function in the operating system is similar to how
+FastFileSystem is used to read and write Amiga-native media.  This
+filesystem should be compatible with most AmigaOS applications which
+use the Dos Exec message layer or above.
+
+This release is an update to BFFS 1.5 which was released in August 1996,
+and is the first release to include full source.  This version should be
+compatible with the following UNIX filesystems:
+    SunOS 4.1, 4.1.1, 4.1.2.
+    Amiga UNIX (SVR4) UFS
+    BSD 4.3 and 4.4 UFS/FFS - still supported by NetBSD 7.1.1
+    BSD UFS V1 (this is post-4.4 and pre-UFS V2) - supported by NetBSD 7.1.1
+    BSD UFS V2 (read-only at best)
+
+There are a few different builds of the filesystem included in the
+distribution.  The default "BFFSFileSystem" can automatically detect and
+read/write both big-endian and little-endian filesystems.  It has been
+tested against NetBSD/amd64 7.1.1 newfs and fsck.
+
+The following support utilities are included:
+    bffstool  cmp      disklabel  edumpfs         fsck  mknod  restore  tunefs  
+    chmod     dbprint  dump       fs_file_verify  ln    newfs  sync     umount  
+    chown     dcp      dumpfs     fs_thrash       ls    rdb    touch    
+
+DISCLAIMER: THE SOFTWARE IS PROVIDED "AS-IS", WITHOUT ANY WARRANTY.
+THE AUTHOR ASSUMES NO LIABILITY FOR ANY DAMAGE ARISING OUT OF THE USE
+OR MISUSE OF THIS UTILITY OR INFORMATION REPORTED BY THIS UTILITY.
+
+For further information, see doc/user_manual in the distribution archive.
