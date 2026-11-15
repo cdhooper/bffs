@@ -1461,7 +1461,8 @@ print_usage(const char *progname)
             "             -t is sort by last modify time\n"
             "             -T is show full time (yyyy-mm-dd hh:mm:ss)\n"
             "             -u is sort by last access time\n"
-            "             -1 is list one file per line\n",
+            "             -1 is list one file per line\n"
+            "       <filename> may contain wildcards: * ? #?\n",
             version + 7, progname);
     exit(0);
 }
@@ -1540,6 +1541,238 @@ sortlist_or_rlist_add(const char *name)
 }
 
 
+/*
+ * Wildcard support
+ *
+ * AmigaDOS shells do not expand wildcards, so ls does it here.  The
+ * supported wildcards are:
+ *     *   UNIX: matches any sequence of characters (including none)
+ *     #?  AmigaDOS: same as *
+ *     ?   UNIX and AmigaDOS: matches any single character
+ * Wildcards may appear in any path component after the device name.
+ * Matching is case-insensitive, as with AmigaDOS patterns.  A wildcard
+ * does not match a leading '.' unless the pattern begins with '.' or
+ * -a was given before the pattern.  Matches are sorted by name.  If a
+ * pattern matches nothing, it is treated as a literal name.
+ */
+static char              glob_path[1024];
+static recursive_node_t *glob_list = NULL;
+
+static char
+lower_char(char ch)
+{
+    if ((ch >= 'A') && (ch <= 'Z'))
+        ch += 'a' - 'A';
+    return (ch);
+}
+
+/* Returns length of the "match any sequence" wildcard at pat, or 0 */
+static int
+is_star(const char *pat)
+{
+    if (pat[0] == '*')
+        return (1);
+    if ((pat[0] == '#') && (pat[1] == '?'))
+        return (2);
+    return (0);
+}
+
+static int
+wild_match(const char *pat, const char *str)
+{
+    int skip;
+
+    while (1) {
+        skip = is_star(pat);
+        if (skip != 0) {
+            /* Collapse consecutive stars */
+            do {
+                pat += skip;
+            } while ((skip = is_star(pat)) != 0);
+
+            if (*pat == '\0')
+                return (1);
+            for (; *str != '\0'; str++)
+                if (wild_match(pat, str))
+                    return (1);
+            return (0);
+        }
+        if (*pat == '\0')
+            return (*str == '\0');
+        if (*str == '\0')
+            return (0);
+        if ((*pat != '?') && (lower_char(*pat) != lower_char(*str)))
+            return (0);
+        pat++;
+        str++;
+    }
+}
+
+/* Note "#?" is covered by the '?' check */
+static int
+has_wildcard(const char *str, int len)
+{
+    int pos;
+
+    for (pos = 0; pos < len; pos++)
+        if ((str[pos] == '*') || (str[pos] == '?'))
+            return (1);
+    return (0);
+}
+
+/* Add a matched path to glob_list, keeping the list sorted by name */
+static void
+glob_add(const char *path)
+{
+    recursive_node_t  *node;
+    recursive_node_t **pp;
+
+    node = (recursive_node_t *) malloc(sizeof (recursive_node_t));
+    if (node == NULL)
+        return;
+    node->filename = strdup(path);
+    if (node->filename == NULL) {
+        free(node);
+        return;
+    }
+    for (pp = &glob_list; *pp != NULL; pp = &(*pp)->next)
+        if (strcompare((*pp)->filename, path) > 0)
+            break;
+    node->next = *pp;
+    *pp = node;
+}
+
+/*
+ * glob_expand() - Expand the path components in rest, appending them
+ *                 to glob_path[0..plen-1].  Complete matches are added
+ *                 to glob_list.
+ */
+static void
+glob_expand(int plen, const char *rest)
+{
+    const char        *end = strchr(rest, '/');
+    int                clen = (end != NULL) ? (end - rest) : strlen(rest);
+    int                lockend;
+    char               saved;
+    char               pattern[128];
+    BPTR               lock;
+    FileInfoBlock_3_t *fib;
+
+    if (!has_wildcard(rest, clen)) {
+        /* Literal component: append it and move on */
+        if (plen + clen + 2 > (int) sizeof (glob_path))
+            return;
+        memcpy(glob_path + plen, rest, clen);
+        plen += clen;
+        if (end == NULL) {
+            glob_path[plen] = '\0';
+            glob_add(glob_path);
+        } else {
+            glob_path[plen++] = '/';
+            glob_expand(plen, end + 1);
+        }
+        return;
+    }
+
+    if (clen >= (int) sizeof (pattern))
+        return;
+    memcpy(pattern, rest, clen);
+    pattern[clen] = '\0';
+
+    /*
+     * Lock the directory so far.  Drop a single trailing '/' after a
+     * name ("dir/" -> "dir"), but keep it where it means parent
+     * directory ("/", "dir//").
+     */
+    lockend = plen;
+    if ((plen >= 2) && (glob_path[plen - 1] == '/') &&
+        (glob_path[plen - 2] != '/') && (glob_path[plen - 2] != ':'))
+        lockend--;
+    saved = glob_path[lockend];
+    glob_path[lockend] = '\0';
+    lock = Lock(glob_path, ACCESS_READ);
+    glob_path[lockend] = saved;
+    if (lock == 0)
+        return;
+
+    fib = (FileInfoBlock_3_t *) malloc(FILEINFOBLOCK_SIZE);
+    if (fib == NULL)
+        goto unlock;
+
+    if (!Examine(lock, (struct FileInfoBlock *) fib) ||
+        (fib->fib_DirEntryType < 0))
+        goto done;  /* Not a directory */
+
+    while (ExNext(lock, (struct FileInfoBlock *) fib)) {
+        const char *name = fib->fib_FileName;
+        int         nlen = strlen(name);
+
+        if ((strcmp(name, ".") == 0) || (strcmp(name, "..") == 0))
+            continue;
+        if ((name[0] == '.') && (pattern[0] != '.') && !aflag)
+            continue;
+        if (!wild_match(pattern, name))
+            continue;
+        if ((end != NULL) && (fib->fib_DirEntryType < 0))
+            continue;  /* More components follow; need a directory */
+        if (plen + nlen + 2 > (int) sizeof (glob_path))
+            continue;
+
+        memcpy(glob_path + plen, name, nlen);
+        if (end == NULL) {
+            glob_path[plen + nlen] = '\0';
+            glob_add(glob_path);
+        } else {
+            glob_path[plen + nlen] = '/';
+            glob_expand(plen + nlen + 1, end + 1);
+        }
+    }
+
+done:
+    free(fib);
+unlock:
+    UnLock(lock);
+}
+
+/*
+ * add_arg() - Handle a name from the command line, expanding wildcards.
+ *             Returns the number of names added.
+ */
+static int
+add_arg(const char *arg)
+{
+    const char       *colon = strchr(arg, ':');
+    const char       *rest  = (colon != NULL) ? (colon + 1) : arg;
+    int               plen  = rest - arg;
+    int               count = 0;
+    recursive_node_t *node;
+
+    if (!has_wildcard(rest, strlen(rest)) ||
+        (plen >= (int) sizeof (glob_path))) {
+        sortlist_or_rlist_add(arg);
+        return (1);
+    }
+
+    memcpy(glob_path, arg, plen);
+    glob_expand(plen, rest);
+
+    if (glob_list == NULL) {
+        /* No match: try it as a literal name */
+        sortlist_or_rlist_add(arg);
+        return (1);
+    }
+
+    while ((node = glob_list) != NULL) {
+        glob_list = node->next;
+        sortlist_or_rlist_add(node->filename);
+        free(node->filename);
+        free(node);
+        count++;
+    }
+    return (count);
+}
+
+
 int
 main(int argc, char *argv[])
 {
@@ -1552,8 +1785,7 @@ main(int argc, char *argv[])
     for (index = 1; index < argc; index++) {
         ptr = argv[index];
         if (*ptr != '-') {
-            sortlist_or_rlist_add(ptr);
-            listed++;
+            listed += add_arg(ptr);
             continue;
         }
         if (strcmp(ptr, "--help") == 0)
