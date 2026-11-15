@@ -109,6 +109,13 @@ typedef struct {
     LONG   mode;              /* unix-mode when is_remote != ZERO */
     char   fib_Reserved[8];
     LONG   fib_DirOffset;
+
+    /*
+     * Pad to the full 260-byte size of the AmigaDOS struct FileInfoBlock.
+     * Filesystems may write all 260 bytes (including fib_Reserved[32]),
+     * so a smaller allocation will be overrun.
+     */
+    char   fib_Reserved2[12];
 } FileInfoBlock_3_t;
 
 #endif  /* _BFFS_DOSEXTENS_H */

@@ -1,3 +1,4 @@
+*.sw?
 *.o
 *.uaem
 bin/*
@@ -6,3 +7,5 @@ l/*
 cscope.out
 bffs
 test/units/Unit20
+test/units/Unit22
+bsdinclude

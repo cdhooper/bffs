@@ -23,6 +23,7 @@ const char *version = "\0$VER: ls 1.2 (08-Feb-2018) © Chris Hooper";
 #include <dos/dosextens.h>
 #include <dos/datetime.h>
 #include <exec/memory.h>
+#include <exec/execbase.h>
 #include <clib/exec_protos.h>
 #include <clib/dos_protos.h>
 #include <clib/alib_protos.h>
@@ -187,7 +188,14 @@ listname(const char *name)
         return;
     }
 
-    fib = (FileInfoBlock_3_t *) malloc(sizeof (FileInfoBlock_3_t));
+    /*
+     * Is there a way to allocate in a manner compatible with FIBs
+     * from 1.3 through 3.2+? If I use AllocDOSObject, that doesn't
+     * necessarily mean the filesystem will not clobber past the
+     * end, does it?
+     */
+#define FILEINFOBLOCK_SIZE (sizeof (FileInfoBlock_3_t) + 32)
+    fib = (FileInfoBlock_3_t *) malloc(FILEINFOBLOCK_SIZE);
     if (fib == NULL)
         goto alloc_failure;
 
@@ -349,15 +357,22 @@ read_passwd_group(pnode_t **head, const char *const *files, int count)
         FILE *fp = fopen(files[cur], "r");
         if (fp != NULL) {
             char buf[80];
+            char skip[80];
             char name[16];
             ulong id;
             while (fgets(buf, sizeof (buf), fp) != NULL) {
                 if ((strchr(buf, '|') &&
-                     sscanf(buf, "%[^|]\|%[^|]\|%u", name, buf, &id) == 3) ||
+                     sscanf(buf, "%15[^|]|%79[^|]|%lu", name, skip, &id) == 3) ||
                     (strchr(buf, ':') &&
-                     sscanf(buf, "%[^:]:%u", name, &id) == 2)) {
+                     sscanf(buf, "%15[^:]:%lu", name, &id) == 2)) {
                     pnode_t *temp = malloc(sizeof (*temp));
+                    if (temp == NULL)
+                        break;
                     temp->name = strdup(name);
+                    if (temp->name == NULL) {
+                        free(temp);
+                        break;
+                    }
                     temp->id = id;
                     temp->next = *head;
                     *head = temp;
@@ -463,23 +478,85 @@ show_gid:
 static void
 print_amiga_rwx(ulong p, char x)
 {
-    putchar(p & FIBF_READ        ? '-' : 'r');
+    putchar(p & FIBF_READ        ? 'r' : '-');
 
     if (p & FIBF_DELETE)
-        putchar(p & FIBF_WRITE   ? '-' : 'W');
+        putchar(p & FIBF_WRITE   ? 'W' : '-');
     else
-        putchar(p & FIBF_WRITE   ? '=' : 'w');
+        putchar(p & FIBF_WRITE   ? 'w' : '=');
 
     if (x == '-')
-        putchar(p & FIBF_EXECUTE ? '-' : 'x');
+        putchar(p & FIBF_EXECUTE ? 'x' : '-');
     else
-        putchar(p & FIBF_EXECUTE ? (x + 'A' - 'a') : x);
+        putchar(p & FIBF_EXECUTE ? x : (x + 'A' - 'a'));
 }
+
+UWORD exec_version = 0;
+
+static const char *const months[] = {
+    "Jan", "Feb", "Mar", "Apr",
+    "May", "Jun", "Jul", "Aug",
+    "Sep", "Oct", "Nov", "Dec"
+};
 
 static const int mdays[12] = {
     31, 28, 31, 30, 31, 30,
     31, 31, 30, 31, 30, 31
 };
+
+static int
+is_leap_year(ulong year)
+{
+    return (((year % 4) == 0) && (((year % 100) != 0) || ((year % 400) == 0)));
+}
+
+/*
+ * local_DateToStr() is a minimal replacement for dos.library DateToStr()
+ * on Kickstart 1.x. Only dat_StrDate and dat_StrTime are filled in.
+ * ds_Days counts days since 1-Jan-1978.
+ */
+static void
+local_DateToStr(struct DateTime *dt)
+{
+    ulong days   = (ulong) dt->dat_Stamp.ds_Days;
+    ulong year   = 1978;
+    ulong minute = (ulong) dt->dat_Stamp.ds_Minute;
+    ulong second = (ulong) dt->dat_Stamp.ds_Tick / TICKS_PER_SECOND;
+    int   month;
+
+    /* Skip whole 400-year cycles (146097 days) first */
+    year += (days / 146097) * 400;
+    days %= 146097;
+
+    while (days >= (is_leap_year(year) ? 366 : 365)) {
+        days -= (is_leap_year(year) ? 366 : 365);
+        year++;
+    }
+    for (month = 0; month < 11; month++) {
+        ulong mlen = mdays[month];
+        if ((month == 1) && is_leap_year(year))
+            mlen++;
+        if (days < mlen)
+            break;
+        days -= mlen;
+    }
+
+    if (dt->dat_StrDate) {
+        if (dt->dat_Format == FORMAT_DOS) {
+            /* FORMAT_DOS is DD-Mmm-YY */
+            sprintf(dt->dat_StrDate, "%02lu-%s-%02lu",
+                    days + 1, months[month], year % 100);
+        } else {
+            /* Assume FORMAT_CDN (DD-MM-YY) */
+            sprintf(dt->dat_StrDate, "%02lu-%02d-%02lu",
+                    days + 1, month + 1, year % 100);
+        }
+    }
+    if (dt->dat_StrTime) {
+        sprintf(dt->dat_StrTime, "%02lu:%02lu:%02lu",
+                (minute / 60) % 24, minute % 60, second % 60);
+    }
+}
 
 static void
 print_daytime(struct DateStamp *dstamp)
@@ -500,7 +577,11 @@ print_daytime(struct DateStamp *dstamp)
     dtime.dat_StrDay          = NULL;
     dtime.dat_StrDate         = datebuf;
     dtime.dat_StrTime         = timebuf;
-    DateToStr(&dtime);
+
+    if (exec_version < 36)
+        local_DateToStr(&dtime);
+    else
+        DateToStr(&dtime);
     DateStamp(&todaystamp);
 
     if (datebuf[0] == '0')              /* remove date leading zero */
@@ -522,10 +603,10 @@ show_blank:
         printf("%4d-%02d-%02d %s ", year, month, day, timebuf);
     } else if ((dtime.dat_Stamp.ds_Days + 274 > todaystamp.ds_Days) &&
                (dtime.dat_Stamp.ds_Days < todaystamp.ds_Days + 91)) {
-        /* It's over about nine months old; show year and no time */
         printf("%-3.3s %2.2s %5.5s ", datebuf + 3,
                 datebuf, timebuf);
     } else {
+        /* It's over about nine months old; show year and no time */
         printf("%-3.3s %2.2s  %d%.2s ", datebuf + 3, datebuf,
                 (datebuf[7] > '6') ? 19 : 20, datebuf + 7);
     }
@@ -536,14 +617,13 @@ print_fib(FileInfoBlock_3_t *fib, ulong fmode, fileattr_t *fattr, int width,
           const char *name)
 {
     int   is_dir = 0;
-    char  echar  = ' ';
-    char  pchar  = ' ';
+    char  estr[2] = { ' ', '\0' };
+    char  pchar   = ' ';
     char  tchar   = '-';
-    int   showchar;
     int   is_executable = 0;
     int   unix_perms = (has_GetPerms || (fattr != NULL));
     int   cur_width = 0;
-    char  buf[80];
+    char  buf[128];
 
     printed = 1;
     if (iflag) {
@@ -558,7 +638,7 @@ print_fib(FileInfoBlock_3_t *fib, ulong fmode, fileattr_t *fattr, int width,
 
     if (unix_perms && fmode && !Bflag) {
         /* UNIX format permission string */
-        pchar = get_unix_type_flags(fmode, &echar, &is_dir);
+        pchar = get_unix_type_flags(fmode, estr, &is_dir);
 
         if (lflag || gflag) {
             putchar(pchar);
@@ -618,8 +698,7 @@ print_fib(FileInfoBlock_3_t *fib, ulong fmode, fileattr_t *fattr, int width,
         /* AmigaDOS format permissions */
         ulong p = fib->fib_Protection;
 
-        pchar = get_amigaos_type_flags(fib->fib_DirEntryType, &echar,
-                                       &is_dir);
+        pchar = get_amigaos_type_flags(fib->fib_DirEntryType, estr, &is_dir);
 
         if (lflag || gflag) {
             putchar(pchar);
@@ -648,7 +727,8 @@ print_fib(FileInfoBlock_3_t *fib, ulong fmode, fileattr_t *fattr, int width,
                 putchar(tchar);
             }
 
-            print_amiga_rwx(p, ((!Aflag && (p & FIBF_SCRIPT)) ? 's' : '-'));
+            print_amiga_rwx(p ^ 0xf,
+                            ((!Aflag && (p & FIBF_SCRIPT)) ? 's' : '-'));
 
             print_amiga_rwx(p >> FIBB_GRP_DELETE,
                             ((!Aflag && (p & FIBF_HIDDEN)) ? 's' : '-'));
@@ -687,20 +767,23 @@ print_fib(FileInfoBlock_3_t *fib, ulong fmode, fileattr_t *fattr, int width,
                 printf("%c ", sizes[pos]);
             }
         } else {
-            printf("%*ld ", filesize_digits, fib->fib_Size);
+            printf("%*lu ", filesize_digits, fib->fib_Size);
         }
 
         print_daytime(&fib->fib_Date);
     }
 
     if ((pchar == '-') && is_executable)
-        echar = '*';
+        estr[0] = '*';
 
-    showchar = Fflag | (pflag && (echar == '/'));
+    if (!Fflag && (!pflag || (estr[0] != '/')))
+        estr[0] = ' ';
+
     if (lflag || gflag) {
         int len;
-        printf("%.108s%c%.80s", fib->fib_FileName,
-                (showchar ? echar : ' '), fib->fib_Comment);
+        if ((estr[0] == ' ') && (fib->fib_Comment[0] == '\0'))
+            estr[0] = '\0';
+        printf("%.108s%s%.80s", fib->fib_FileName, estr, fib->fib_Comment);
         if ((fib->fib_DirEntryType == ST_SOFTLINK) &&
             ((len = strlen(name)) < sizeof (buf))) {
             BPTR lock;
@@ -718,14 +801,15 @@ print_fib(FileInfoBlock_3_t *fib, ulong fmode, fileattr_t *fattr, int width,
                 if (ReadLink(port, lock, fib->fib_FileName, buf,
                              sizeof (buf) - 1) > 0) {
                     buf[sizeof (buf) - 1] = '\0';
-                    printf("-> %s", buf);
+                    printf(" -> %s", buf);
                 }
                 UnLock(lock);
             }
         }
     } else {
-        sprintf(buf, "%.108s%c", fib->fib_FileName,
-                (showchar ? echar : ' '));
+        if ((estr[0] == ' ') && (width == 0))
+            estr[0] = '\0';
+        sprintf(buf, "%.108s%s", fib->fib_FileName, estr);
 
         printf("%-*s", width - cur_width, buf);
     }
@@ -749,17 +833,24 @@ print_fibnames(BPTR plock, FileInfoBlock_3_t *pfib, const char *name)
         printf("[%s]\n", name);
     }
 
+    for (ptr = name; *ptr != '\0'; ptr++)
+        ec = *ptr;
+
     while (1) {
         fattr = NULL;
+        fmode = 0;
         if (has_ExObject) {
             fattr = (fileattr_t *) malloc(sizeof (fileattr_t));
             if (fattr != NULL) {
-                if (PExObject((BPTR)plock, pfib, fattr, 1) == 0) {
+                int rc = PExObject((BPTR)plock, pfib, fattr, 1);
+                if (rc == 0) {
                     /* (fattr != NULL) only in this case */
                     fmode = fattr->fa_mode;
                 } else {
                     free(fattr);
                     fattr = NULL;
+                    if (rc == ERROR_NO_MORE_ENTRIES)
+                        break;  /* End of directory, EX_NEXT still works */
                 }
             }
         }
@@ -768,15 +859,6 @@ print_fibnames(BPTR plock, FileInfoBlock_3_t *pfib, const char *name)
             (ExNext(plock, (struct FileInfoBlock *) pfib) == 0))
             break;  /* No more directory entries: exit loop */
 
-        if (fattr == NULL) {
-            has_ExObject = 0;  /* ExObject() failed this time or before */
-            if (has_GetPerms)
-                if (GetPerms(name, &fmode) == ERROR_ACTION_NOT_KNOWN)
-                    has_GetPerms = 0;
-        }
-
-        for (ptr = name; *ptr != '\0'; ptr++)
-            ec = *ptr;
         switch (ec) {
             case '\0':
                 strcpy(buf, pfib->fib_FileName);
@@ -790,8 +872,19 @@ print_fibnames(BPTR plock, FileInfoBlock_3_t *pfib, const char *name)
                 break;
         }
 
-        if (aflag || (pfib->fib_FileName[0] != '.'))
+        if (fattr == NULL) {
+            has_ExObject = 0;  /* ExObject() failed this time or before */
+            if (has_GetPerms)
+                if (GetPerms(buf, &fmode) == ERROR_ACTION_NOT_KNOWN)
+                    has_GetPerms = 0;
+        }
+
+        if (aflag || (pfib->fib_FileName[0] != '.')) {
+            /* sortlist_add() takes ownership of fattr */
             sortlist_add(buf, pfib->fib_FileName, fmode, pfib, fattr);
+        } else if (fattr != NULL) {
+            free(fattr);
+        }
     }
     while (sortlist != NULL)
         sortlist_process();
@@ -843,8 +936,10 @@ PExObject(BPTR lock, FileInfoBlock_3_t *fib, fileattr_t *attr, int next)
     if (packet->sp_Pkt.dp_Res1 == DOSFALSE) {
         rc = packet->sp_Pkt.dp_Res2;
     } else {
-        ULONG len = fib->fib_FileName[0];
-        memcpy(fib->fib_FileName, fib->fib_FileName + 1, len);
+        ULONG len = (UBYTE) fib->fib_FileName[0];
+        if (len > sizeof (fib->fib_FileName) - 1)
+            len = sizeof (fib->fib_FileName) - 1;
+        memmove(fib->fib_FileName, fib->fib_FileName + 1, len);
         fib->fib_FileName[len] = '\0';
     }
 
@@ -863,6 +958,9 @@ GetPerms(const char *name, ulong *mode)
     struct StandardPacket *packet;
     struct Lock           *dlock;
     char                   buf[512];
+
+    if (strlen(name) > 255)
+        return (ERROR_LINE_TOO_LONG);
 
     msgport = (struct MsgPort *) DeviceProc((char *)name);
     if (msgport == NULL)
@@ -927,6 +1025,9 @@ GetTimes(const char *name, int which, unix_timeval_t *timevalue)
     struct StandardPacket   *packet;
     struct Lock             *dlock;
     char                    buf[512];
+
+    if (strlen(name) > 255)
+        return (ERROR_LINE_TOO_LONG);
 
     msgport = (struct MsgPort *) DeviceProc((char *)name);
     if (msgport == NULL)
@@ -1048,25 +1149,20 @@ sortlist_add(const char *filename, const char *shortname, ulong mode,
 
     temp = (sort_node_t *) malloc(sizeof (sort_node_t));
     if (temp == NULL)
-        return;
+        goto fail_alloc_node;
 
     namelen = strlen(fib->fib_FileName);
     if (namelen > max_namelength)
         max_namelength = namelen;
 
     temp->name = (char *) malloc(strlen(filename) + 1);
-    if (temp->name == NULL) {
-        free(temp);
-        return;
-    }
+    if (temp->name == NULL)
+        goto fail_alloc_name;
     strcpy(temp->name, filename);
 
     temp->shortname = (char *) malloc(strlen(shortname) + 1);
-    if (temp->shortname == NULL) {
-        free(temp->name + 1);
-        free(temp);
-        return;
-    }
+    if (temp->shortname == NULL)
+        goto fail_alloc_shortname;
     strcpy(temp->shortname, shortname);
 
     if (filesize_max < fib->fib_Size) {
@@ -1090,7 +1186,7 @@ sortlist_add(const char *filename, const char *shortname, ulong mode,
             /* Show last access time */
             gtime.tv_sec  = fattr->fa_atime;
             gtime.tv_usec = fattr->fa_atime_us;
-        } else if (has_GetTimes &&
+        } else if (has_GetTimes && has_GetPerms &&
                GetTimes(filename, type, &gtime) == ERROR_ACTION_NOT_KNOWN) {
             has_GetTimes = 0;
         }
@@ -1107,18 +1203,25 @@ sortlist_add(const char *filename, const char *shortname, ulong mode,
                  fib->fib_Date.ds_Minute * 60 +
                  fib->fib_Date.ds_Tick / TICKS_PER_SECOND;
     temp->size = fib->fib_Size;
-    temp->fib = (FileInfoBlock_3_t *) malloc(sizeof (FileInfoBlock_3_t));
-    if (temp->fib == NULL) {
-        free(temp->shortname);
-        free(temp->name);
-        free(temp);
-        return;
-    }
+    temp->fib = (FileInfoBlock_3_t *) malloc(FILEINFOBLOCK_SIZE);
+    if (temp->fib == NULL)
+        goto fail_alloc_fib;
     memcpy(temp->fib, fib, sizeof (FileInfoBlock_3_t));
     temp->fattr = fattr;
     temp->next = NULL;
 
     sortlist_sortadd(temp);
+    return;
+
+fail_alloc_fib:
+    free(temp->shortname);
+fail_alloc_shortname:
+    free(temp->name);
+fail_alloc_name:
+    free(temp);
+fail_alloc_node:
+    if (fattr != NULL)
+        free(fattr);
 }
 
 /* Return values:
@@ -1177,8 +1280,9 @@ static int
 get_widths(int per_column, int add_width, int *widths)
 {
     sort_node_t *temp;
-    int          count = 0;
-    int          sum   = 0;
+    int          count  = 0;
+    int          sum    = 0;
+    int          column = 0;
 
     *widths = 0;
     for (temp = sortlist; temp != NULL; temp = temp->next) {
@@ -1188,6 +1292,8 @@ get_widths(int per_column, int add_width, int *widths)
         if (++count == per_column) {
             count = 0;
             sum += *widths;
+            if (++column == MAX_COLUMNS)
+                break;
             widths++;
             *widths = 0;
         }
@@ -1257,13 +1363,18 @@ sortlist_process(void)
     temp     = sortlist;
     column   = 0;
     while (count--) {
+        int width = widths[column];
         sort_node_t *next = temp->next;
         if (parent == NULL)
             sortlist = next;
         else
             parent->next = next;
 
-        is_dir = print_fib(temp->fib, temp->mode, temp->fattr, widths[column],
+        width = widths[column];
+        if ((column == columns - 1) || (count == 0))
+            width = 0;  /* Do not end-pad last name on line */
+
+        is_dir = print_fib(temp->fib, temp->mode, temp->fattr, width,
                            temp->name);
         if (is_dir && Rflag)
             rlist_add(temp->name);
@@ -1372,10 +1483,15 @@ sortlist_or_rlist_add(const char *name)
     /* Always reset this flag when handling a new path from the cmdline */
     has_ExObject = 1;
 
-    fib = (FileInfoBlock_3_t *) malloc(sizeof (FileInfoBlock_3_t));
+    fib = (FileInfoBlock_3_t *) malloc(sizeof (FileInfoBlock_3_t) + 32);
+    if (fib == NULL) {
+        fprintf(stderr, "malloc fail\n");
+        return;
+    }
     lock = Lock((char *)name, ACCESS_READ);
     if (lock == 0) {
         fprintf(stderr, "%s not found\n", name);
+        free(fib);
         return;
     }
     if (has_ExObject) {
@@ -1393,6 +1509,7 @@ sortlist_or_rlist_add(const char *name)
         if (!Examine(lock, (struct FileInfoBlock *) fib)) {
             printf("Error examining %s\n", name);
             UnLock(lock);
+            free(fib);
             return;
         }
 
@@ -1405,7 +1522,8 @@ sortlist_or_rlist_add(const char *name)
 
     if (dflag) {
         sortlist_add(name, fib->fib_FileName, fmode, fib, fattr);
-        return;  /* Don't process as directories */
+        free(fib);  /* sortlist_add() made a copy */
+        return;     /* Don't process as directories */
     }
 
     /* If this is a directory, add it to the recursive list */
@@ -1417,6 +1535,7 @@ sortlist_or_rlist_add(const char *name)
         free(fib);
     } else {  /* Otherwise, treat it as a file in the sort list */
         sortlist_add(name, fib->fib_FileName, fmode, fib, fattr);
+        free(fib);  /* sortlist_add() made a copy */
     }
 }
 
@@ -1426,6 +1545,9 @@ main(int argc, char *argv[])
 {
     int index;
     char *ptr;
+
+    /* Get exec version from SysBase (absolute address 4) */
+    exec_version = (*(struct ExecBase **) 4)->LibNode.lib_Version;
 
     for (index = 1; index < argc; index++) {
         ptr = argv[index];
