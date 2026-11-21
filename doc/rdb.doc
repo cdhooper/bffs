@@ -20,6 +20,9 @@ Where
     unit is the physical disk unit on that driver
 
     option can be any of:
+        -check = report problems in the RDB
+        -fix = fix problems in the RDB, asking before writing
+        -edit = interactive RDB and partition editor (like fdisk)
         -newrdb = create a new Rigid Disk Block on a disk which has none
         -rigid = edit fields in the Rigid Disk Block
         -part NAME = modify partition table parameters of NAME
@@ -80,6 +83,48 @@ Creating an RDB:
     another partition, or the end of the disk.
     rdb warns if the first blocks of the disk are not empty, and always
     asks before writing.  Only 512-byte sectors are supported.
+
+Checking and fixing an RDB:
+    -check reads every block of the RDB (bad block list, partitions,
+    filesystems and their code, and DriveInit code) and reports
+    errors and warnings.  It checks block IDs and checksums, broken
+    or looping lists, blocks used twice, the RDB geometry, and each
+    partition: name (missing or duplicate), cylinder range (overlaps
+    the RDB area, another partition, or runs past the end of the disk),
+    boot blocks, buffers, and a DosType with no filesystem.  The exit
+    status is 1 if errors were found.
+        rdb scsi.device 0 -check
+
+    -fix also repairs what can be repaired safely: checksums, invalid
+    SummedLongs in RDB/partition/filesystem blocks, broken or looping
+    lists (the list is ended at the last good block), HiCylinder,
+    HighRDSKBlock, and missing or duplicate partition names.  It shows
+    the blocks it will write and asks first, then checks the RDB again.
+    Overlapping partitions, damaged filesystem code, and blocks used
+    by two lists are reported but not changed.
+
+Editing interactively:
+    -edit shows the partition table and accepts these commands:
+        p   print the partition table
+        n   add a new partition (name, first and last cylinder or
+            +size{K,M,G}, DosType)
+        d   delete a partition
+        e   edit a partition's fields (name, DosType, buffers, bootable,
+            boot priority, automount, cylinders, MaxTransfer, Mask, ...)
+        r   edit RDB fields
+        l   list the filesystems in the RDB (DosType, version, size,
+            blocks, stack, and the partitions which use each one)
+        a   add a filesystem from a file, such as L:FastFileSystem.
+            The version is read from the file's $VER string; the
+            DosType, version, and stack size may be given.
+        x   remove a filesystem (asks first if a partition needs it)
+        g   create a new RDB (shown only when the disk has none)
+        c   check for problems
+        f   fix problems
+        w   write the changes to disk and quit
+        q   quit without saving
+    Nothing is written until w, which lists the blocks and asks first.
+        rdb a4091.device 3 -edit
 
 ------------------------------------------------------------------------
 
