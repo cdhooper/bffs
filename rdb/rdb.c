@@ -11,7 +11,7 @@
  *
  */
 
-const char *version = "\0$VER: rdb 1.2 (08-Feb-2018) © Chris Hooper";
+const char *version = "\0$VER: rdb 1.3 (21-Nov-2026) \xA9  Chris Hooper";
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -46,10 +46,15 @@ const char *version = "\0$VER: rdb 1.2 (08-Feb-2018) © Chris Hooper";
 
 #define strcasecmp stricmp
 
+/* rdb_HighRDSKBlock is rdb_Reserved4[0] in older headers */
+#define RDB_HIGHRDSKBLOCK(r) (((ULONG *) (r))[38])
+
 struct FileSysStartupMsg *find_startup();
 static long  blk_read(void *buf, ULONG blk);
 static long  blk_write(void *buf, ULONG blk);
 static int   break_abort(void);
+static ULONG chain_limit(void);
+static int   chain_loops(int which, ULONG *count, ULONG blk);
 static ULONG chars_to_long(unsigned char *str);
 static LONG  chksum(void *ptr);
 static void  close_device(void);
@@ -61,6 +66,9 @@ static void  filesystem_operation(int filesystem);
 static int   fixsum(void *ptr, ULONG blk);
 static void  freelist(struct LoadSegBlock *current);
 static int   getans(void);
+static int   scan_lseg_chain(int blk);
+static int   name_matches(UBYTE *dname, const char *name);
+static int   name_in_use(const char *name, const char *except);
 static int   open_device(void);
 static int   partition_operation(int partition, int parent);
 static void  perr(const char *fmt, ...);
@@ -104,8 +112,14 @@ int     promote = 0;
 char    partname[32];
 int     extractfs = 0;
 int     rdb_blk = 0;
-int     bstr = 0;
+int     any_bstr = 0;           /* Some partition name is a BSTR */
+int     any_ivs = 0;            /* Some partition name is a C string */
 int     showseglist = 0;
+int     promoted = 0;
+int     partfound = 0;          /* -part / -promote partition was found */
+int     scan_error = 0;         /* Some RDB chain could not be read */
+int     exit_status = 0;
+int     extract_count = 0;
 ULONG   extractid = 0;
 
 
@@ -194,54 +208,55 @@ typedef struct {
     short offset;           /* Offset into RDB struct */
     char type;              /* 0=INT, 1=STR */
     char which;             /* 0=Partition, 1=RDB, 2=Filesystem */
+    char size;              /* Maximum length of STR field */
 } accept_info_t;
 
 static const accept_info_t accept[] =
-/*  name                    offset   type   which   */
-{   "HostID",               3,       INT,   RIGID,
-    "BlockBytes",           4,       INT,   RIGID,
-    "RigidFlags",           5,       INT,   RIGID,
-    "BadBlockList",         6,       INT,   RIGID,
-    "PartitionList",        7,       INT,   RIGID,
-    "FileSysHeaderList",    8,       INT,   RIGID,
-    "DriveInit",            9,       INT,   RIGID,
-    "Cylinders",            16,      INT,   RIGID,
-    "Sectors",              17,      INT,   RIGID,
-    "Heads",                18,      INT,   RIGID,
-    "Interleave",           19,      INT,   RIGID,
-    "Park",                 20,      INT,   RIGID,
-    "WritePreComp",         24,      INT,   RIGID,
-    "ReducedWrite",         25,      INT,   RIGID,
-    "StepRate",             26,      INT,   RIGID,
-    "RDBBlocksLo",          32,      INT,   RIGID,
-    "RDBBlocksHi",          33,      INT,   RIGID,
-    "LoCylinder",           34,      INT,   RIGID,
-    "HiCylinder",           35,      INT,   RIGID,
-    "CylBlocks",            36,      INT,   RIGID,
-    "AutoParkSeconds",      37,      INT,   RIGID,
-    "DiskVendor",           40,      STR,   RIGID,
-    "DiskProduct",          42,      STR,   RIGID,
-    "DiskRevision",         46,      STR,   RIGID,
-    "ControllerVendor",     47,      STR,   RIGID,
-    "ControllerProduct",    49,      STR,   RIGID,
-    "ControllerRev",        53,      STR,   RIGID,
-    "Next",                 4,       INT,   PART,
-    "Flags",                5,       INT,   PART,
-    "DevFlags",             8,       INT,   PART,
-    "DriveName",            9,       STR,   PART,
-    "Surfaces",             32 + 3,  INT,   PART,
-    "BlocksPerTrack",       32 + 5,  INT,   PART,
-    "Reserved",             32 + 6,  INT,   PART,
-    "PreAlloc",             32 + 7,  INT,   PART,
-    "Interleave",           32 + 8,  INT,   PART,
-    "LowCyl",               32 + 9,  INT,   PART,
-    "HighCyl",              32 + 10, INT,   PART,
-    "NumBuffers",           32 + 11, INT,   PART,
-    "BufMemType",           32 + 12, INT,   PART,
-    "MaxTransfer",          32 + 13, INT,   PART,
-    "Mask",                 32 + 14, INT,   PART,
-    "BootPri",              32 + 15, INT,   PART,
-    "DosType",              32 + 16, INT,   PART,
+/*  name                    offset   type   which  size */
+{   "HostID",               3,       INT,   RIGID,  0,
+    "BlockBytes",           4,       INT,   RIGID,  0,
+    "RigidFlags",           5,       INT,   RIGID,  0,
+    "BadBlockList",         6,       INT,   RIGID,  0,
+    "PartitionList",        7,       INT,   RIGID,  0,
+    "FileSysHeaderList",    8,       INT,   RIGID,  0,
+    "DriveInit",            9,       INT,   RIGID,  0,
+    "Cylinders",            16,      INT,   RIGID,  0,
+    "Sectors",              17,      INT,   RIGID,  0,
+    "Heads",                18,      INT,   RIGID,  0,
+    "Interleave",           19,      INT,   RIGID,  0,
+    "Park",                 20,      INT,   RIGID,  0,
+    "WritePreComp",         24,      INT,   RIGID,  0,
+    "ReducedWrite",         25,      INT,   RIGID,  0,
+    "StepRate",             26,      INT,   RIGID,  0,
+    "RDBBlocksLo",          32,      INT,   RIGID,  0,
+    "RDBBlocksHi",          33,      INT,   RIGID,  0,
+    "LoCylinder",           34,      INT,   RIGID,  0,
+    "HiCylinder",           35,      INT,   RIGID,  0,
+    "CylBlocks",            36,      INT,   RIGID,  0,
+    "AutoParkSeconds",      37,      INT,   RIGID,  0,
+    "DiskVendor",           40,      STR,   RIGID,  8,
+    "DiskProduct",          42,      STR,   RIGID, 16,
+    "DiskRevision",         46,      STR,   RIGID,  4,
+    "ControllerVendor",     47,      STR,   RIGID,  8,
+    "ControllerProduct",    49,      STR,   RIGID, 16,
+    "ControllerRev",        53,      STR,   RIGID,  4,
+    "Next",                 4,       INT,   PART,  0,
+    "Flags",                5,       INT,   PART,  0,
+    "DevFlags",             8,       INT,   PART,  0,
+    "DriveName",            9,       STR,   PART, 31,
+    "Surfaces",             32 + 3,  INT,   PART,  0,
+    "BlocksPerTrack",       32 + 5,  INT,   PART,  0,
+    "Reserved",             32 + 6,  INT,   PART,  0,
+    "PreAlloc",             32 + 7,  INT,   PART,  0,
+    "Interleave",           32 + 8,  INT,   PART,  0,
+    "LowCyl",               32 + 9,  INT,   PART,  0,
+    "HighCyl",              32 + 10, INT,   PART,  0,
+    "NumBuffers",           32 + 11, INT,   PART,  0,
+    "BufMemType",           32 + 12, INT,   PART,  0,
+    "MaxTransfer",          32 + 13, INT,   PART,  0,
+    "Mask",                 32 + 14, INT,   PART,  0,
+    "BootPri",              32 + 15, INT,   PART,  0,
+    "DosType",              32 + 16, INT,   PART,  0,
 };
 
 #define NUM_ACCEPT ARRAY_SIZE(accept)
@@ -254,6 +269,7 @@ main(int argc, char *argv[])
     int     cur;
     int     argnum = 0;
     int     reportmax = 0;
+    int     found;
     char    *equalspos;
 
     progname = argv[0];
@@ -305,6 +321,8 @@ main(int argc, char *argv[])
                 index++;
                 if (index == argc)
                     perr("newpart requires the new partition name");
+                if (strlen(argv[index]) >= sizeof (partname))
+                    perr("partition name %s is too long", argv[index]);
                 strcpy(partname, argv[index]);
             } else if (strcasecmp(argv[index], "part") == 0 ||
                      strcasecmp(argv[index], "p") == 0) {
@@ -318,6 +336,8 @@ main(int argc, char *argv[])
                 index++;
                 if (index == argc)
                     perr("part requires the partition name");
+                if (strlen(argv[index]) >= sizeof (partname))
+                    perr("partition name %s is too long", argv[index]);
                 strcpy(partname, argv[index]);
             } else if (strcasecmp(argv[index], "promote") == 0 ||
                        strcasecmp(argv[index], "pr") == 0) {
@@ -329,6 +349,8 @@ main(int argc, char *argv[])
                 index++;
                 if (index == argc)
                         perr("promote requires the bootable partition name");
+                if (strlen(argv[index]) >= sizeof (partname))
+                    perr("partition name %s is too long", argv[index]);
                 strcpy(partname, argv[index]);
             } else if (strcasecmp(argv[index], "rigid") == 0 ||
                        strcasecmp(argv[index], "r") == 0) {
@@ -342,53 +364,67 @@ main(int argc, char *argv[])
             if (equalspos = strchr(argv[index], '='))
                 *equalspos = '\0';
 
+            found = 0;
             for (cur = 0; cur < NUM_ACCEPT; cur++) {
-                if (strcasecmp(accept[cur].name, argv[index]) == 0) {
-                    if (equalspos)
-                        argv[index] = equalspos + 1;
-                    else
-                        index++;
-                    printf("%s = %s\n", accept[cur].name, argv[index]);
-                    if (accept[cur].type == STR) /* it's a string */
-                        switch (accept[cur].which) {
-                            case PART:
-                                strcpy((char *) (((ULONG *) &newpart) +
-                                        accept[cur].offset), argv[index]);
-                                break;
-                            case RIGID:
-                                strcpy((char *) (((ULONG *) &newrigid) +
-                                        accept[cur].offset), argv[index]);
-                                break;
-                        }
-                    else if (*argv[index] == '\'')  /* check for 'XXXX' */
-                        switch (accept[cur].which) {
-                            case PART:
-                                ((ULONG *) &newpart)[accept[cur].offset] =
-                                           chars_to_long(argv[index] + 1);
-                                break;
-                            case RIGID:
-                                ((ULONG *) &newrigid)[accept[cur].offset] =
-                                           chars_to_long(argv[index] + 1);
-                                break;
-                        }
-                    else /* scan number */
-                        switch (accept[cur].which) {
-                            case PART:
-                                sscanf(argv[index], "%i", ((ULONG *)
-                                       &newpart) + accept[cur].offset);
-                                break;
-                            case RIGID:
-                                sscanf(argv[index], "%i", ((ULONG *)
-                                       &newrigid) + accept[cur].offset);
-                                break;
-                        }
-                    changed[cur] = 1;
-                    break;
+                char *value;
+                if (strcasecmp(accept[cur].name, argv[index]) != 0)
+                    continue;
+                if (equalspos) {
+                    value = equalspos + 1;
+                } else if (!found) {
+                    if (index + 1 >= argc)
+                        perr("%s requires a value", accept[cur].name);
+                    value = argv[++index];
+                } else {
+                    value = argv[index];  /* already advanced */
                 }
+                if (!found)
+                    printf("%s = %s\n", accept[cur].name, value);
+                found = 1;
+                if (accept[cur].type == STR) { /* it's a string */
+                    char *dst;
+                    if (strlen(value) > accept[cur].size)
+                        perr("%s may be at most %d characters",
+                             accept[cur].name, accept[cur].size);
+                    if (accept[cur].which == PART)
+                        dst = (char *) (((ULONG *) &newpart) +
+                                        accept[cur].offset);
+                    else
+                        dst = (char *) (((ULONG *) &newrigid) +
+                                        accept[cur].offset);
+                    memset(dst, 0, accept[cur].size);
+                    memcpy(dst, value, strlen(value));
+                } else if (*value == '\'') {  /* check for 'XXXX' */
+                    switch (accept[cur].which) {
+                        case PART:
+                            ((ULONG *) &newpart)[accept[cur].offset] =
+                                       chars_to_long(value + 1);
+                            break;
+                        case RIGID:
+                            ((ULONG *) &newrigid)[accept[cur].offset] =
+                                       chars_to_long(value + 1);
+                            break;
+                    }
+                } else { /* scan number */
+                    switch (accept[cur].which) {
+                        case PART:
+                            sscanf(value, "%i", ((ULONG *)
+                                   &newpart) + accept[cur].offset);
+                            break;
+                        case RIGID:
+                            sscanf(value, "%i", ((ULONG *)
+                                   &newrigid) + accept[cur].offset);
+                            break;
+                    }
+                }
+                changed[cur] = 1;
             }
 
-            if (cur < NUM_ACCEPT)
+            if (found)
                 continue;
+
+            if (equalspos)
+                *equalspos = '=';
 
             switch (argnum) {
                 case 0:
@@ -414,12 +450,42 @@ main(int argc, char *argv[])
     if (argnum == 0)
         print_usage();
 
+    /*
+     * A keyword such as Interleave exists for both the RDB and partitions.
+     * Apply it only to the block type being edited.
+     */
+    for (index = 0; index < NUM_ACCEPT; index++) {
+        if (!changed[index])
+            continue;
+        for (cur = 0; cur < NUM_ACCEPT; cur++) {
+            if ((cur != index) &&
+                (strcasecmp(accept[cur].name, accept[index].name) == 0))
+                break;
+        }
+        if (cur == NUM_ACCEPT)
+            continue;  /* Not ambiguous */
+        if ((accept[index].which == RIGID) && !editrigid)
+            changed[index] = 0;
+        else if ((accept[index].which == PART) &&
+                 !(editpart || createpart || promote))
+            changed[index] = 0;
+    }
+    for (index = 0; index < NUM_ACCEPT; index++) {
+        if (changed[index] && (accept[index].which == PART) &&
+            !(editpart || createpart || promote)) {
+            fprintf(stderr, "You must specify -part, -newpart, or -promote "
+                    "to edit partition fields\n\n");
+            exit_status = 1;
+            break;
+        }
+    }
+
     if (open_device())
         exit(1);
     onbreak(break_abort);
     buffer = (char *) malloc(TD_SECTOR * 5);
     if (buffer == NULL) {
-        fprintf(stderr, "Unable to allocate %d bytes\n", TD_SECTOR);
+        fprintf(stderr, "Unable to allocate %d bytes\n", TD_SECTOR * 5);
         close_device();
         exit(1);
     }
@@ -439,13 +505,61 @@ main(int argc, char *argv[])
 
     if (index < RDB_LOCATION_LIMIT) {
         rdb_blk = index;
-        print_rdb_info();
-        print_bad_blocks();
-        print_partition_info();
-        print_filesystem_info();
+        if ((rdb->rdb_BlockBytes != TD_SECTOR) && (rdb->rdb_BlockBytes != 0)) {
+            fprintf(stderr, "RDB at block %d has BlockBytes=%u; only %d-byte "
+                    "blocks are supported\n", rdb_blk, rdb->rdb_BlockBytes,
+                    TD_SECTOR);
+            free(buffer);
+            close_device();
+            exit(1);
+        }
+        if (editpart) {
+            /* Refuse a rename to the name of another partition */
+            for (cur = 0; cur < NUM_ACCEPT; cur++)
+                if (changed[cur] && (accept[cur].which == PART) &&
+                    (accept[cur].type == STR))
+                    break;
+            if ((cur < NUM_ACCEPT) &&
+                name_in_use((char *) newpart.pb_DriveName, partname)) {
+                fprintf(stderr, "Partition %s already exists\n",
+                        newpart.pb_DriveName);
+                free(buffer);
+                close_device();
+                exit(1);
+            }
+        }
+        if (print_rdb_info()) {
+            index = RDB_LOCATION_LIMIT;  /* Skip creations */
+            exit_status = 1;
+        } else {
+            if (print_bad_blocks())
+                scan_error = 1;
+            if (print_partition_info())
+                scan_error = 1;
+            if ((editpart || promote) && !partfound && !scan_error) {
+                fprintf(stderr, "Partition %s not found\n", partname);
+                exit_status = 1;
+            }
+            if (print_filesystem_info())
+                scan_error = 1;
+            if (extractfs && (extract_count == 0) && !scan_error) {
+                fprintf(stderr, "No filesystem with DosType %08X found\n",
+                        extractid);
+                exit_status = 1;
+            }
+            if ((rdb->rdb_DriveInit != -1) &&
+                scan_lseg_chain(rdb->rdb_DriveInit)) {
+                fprintf(stderr, "DriveInit code chain could not be read\n");
+                scan_error = 1;
+            }
+            if (RDB_HIGHRDSKBLOCK(rdb) > maxaccess &&
+                RDB_HIGHRDSKBLOCK(rdb) <= rdb->rdb_RDBBlocksHi)
+                maxaccess = RDB_HIGHRDSKBLOCK(rdb);
+        }
     } else {
         fprintf(stderr, "No RDB label found on %s unit %d\n",
                 disk_device, disk_unit);
+        exit_status = 1;
     }
 
     if (reportmax)
@@ -456,7 +570,7 @@ main(int argc, char *argv[])
 
     free(buffer);
     close_device();
-    exit(0);
+    exit((exit_status || scan_error) ? 1 : 0);
 }
 
 static int
@@ -469,11 +583,13 @@ open_device(void)
                   CreateExtIO(devport, sizeof (struct IOExtTD));
     } else {
         trackIO = NULL;
-        DeletePort(devport);
     }
 
     if (trackIO == NULL) {
         fprintf(stderr, "Failed to create trackIO structure\n");
+        if (devport != NULL)
+            DeletePort(devport);
+        devport = NULL;
         return (1);
     }
 
@@ -481,8 +597,10 @@ open_device(void)
                    disk_flags)) {
         fprintf(stderr, "fatal: Unable to open %s unit %d.\n",
                 disk_device, disk_unit);
-        DeletePort(devport);
         DeleteExtIO((struct IORequest *)trackIO);
+        DeletePort(devport);
+        trackIO = NULL;
+        devport = NULL;
         return (1);
     }
 
@@ -641,7 +759,7 @@ break_abort(void)
     static int entered = 0;
 
     if (entered++)
-        return;
+        return (0);
 
     fprintf(stderr, "^C\n");
 
@@ -650,6 +768,122 @@ break_abort(void)
     close_device();
 
     exit(1);
+    return (0);
+}
+
+/*
+ * Maximum number of blocks in any RDB chain.  Used to stop looping
+ * on a corrupt (circular) chain.
+ */
+static ULONG
+chain_limit(void)
+{
+    ULONG hi = rdb->rdb_RDBBlocksHi;
+
+    if ((hi < RDB_LOCATION_LIMIT) || (hi > 0xfffff))
+        hi = 65535;
+    return (hi + 1);
+}
+
+#define MAP_BAD  0
+#define MAP_PART 1
+#define MAP_FS   2
+#define MAP_SEG  3
+#define MAP_MAX_BLKS 65536
+
+static UBYTE *walkmap[4];
+
+/*
+ * Call once per block while walking an RDB chain, with *count starting
+ * at 0 for each walk.  Returns 1 if the chain loops: a block was already
+ * visited in this walk, or the walk is longer than the RDB area.
+ */
+static int
+chain_loops(int which, ULONG *count, ULONG blk)
+{
+    UBYTE *map;
+
+    if (walkmap[which] == NULL)
+        walkmap[which] = (UBYTE *) malloc(MAP_MAX_BLKS / 8);
+    map = walkmap[which];
+    if ((*count == 0) && (map != NULL))
+        memset(map, 0, MAP_MAX_BLKS / 8);
+    if ((*count)++ >= chain_limit())
+        return (1);
+    if ((map != NULL) && (blk < MAP_MAX_BLKS)) {
+        if (map[blk >> 3] & (1 << (blk & 7)))
+            return (1);
+        map[blk >> 3] |= (1 << (blk & 7));
+    }
+    return (0);
+}
+
+/*
+ * Walk a LoadSeg block chain without printing it, so that maxaccess
+ * accounts for every block in use by the RDB.
+ */
+static int
+scan_lseg_chain(int blk)
+{
+    ULONG count = 0;
+
+    while (blk != -1) {
+        if (chain_loops(MAP_SEG, &count, blk) || blk_read(seg, blk) ||
+            (seg->lsb_ID != IDNAME_LOADSEG))
+            return (1);
+        blk = seg->lsb_Next;
+    }
+    return (0);
+}
+
+/*
+ * Compare a partition DriveName (BSTR, or C string as written by some
+ * old IVS software) with a name, ignoring case as AmigaDOS does.
+ */
+static int
+name_matches(UBYTE *dname, const char *name)
+{
+    int len = strlen(name);
+    int i;
+    UBYTE *p;
+
+    if (dname[0] < 32) {            /* BSTR */
+        if (dname[0] != len)
+            return (0);
+        p = dname + 1;
+    } else {                        /* C string */
+        if (len >= 32)
+            return (0);
+        p = dname;
+        if (p[len] != '\0')
+            return (0);
+    }
+    for (i = 0; i < len; i++)
+        if (tolower(p[i]) != tolower((UBYTE) name[i]))
+            return (0);
+    return (1);
+}
+
+/*
+ * Returns 1 if a partition other than "except" is named "name".
+ * Uses the ppart buffer.
+ */
+static int
+name_in_use(const char *name, const char *except)
+{
+    int   blk = rdb->rdb_PartitionList;
+    ULONG count = 0;
+
+    while (blk != -1) {
+        if (chain_loops(MAP_PART, &count, blk) || blk_read(ppart, blk) ||
+            (ppart->pb_ID != IDNAME_PARTITION))
+            return (0);  /* Reported later by the full scan */
+        if (name_matches(ppart->pb_DriveName, name) &&
+            !name_matches(ppart->pb_DriveName, except))
+            return (1);
+        blk = ppart->pb_Next;
+    }
+    return (0);
 }
 
 static int
@@ -700,7 +934,9 @@ print_rdb_info(void)
             rdb->rdb_ControllerVendor, rdb->rdb_ControllerProduct,
             rdb->rdb_ControllerRevision);
     printf("\n");
-    rigid_operation();
+    if (rigid_operation())
+        exit_status = 1;
+    return (0);
 }
 
 static int
@@ -708,15 +944,20 @@ print_partition_info(void)
 {
     int parent = -1;
     int partition;
+    ULONG count = 0;
     struct DosEnvec *env;
 
     autofix = globalfix;
     if ((partition = rdb->rdb_PartitionList) == -1) {
         printf("No partitions\n");
-        return (1);
+        return (0);
     }
 
     while (partition != -1) {
+        if (chain_loops(MAP_PART, &count, partition)) {
+            fprintf(stderr, "partition list loops; giving up\n");
+            return (1);
+        }
         if (blk_read(part, partition)) {
             fprintf(stderr, "partition block %d could not be read\n",
                     partition);
@@ -736,21 +977,19 @@ print_partition_info(void)
         printf("  Blk=%-3d ", partition);
 
         if (part->pb_DriveName[0] < 32) {
-            bstr = 1;
+            any_bstr = 1;
             printf("DriveName=%-4.*s", part->pb_DriveName[0],
                     part->pb_DriveName + 1);
         } else {
+            any_ivs = 1;
             printf("DriveName=%-4.32s", part->pb_DriveName);
         }
 
-        if (createpart) {
-            if ((bstr && strncmp(part->pb_DriveName + 1, partname,
-                                 part->pb_DriveName[0])) ||
-                (!bstr && !strcmp(part->pb_DriveName, partname))) {
-                    createpart = 0;
-                    fprintf(stderr, "Error, partition %s already exists\n",
-                            partname);
-                }
+        if (createpart && name_matches(part->pb_DriveName, partname)) {
+            createpart = 0;
+            exit_status = 1;
+            fprintf(stderr, "Error, partition %s already exists\n",
+                    partname);
         }
         printf(" DevFlags=%-4d HostID=%d Next=%-3d %s%s\n",
                part->pb_DevFlags, part->pb_HostID,
@@ -772,7 +1011,10 @@ print_partition_info(void)
         print_id(env->de_DosType);
         printf("'\n");
 
-        partition_operation(partition, parent);
+        if (partition_operation(partition, parent))
+            return (1);  /* Quit or failed write */
+        if (promoted)
+            break;  /* List was reordered; stop walking it */
         parent = partition;
         partition = part->pb_Next;
     }
@@ -784,14 +1026,19 @@ static int
 print_filesystem_info(void)
 {
     int filesystem;
+    ULONG count = 0;
 
     autofix = globalfix;
     if ((filesystem = rdb->rdb_FileSysHeaderList) == -1) {
         printf("No filesystems\n");
-        return (1);
+        return (0);
     }
 
     while (filesystem != -1) {
+        if (chain_loops(MAP_FS, &count, filesystem)) {
+            fprintf(stderr, "filesystem list loops; giving up\n");
+            return (1);
+        }
         if (blk_read(fs, filesystem)) {
             fprintf(stderr, "filesystem block %d could not be read\n",
                     filesystem);
@@ -826,10 +1073,17 @@ print_filesystem_info(void)
         COND_PRINT(6, "Startup");
         COND_PRINT(7, "SegListBlocks");
         COND_PRINT(8, "GlobVec");
-        if (showseglist)
-            print_seglist(fs->fhb_SegListBlocks);
-        else
+        if (showseglist) {
+            if (print_seglist(fs->fhb_SegListBlocks))
+                scan_error = 1;
+        } else {
             printf("\n");
+            if (scan_lseg_chain(fs->fhb_SegListBlocks)) {
+                fprintf(stderr, "seglist of filesystem at block %d could "
+                        "not be read\n", filesystem);
+                scan_error = 1;
+            }
+        }
 
         filesystem_operation(filesystem);
 
@@ -881,7 +1135,7 @@ print_id(ULONG name)
 
     for (index = 0; index < 4; index++) {
         ch = (name >> (8 * (3 - index))) & 255;
-        if ((ch < 32) || (ch > 'Z'))
+        if ((ch < 32) || (ch > 126) || (ch == '\\'))
             printf("\\%d", ch);
         else
             printf("%c", ch);
@@ -892,13 +1146,18 @@ static int
 print_seglist(int seglist)
 {
     int index = 0;
+    ULONG count = 0;
 
     autofix = globalfix;
     if (seglist == -1) {
         printf("      No seglist\n");
-        return (1);
+        return (0);
     }
     while (seglist != -1) {
+        if (chain_loops(MAP_SEG, &count, seglist)) {
+            fprintf(stderr, "\nseglist loops; giving up\n");
+            return (1);
+        }
         if ((index % 11) == 0) {
             printf("\n");
             printf("      ");
@@ -929,14 +1188,20 @@ print_bad_blocks(void)
 {
     int badblock;
     int index;
+    int pairs;
+    ULONG count = 0;
 
     autofix = globalfix;
     if ((badblock = rdb->rdb_BadBlockList) == -1) {
         printf("No bad blocks\n\n");
-        return (1);
+        return (0);
     }
 
     while (badblock != -1) {
+        if (chain_loops(MAP_BAD, &count, badblock)) {
+            fprintf(stderr, "bad block list loops; giving up\n");
+            return (1);
+        }
         if (blk_read(bad, badblock)) {
             fprintf(stderr, "badblock block %d could not be read\n",
                     badblock);
@@ -955,12 +1220,15 @@ print_bad_blocks(void)
         print_id(bad->bbb_ID);
         printf("  Blk=%-3d HostID=%d Next=%d Reserved=%d",
                badblock, bad->bbb_HostID, bad->bbb_Next, bad->bbb_Reserved);
-        for (index = 0; index < (bad->bbb_SummedLongs - 6) / 2; index++) {
-            if (index % 4)
+        pairs = ((LONG) bad->bbb_SummedLongs - 6) / 2;
+        if (pairs > (TD_SECTOR / 4 - 6) / 2)
+            pairs = (TD_SECTOR / 4 - 6) / 2;
+        for (index = 0; index < pairs; index++) {
+            if ((index % 4) == 0)
                 printf("\n      ");
             printf("%6d->%-6d  ",
                    bad->bbb_BlockPairs[index].bbe_BadBlock,
-                   bad->bbb_BlockPairs[index].bbe_BadBlock);
+                   bad->bbb_BlockPairs[index].bbe_GoodBlock);
         }
         printf("\n");
 
@@ -978,8 +1246,8 @@ chksum(void *ptr)
     LONG *buf = (LONG *) ptr;
 
     size = buf[1];
-    if (size > (TD_SECTOR >> 2)) {
-        fprintf(stderr, "Invalid size of csum structure\n");
+    if ((size < 3) || (size > (TD_SECTOR >> 2))) {
+        fprintf(stderr, "Invalid SummedLongs %d in block\n", size);
         return (1);
     }
     for (; size > 0; size--) {
@@ -1001,8 +1269,11 @@ fixsum(void *ptr, ULONG blk)
     size = buf[1];
     buf[2] = 0;
 
-    if (size > (TD_SECTOR >> 2))
+    if ((size < 3) || (size > (TD_SECTOR >> 2))) {
+        fprintf(stderr, "Can not fix block %u: invalid SummedLongs %d\n",
+                blk, size);
         return (1);
+    }
 
     for (; size > 0; size--) {
         csum += *temp;
@@ -1021,7 +1292,7 @@ fixsum(void *ptr, ULONG blk)
 static int
 getans(void)
 {
-    char ch;
+    int ch;
     int ret = 0;
 
     while ((ch = getchar()) != EOF) {
@@ -1106,10 +1377,8 @@ rigid_operation(void)
                 name = (char *) &((ULONG *) rdb)[accept[index].offset];
                 newname = (char *) &((ULONG *) &newrigid)[accept[index].offset];
 
-                if (bstr)
-                    printf(" %.*s to %s?\n", name[0], name + 1, newname);
-                else
-                    printf(" %s to %s?\n", name, newname);
+                printf(" %.*s to %.*s?\n", accept[index].size, name,
+                       accept[index].size, newname);
             } else {                        /* it's a number */
                 printf(" %d to %d?\n",
                        ((ULONG *)     rdb)[accept[index].offset],
@@ -1130,12 +1399,7 @@ rigid_operation(void)
 dochange:
                     count++;
                     if (accept[index].type == STR) { /* it's a string */
-                        if (bstr) {
-                            strcpy(name + 1, newname);
-                            name[0] = strlen(newname);
-                        } else {    /* cursed IVS */
-                            strcpy(name, newname);
-                        }
+                        memcpy(name, newname, accept[index].size);
                     } else {                        /* it's a number */
                         ((ULONG *) rdb)[accept[index].offset] =
                               ((ULONG *) &newrigid)[accept[index].offset];
@@ -1160,21 +1424,15 @@ partition_operation(int partition, int parent)
     char *newname;
     int   changeall = 0;
     int   count = 0;
+    int   bstr;
 
     if (!editpart && !promote)
         return (0);
 
-    name = part->pb_DriveName;
-    if (*name < 32) {               /* It's a BSTR */
-        if (strncmp(name + 1, partname, name[0]))
-            return (0);
-        if (strlen(partname) > name[0])
-            return (0);
-        bstr = 1;
-    } else {                        /* It's an IVS screwup  */
-        if (strcmp(name, partname))
-            return (0);
-    }
+    if (!name_matches(part->pb_DriveName, partname))
+        return (0);
+    bstr = (part->pb_DriveName[0] < 32);  /* else an IVS C string */
+    partfound = 1;
     printf("found partition %s\n", partname);
 
     for (index = 0; index < NUM_ACCEPT; index++)
@@ -1209,11 +1467,13 @@ partition_operation(int partition, int parent)
 dochange:
                     count++;
                     if (accept[index].type == STR) {/* it's a string */
+                        int len = strlen(newname);
+                        memset(name, 0, sizeof (part->pb_DriveName));
                         if (bstr) {
-                            strcpy(name + 1, newname);
-                            name[0] = strlen(newname);
+                            name[0] = len;
+                            memcpy(name + 1, newname, len);
                         } else {    /* cursed IVS */
-                            strcpy(name, newname);
+                            memcpy(name, newname, len);
                         }
                     } else {                        /* it's a number */
                         ((ULONG *) part)[accept[index].offset] =
@@ -1224,11 +1484,13 @@ dochange:
         }
 
     if (promote) {
-        if (!(part->pb_Flags & PBFF_BOOTABLE))
+        if (!(part->pb_Flags & PBFF_BOOTABLE)) {
             fprintf(stderr, "This partition may not be promoted unless the Bootable bit is set\n");
-        else if (partition == rdb->rdb_PartitionList)
+            exit_status = 1;
+        } else if (partition == rdb->rdb_PartitionList) {
             fprintf(stderr, "This partition is already mounted first\n");
-        else {
+            exit_status = 1;
+        } else {
             /* non-corrupting scheme:
                     1. Point parent of this partition's Next to oldchild
                     2. Point this partition's Next to newchild
@@ -1237,14 +1499,15 @@ dochange:
             printf("promote partition?\n");
             switch (getans()) {
                 case NO:
-                    return (0);
+                    goto skip_promote;
                 case QUIT:
                     return (1);
             }
 
             /* 1. Point parent of this partition's Next to oldchild */
             if (parent == -1) {
-                fprintf(stderr, "%s internal error, aborting changes\n");
+                fprintf(stderr, "%s internal error, aborting changes\n",
+                        progname);
                 return (1);
             } else {
                 if (blk_read(ppart, parent)) {
@@ -1266,10 +1529,12 @@ dochange:
             rdb->rdb_PartitionList = partition;
             if (fixsum(rdb, rdb_blk))
                 return (1);
+            promoted = 1;
 
             count = 0;
         }
     }
+skip_promote:
 
     if (count)
         if (fixsum(part, partition))
@@ -1287,18 +1552,27 @@ filesystem_operation(int filesystem)
 
     if (fs->fhb_DosType != extractid)
         return;
+    extract_count++;
 
     printf("\nExtract this filesystem (%08x '", fs->fhb_DosType);
     print_id(fs->fhb_DosType);
     printf("') ?  (Yes/No)\n");
     switch (getans()) {
         case NO:
+            return;
         case QUIT:
+            exit_status = 1;
             return;
     }
 
-    sprintf(name, "%08X", fs->fhb_DosType);
-    extract_seglist(fs->fhb_SegListBlocks, name);
+    /* A second filesystem with the same DosType gets a .2 suffix, etc */
+    if (extract_count == 1)
+        sprintf(name, "%08X", fs->fhb_DosType);
+    else
+        sprintf(name, "%08X.%d", fs->fhb_DosType, extract_count);
+    printf("Writing %s\n", name);
+    if (extract_seglist(fs->fhb_SegListBlocks, name))
+        exit_status = 1;
 }
 
 static int
@@ -1309,6 +1583,8 @@ extract_seglist(int seglist, const char *name)
     struct LoadSegBlock *current = NULL;
     struct LoadSegBlock *parent = NULL;
     int checkbad = 1;
+    int len;
+    ULONG count = 0;
 
     if (seglist == -1) {
         fprintf(stderr, "No seglist to extract for %s\n", name);
@@ -1316,6 +1592,10 @@ extract_seglist(int seglist, const char *name)
     }
 
     while (seglist != -1) {
+        if (chain_loops(MAP_SEG, &count, seglist)) {
+            fprintf(stderr, "seglist loops; truncating\n");
+            break;
+        }
         if (blk_read(seg, seglist)) {
             fprintf(stderr, "\nloadseg block %d could not be read\n", seglist);
             freelist(start);
@@ -1330,7 +1610,7 @@ extract_seglist(int seglist, const char *name)
                     goto write_data;
                 case QUIT:
                     freelist(start);
-                    return;
+                    return (1);
                 case ALL:
                     checkbad = 0;
                     break;
@@ -1359,19 +1639,24 @@ extract_seglist(int seglist, const char *name)
     fp = fopen(name, "w");
     if (fp == NULL) {
         fprintf(stderr, "Unable to open output file %s\n", name);
-        return;
+        freelist(start);
+        return (1);
     }
 
     current = start;
     while (current != NULL) {
-        fwrite(current->lsb_LoadData,
-               (current->lsb_SummedLongs - 5) * 4, 1, fp);
+        len = ((LONG) current->lsb_SummedLongs - 5) * 4;
+        if (len > TD_SECTOR - 5 * 4)
+            len = TD_SECTOR - 5 * 4;
+        if (len > 0)
+            fwrite(current->lsb_LoadData, len, 1, fp);
         current = (struct LoadSegBlock *) current->lsb_Next;
     }
 
     fclose(fp);
     sleep(1);
     freelist(start);
+    return (0);
 }
 
 static void
@@ -1388,15 +1673,18 @@ freelist(struct LoadSegBlock *current)
 static int
 create_partition(void)
 {
-    int newblk;
+    ULONG newblk;
+    ULONG count = 0;
     int previous = -1;
     int current;
+    int len;
 
     printf("Create a New partition with the device name %s? (Yes/No)\n",
             partname);
     switch (getans()) {
-        case QUIT:
         case NO:
+            return (0);
+        case QUIT:
             return (1);
     }
 
@@ -1404,22 +1692,20 @@ create_partition(void)
      * Add partition to the end of list of partitions so that
      * AmigaDOS won't try to boot from it because it's first
      */
-
-    /* first create the new partition block */
     newblk = maxaccess + 1;
-    newpart.pb_Next = -1;
-    if (bstr) {
-        strcpy(newpart.pb_DriveName + 1, partname);
-        newpart.pb_DriveName[0] = strlen(partname);
-    } else {
-        strcpy(newpart.pb_DriveName, partname);
+    if (newblk > rdb->rdb_RDBBlocksHi) {
+        fprintf(stderr, "No free block in RDB area (next=%u RDBBlocksHi=%u)\n",
+                newblk, rdb->rdb_RDBBlocksHi);
+        return (1);
     }
-    memcpy(part, &newpart, TD_SECTOR);
-    fixsum(part, newblk);
 
-
+    /* Find the last partition in the list */
     current = rdb->rdb_PartitionList;
     while (current != -1) {
+        if (chain_loops(MAP_PART, &count, current)) {
+            fprintf(stderr, "partition list loops; giving up\n");
+            return (1);
+        }
         if (blk_read(part, current)) {
             fprintf(stderr, "partition block %d could not be read\n",
                     current);
@@ -1438,14 +1724,43 @@ create_partition(void)
         previous = current;
         current = part->pb_Next;
     }
+    if (previous != -1)
+        memcpy(ppart, part, TD_SECTOR);
 
+    /* Create the new partition block */
+    len = strlen(partname);
+    if (len > 31) {
+        fprintf(stderr, "Partition name %s is too long\n", partname);
+        return (1);
+    }
+    newpart.pb_Next = -1;
+    memset(newpart.pb_DriveName, 0, sizeof (newpart.pb_DriveName));
+    if (any_bstr || !any_ivs) {  /* BSTR unless only IVS names exist */
+        newpart.pb_DriveName[0] = len;
+        memcpy(newpart.pb_DriveName + 1, partname, len);
+    } else {
+        memcpy(newpart.pb_DriveName, partname, len);
+    }
+    memset(part, 0, TD_SECTOR);
+    memcpy(part, &newpart, sizeof (newpart));
+    if (fixsum(part, newblk))
+        return (1);
+
+    /* Link it in */
     if (previous == -1) {   /* then modify RDB (first partition in RDB) */
         rdb->rdb_PartitionList = newblk;
-        fixsum(rdb, rdb_blk);
     } else {
-        part->pb_Next = newblk;
-        fixsum(part, previous);
+        ppart->pb_Next = newblk;
+        if (fixsum(ppart, previous))
+            return (1);
     }
+    if ((previous == -1) || (RDB_HIGHRDSKBLOCK(rdb) < newblk)) {
+        if (RDB_HIGHRDSKBLOCK(rdb) < newblk)
+            RDB_HIGHRDSKBLOCK(rdb) = newblk;
+        if (fixsum(rdb, rdb_blk))
+            return (1);
+    }
+    maxaccess = newblk;
     return (0);
 }
 
@@ -1455,8 +1770,17 @@ do_creations(void)
     if (rdb->rdb_ID != IDNAME_RIGIDDISK)
         return;
 
-    if (createpart)
-        create_partition();
+    if (!createpart)
+        return;
+
+    if (scan_error) {
+        fprintf(stderr, "The RDB could not be read completely; "
+                "not creating partition %s\n", partname);
+        exit_status = 1;
+        return;
+    }
+    if (create_partition())
+        exit_status = 1;
 }
 
 static void
