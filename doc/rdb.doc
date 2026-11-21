@@ -1,5 +1,5 @@
 ------------------------------------------------------------------------
-Version 1.2 of rdb
+Version 1.3 of rdb
 ------------------------------------------------------------------------
 
 rdb - edit the RDB (Rigid Disk Block) area of an AmigaDOS disk device
@@ -20,6 +20,7 @@ Where
     unit is the physical disk unit on that driver
 
     option can be any of:
+        -newrdb = create a new Rigid Disk Block on a disk which has none
         -rigid = edit fields in the Rigid Disk Block
         -part NAME = modify partition table parameters of NAME
         -newpart NAME = add new partition NAME to the RDB
@@ -62,6 +63,23 @@ Example:
     You want to change the boot priority of DH0: on your machine
     using scsi.device, unit 6
         rdb scsi.device 6 -part DH0 bootpri=10
+
+Creating an RDB:
+    -newrdb writes a new RDB to block 0 of a disk which does not
+    already have one.  The geometry is taken from the device driver
+    (TD_GETGEOMETRY); the RDB area is the first cylinders of the disk
+    (at least 2048 blocks), and the rest of the disk is available for
+    partitions.  RDB keywords override any field, for example:
+        rdb a4091.device 3 -newrdb Heads=16 Sectors=63 DiskVendor=CDH
+    -newpart may be given at the same time to add the first partition:
+        rdb a4091.device 3 -newrdb -newpart DH9 DosType=0x444f5303
+
+    -newpart takes Surfaces and BlocksPerTrack from the RDB geometry,
+    and LowCyl and HighCyl from the RDB partitionable area, unless they
+    are given.  It refuses a partition which overlaps the RDB area,
+    another partition, or the end of the disk.
+    rdb warns if the first blocks of the disk are not empty, and always
+    asks before writing.  Only 512-byte sectors are supported.
 
 ------------------------------------------------------------------------
 

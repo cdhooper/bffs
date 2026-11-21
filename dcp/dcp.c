@@ -254,11 +254,12 @@ do_close(struct file_info *fdes)
                 fdes->trackIO[0]->iotd_Req.io_Length  = 0;    /* 0=off, 1=on */
                 DoIO((struct IORequest *)fdes->trackIO[0]);
 
-                CloseDevice((struct IORequest *)fdes->trackIO[0]);
-
                 temp = fdes->trackIO[0]->iotd_Req.io_Message.mn_ReplyPort;
-                for (i = 0; i <= async; i++)
+
+                for (i = 0; i <= async; i++) {
+                    CloseDevice((struct IORequest *)fdes->trackIO[i]);
                     DeleteExtIO((struct IORequest *)fdes->trackIO[i]);
+                }
 
                 DeletePort(temp);
                 fdes->trackIO[0] = NULL;
@@ -587,7 +588,7 @@ do_open(struct file_info *fdes, int rwtype, int req_blocksize)
         } else {
             fdes->dtype = tFILE;
             if (verbose) {
-                fprintf(stderr, "file %-38s start=%-8u end=%-8u bs=%u\n",
+                fprintf(stderr, "file %-37s start=%-8u end=%-8u bs=%u\n",
                         fdes->name, fdes->startblk, fdes->maxblk,
                         fdes->blocksize);
             }
@@ -1087,7 +1088,7 @@ close_finish:
 
     if (good_finish && (verbose || report_perf)) {
         unsigned int total;  /* KB */
-        unsigned int rep = total;
+        unsigned int rep;
         unsigned int ttime;
         unsigned int tsec;
         unsigned int trem;
